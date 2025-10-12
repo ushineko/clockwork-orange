@@ -230,12 +230,12 @@ The service file uses `/usr/bin/python3` by default. If you're using a conda env
 
 **For conda/virtual environments:**
 ```ini
-ExecStart=/path/to/your/python /home/nverenin/git/clockwork-orange/clockwork-orange.py
+ExecStart=/path/to/your/python /path/to/clockwork-orange/clockwork-orange.py
 ```
 
 **For system Python (default):**
 ```ini
-ExecStart=/usr/bin/python3 /home/nverenin/git/clockwork-orange/clockwork-orange.py
+ExecStart=/usr/bin/python3 /path/to/clockwork-orange/clockwork-orange.py
 ```
 
 Make sure PyYAML is installed for your chosen Python interpreter:
