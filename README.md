@@ -1,6 +1,8 @@
 # clockwork-orange
 
-A comprehensive Python script for managing wallpapers and lock screen backgrounds on KDE Plasma 6. The script supports setting wallpapers from URLs, local files, or random selection from directories, with options for both desktop and lock screen backgrounds.
+A comprehensive Python script for managing wallpapers and lock screen backgrounds on **KDE Plasma 6 only**. The script supports setting wallpapers from URLs, local files, or random selection from directories, with options for both desktop and lock screen backgrounds.
+
+> **⚠️ IMPORTANT:** This script is designed specifically for KDE Plasma 6 and requires `qdbus6` and `kwriteconfig6` commands. It will not work with older KDE versions.
 
 *Named after the automated, mechanical precision with which it changes your visual environment - conditioning you to accept its wallpaper choices whether you want to or not.*
 
@@ -16,8 +18,8 @@ A comprehensive Python script for managing wallpapers and lock screen background
 
 ## Requirements
 
+- **KDE Plasma 6** (REQUIRED - script will not work with older KDE versions)
 - **Python 3.6+**
-- **KDE Plasma 6** (for lock screen functionality)
 - **PyYAML** (`pip install PyYAML`)
 - **qdbus6** (usually included with KDE Plasma 6)
 - **kwriteconfig6** (usually included with KDE Plasma 6)
@@ -26,8 +28,8 @@ A comprehensive Python script for managing wallpapers and lock screen background
 
 1. **Clone or download the script:**
    ```bash
-   git clone <repository-url>
-   cd qdbus6_setwallpaper
+   git clone https://github.com/ushineko/clockwork-orange
+   cd clockwork-orange
    ```
 
 2. **Install dependencies:**
@@ -221,6 +223,30 @@ The repository includes several service-related files:
 - `clockwork-orange.service` - Systemd user service file
 - `run_clockwork_orange.sh` - Wrapper script with proper environment setup
 - `clockwork-orange.yml.example` - Example configuration file
+
+### Service Configuration Notes
+
+The service file uses `/usr/bin/python3` by default. If you're using a conda environment, virtual environment, or custom Python installation, you may need to update the `ExecStart` path in the service file to point to your specific Python interpreter.
+
+**For conda/virtual environments:**
+```ini
+ExecStart=/path/to/your/python /home/nverenin/git/clockwork-orange/clockwork-orange.py
+```
+
+**For system Python (default):**
+```ini
+ExecStart=/usr/bin/python3 /home/nverenin/git/clockwork-orange/clockwork-orange.py
+```
+
+Make sure PyYAML is installed for your chosen Python interpreter:
+```bash
+# For system Python
+sudo pacman -S python-yaml  # Arch Linux
+sudo apt install python3-yaml  # Ubuntu/Debian
+
+# For conda/virtual environments
+pip install PyYAML
+```
 
 ## Troubleshooting
 

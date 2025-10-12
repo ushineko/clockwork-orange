@@ -594,9 +594,12 @@ def debug_lockscreen_config():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Set wallpaper or lock screen from URL, local file, or random image from directory",
+        description="Set wallpaper or lock screen from URL, local file, or random image from directory (KDE Plasma 6 only)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+IMPORTANT: This script is designed specifically for KDE Plasma 6 and requires
+qdbus6 and kwriteconfig6 commands. It will not work with older KDE versions.
+
 Examples:
   # Regular wallpaper operations:
   %(prog)s                           # Download from default URL (https://pic.re/image)
