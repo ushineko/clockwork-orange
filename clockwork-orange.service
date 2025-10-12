@@ -1,0 +1,13 @@
+[Unit]
+Description=Clockwork Orange - Wallpaper Service
+After=graphical-session.target
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+ExecStart=/home/nverenin/miniforge3/bin/python /home/nverenin/git/qdbus6_setwallpaper/clockwork-orange.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

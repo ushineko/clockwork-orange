@@ -1,0 +1,23 @@
+# Example configuration file for clockwork-orange.py
+# Place this file at ~/.config/clockwork-orange.yml
+
+# Enable dual wallpaper mode (both desktop and lock screen with different images)
+dual_wallpapers: true
+
+# Default directory for wallpapers
+default_directory: /home/user/Pictures/Wallpapers
+
+# Default wait interval for cycling (in seconds)
+default_wait: 300
+
+# Alternative: Enable only desktop mode
+# desktop: true
+
+# Alternative: Enable only lock screen mode  
+# lockscreen: true
+
+# Alternative: Set default URL
+# default_url: "https://pic.re/image"
+
+# Alternative: Set default file
+# default_file: "/path/to/specific/wallpaper.jpg"

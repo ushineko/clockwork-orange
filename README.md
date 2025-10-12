@@ -1,0 +1,289 @@
+# clockwork-orange
+
+A comprehensive Python script for managing wallpapers and lock screen backgrounds on KDE Plasma 6. The script supports setting wallpapers from URLs, local files, or random selection from directories, with options for both desktop and lock screen backgrounds.
+
+*Named after the automated, mechanical precision with which it changes your visual environment - conditioning you to accept its wallpaper choices whether you want to or not.*
+
+## Features
+
+- **Multiple Sources**: Download from URLs, use local files, or randomly select from directories
+- **Dual Wallpaper Support**: Set different wallpapers for desktop and lock screen simultaneously
+- **Continuous Cycling**: Automatically cycle through wallpapers at specified intervals
+- **Lock Screen Support**: Configure KDE Plasma 6 lock screen backgrounds
+- **Configuration File**: YAML-based configuration for persistent settings
+- **Service Mode**: Run as a background service with systemd
+- **Comprehensive Debugging**: Detailed logging for troubleshooting
+
+## Requirements
+
+- **Python 3.6+**
+- **KDE Plasma 6** (for lock screen functionality)
+- **PyYAML** (`pip install PyYAML`)
+- **qdbus6** (usually included with KDE Plasma 6)
+- **kwriteconfig6** (usually included with KDE Plasma 6)
+
+## Installation
+
+1. **Clone or download the script:**
+   ```bash
+   git clone <repository-url>
+   cd qdbus6_setwallpaper
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install PyYAML
+   ```
+
+3. **Make the script executable:**
+   ```bash
+   chmod +x clockwork-orange.py
+   ```
+
+## Quick Start
+
+### Basic Usage
+
+```bash
+# Set desktop wallpaper from URL (default behavior)
+./clockwork-orange.py
+
+# Set desktop wallpaper from local file
+./clockwork-orange.py -f /path/to/image.jpg
+
+# Set random desktop wallpaper from directory
+./clockwork-orange.py -d /path/to/wallpapers
+
+# Set lock screen wallpaper
+./clockwork-orange.py --lockscreen -f /path/to/image.jpg
+
+# Set different wallpapers for desktop and lock screen
+./clockwork-orange.py --desktop --lockscreen -d /path/to/wallpapers
+
+# Cycle through random wallpapers every 5 minutes
+./clockwork-orange.py -d /path/to/wallpapers -w 300
+```
+
+### Configuration File
+
+Create a configuration file for persistent settings:
+
+```bash
+# Create initial configuration
+./clockwork-orange.py --desktop --lockscreen -d /path/to/your/wallpapers -w 300 --write-config
+
+# Now you can just run without arguments
+./clockwork-orange.py
+```
+
+## Command Line Options
+
+### Target Selection
+- `--desktop` - Set desktop wallpaper only
+- `--lockscreen` - Set lock screen wallpaper only
+- `--desktop --lockscreen` - Set both (different images)
+
+### Source Options (mutually exclusive)
+- `-u, --url URL` - Download from URL
+- `-f, --file PATH` - Use local file
+- `-d, --directory PATH` - Random selection from directory
+
+### Other Options
+- `-w, --wait SECONDS` - Wait interval for cycling (directory mode only)
+- `--write-config` - Write configuration file and exit
+- `--debug-lockscreen` - Show current lock screen configuration
+
+## Configuration File
+
+The script supports a YAML configuration file at `~/.config/clockwork-orange.yml`:
+
+```yaml
+# Enable dual wallpaper mode (both desktop and lock screen with different images)
+dual_wallpapers: true
+
+# Default directory for wallpapers
+default_directory: /path/to/your/wallpapers
+
+# Default wait interval for cycling (in seconds)
+default_wait: 300
+
+# Alternative: Enable only desktop mode
+# desktop: true
+
+# Alternative: Enable only lock screen mode  
+# lockscreen: true
+
+# Alternative: Set default URL
+# default_url: "https://pic.re/image"
+
+# Alternative: Set default file
+# default_file: "/path/to/specific/wallpaper.jpg"
+```
+
+### Configuration Options
+
+- `dual_wallpapers: true` - Enable dual wallpaper mode
+- `desktop: true` - Enable desktop wallpaper mode only
+- `lockscreen: true` - Enable lock screen mode only
+- `default_directory: "/path/to/wallpapers"` - Default wallpaper directory
+- `default_file: "/path/to/wallpaper.jpg"` - Default wallpaper file
+- `default_url: "https://example.com/image.jpg"` - Default URL
+- `default_wait: 300` - Default wait interval for cycling
+
+## How It Works
+
+### Desktop Wallpapers
+The script uses `qdbus6` to communicate with KDE Plasma's D-Bus interface:
+```javascript
+desktops().forEach(d => {
+    d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");
+    d.writeConfig("Image", "file://FILEPATH");
+    d.reloadConfig();
+});
+```
+
+### Lock Screen Wallpapers
+The script modifies the `~/.config/kscreenlockerrc` configuration file using `kwriteconfig6`:
+```bash
+kwriteconfig6 --file kscreenlockerrc \
+  --group Greeter \
+  --group Wallpaper \
+  --group org.kde.image \
+  --group General \
+  --key Image "file:///path/to/image.jpg"
+```
+
+### Image Detection
+The script automatically detects image files by:
+- File extension (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tiff`, `.webp`, `.svg`)
+- MIME type detection as fallback
+
+## Running as a Background Service
+
+### Option 1: Systemd User Service (Recommended)
+
+1. **Setup the service:**
+   ```bash
+   mkdir -p ~/.config/systemd/user
+   cp clockwork-orange.service ~/.config/systemd/user/
+   systemctl --user daemon-reload
+   systemctl --user enable clockwork-orange.service
+   ```
+
+2. **Start the service:**
+   ```bash
+   systemctl --user start clockwork-orange.service
+   ```
+
+3. **Management commands:**
+   ```bash
+   # Check status
+   systemctl --user status clockwork-orange.service
+   
+   # View logs
+   journalctl --user -u clockwork-orange.service -f
+   
+   # Stop service
+   systemctl --user stop clockwork-orange.service
+   
+   # Restart service
+   systemctl --user restart clockwork-orange.service
+   ```
+
+### Option 2: Simple Background Process
+
+```bash
+# Run in background with nohup
+nohup ./run_clockwork_orange.sh --desktop --lockscreen -d /path/to/wallpapers -w 300 > clockwork-orange.log 2>&1 &
+
+# Or run with screen/tmux for better process management
+screen -S clockwork-orange ./run_clockwork_orange.sh --desktop --lockscreen -d /path/to/wallpapers -w 300
+```
+
+### Option 3: Desktop Autostart
+
+Create `~/.config/autostart/clockwork-orange.desktop`:
+```ini
+[Desktop Entry]
+Type=Application
+Name=Clockwork Orange
+Comment=Automatic wallpaper cycling service
+Exec=/path/to/your/clockwork-orange/run_clockwork_orange.sh --desktop --lockscreen -d /path/to/wallpapers -w 300
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+```
+
+## Service Files
+
+The repository includes several service-related files:
+
+- `clockwork-orange.service` - Systemd user service file
+- `run_clockwork_orange.sh` - Wrapper script with proper environment setup
+- `clockwork-orange.yml.example` - Example configuration file
+
+## Troubleshooting
+
+### Check Service Status
+```bash
+systemctl --user status clockwork-orange.service
+```
+
+### View Service Logs
+```bash
+journalctl --user -u clockwork-orange.service -f
+```
+
+### Test Manually
+```bash
+# Test with your specific Python interpreter
+/path/to/your/python clockwork-orange.py --desktop --lockscreen -d /path/to/wallpapers -w 30
+```
+
+### Check Environment Variables
+```bash
+echo $DISPLAY
+echo $XDG_RUNTIME_DIR
+echo $DBUS_SESSION_BUS_ADDRESS
+```
+
+### Debug Lock Screen Configuration
+```bash
+./clockwork-orange.py --debug-lockscreen
+```
+
+## Examples
+
+### Daily Wallpaper Cycling
+```bash
+# Set up configuration for daily cycling
+./clockwork-orange.py --desktop --lockscreen -d /home/user/Pictures/Wallpapers -w 86400 --write-config
+
+# Run as service
+systemctl --user start clockwork-orange.service
+```
+
+### Hourly Desktop Wallpaper Changes
+```bash
+# Desktop only, every hour
+./clockwork-orange.py -d /home/user/DesktopWallpapers -w 3600
+```
+
+### Lock Screen Only
+```bash
+# Set lock screen from specific file
+./clockwork-orange.py --lockscreen -f /home/user/lockscreen.jpg
+```
+
+## Notes
+
+- The service automatically restarts if it crashes
+- Make sure your wallpaper directory exists and contains image files
+- The service runs with a 10-second restart delay if it fails
+- Logs are available through journalctl for systemd services
+- Command line arguments override configuration file settings
+- The script ensures different images for desktop and lock screen in dual mode
+
+## License
+
+This script is provided as-is for educational and personal use.
