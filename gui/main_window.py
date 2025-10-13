@@ -74,11 +74,11 @@ class AboutDialog(QDialog):
     
     def get_logo(self):
         """Get the logo from file or create a default one"""
-        # Try to load the actual logo file
+        # Try to load the actual logo file from gui/icons directory
         logo_paths = [
-            Path(__file__).parent.parent / "clockwork-orange-128x128.png",
-            Path(__file__).parent.parent / "clockwork-orange.png",
-            Path(__file__).parent.parent / "clockwork-orange-64x64.png"
+            Path(__file__).parent / "icons" / "clockwork-orange-128x128.png",
+            Path(__file__).parent / "icons" / "clockwork-orange.png",
+            Path(__file__).parent / "icons" / "clockwork-orange-64x64.png"
         ]
         
         for logo_path in logo_paths:
@@ -243,11 +243,12 @@ class ClockworkOrangeGUI(QMainWindow):
         
     def _get_icon(self):
         """Get application icon"""
-        # Try to find an icon file in the project directory
+        # Try to find an icon file in the gui/icons directory
         icon_paths = [
-            Path(__file__).parent.parent / "clockwork-orange.png",
-            Path(__file__).parent.parent / "clockwork-orange-128x128.png",
-            Path(__file__).parent.parent / "clockwork-orange-64x64.png",
+            Path(__file__).parent / "icons" / "clockwork-orange-128x128.png",
+            Path(__file__).parent / "icons" / "clockwork-orange.png",
+            Path(__file__).parent / "icons" / "clockwork-orange-64x64.png",
+            Path(__file__).parent / "icons" / "clockwork-orange-32x32.png",
             Path(__file__).parent.parent / "icon.png",
             Path(__file__).parent.parent / "assets" / "icon.png"
         ]

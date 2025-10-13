@@ -83,19 +83,25 @@ def main():
     """Create and save the logo"""
     app = QApplication(sys.argv)
     
+    # Create icons directory if it doesn't exist
+    import os
+    icons_dir = "gui/icons"
+    os.makedirs(icons_dir, exist_ok=True)
+    
     # Create different sizes
     sizes = [16, 32, 48, 64, 128, 256, 512]
     
     for size in sizes:
         logo = create_clockwork_orange_logo(size)
-        filename = f"clockwork-orange-{size}x{size}.png"
+        filename = os.path.join(icons_dir, f"clockwork-orange-{size}x{size}.png")
         logo.save(filename)
         print(f"Created {filename}")
     
     # Also create a default icon
     logo = create_clockwork_orange_logo(128)
-    logo.save("clockwork-orange.png")
-    print("Created clockwork-orange.png")
+    default_filename = os.path.join(icons_dir, "clockwork-orange.png")
+    logo.save(default_filename)
+    print(f"Created {default_filename}")
     
     print("Logo creation complete!")
 
