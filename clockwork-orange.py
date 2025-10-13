@@ -13,6 +13,13 @@ import configparser
 import os
 import yaml
 
+# GUI imports (optional)
+try:
+    from gui.main_window import main as gui_main
+    GUI_AVAILABLE = True
+except ImportError:
+    GUI_AVAILABLE = False
+
 # Supported image file extensions
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp', '.svg'}
 
@@ -626,6 +633,9 @@ Configuration File:
 
   Create initial config file:
   %(prog)s --desktop --lockscreen -d /path/to/wallpapers -w 300 --write-config
+  
+  # Start graphical user interface:
+  %(prog)s --gui
         """
     )
     
@@ -651,6 +661,9 @@ Configuration File:
     
     parser.add_argument('--write-config', action='store_true',
                        help='Write configuration file based on current command line options and exit')
+    
+    parser.add_argument('--gui', action='store_true',
+                       help='Start the graphical user interface')
     
     args = parser.parse_args()
     
@@ -680,6 +693,14 @@ Configuration File:
     if args.debug_lockscreen:
         debug_lockscreen_config()
         return
+    
+    # Handle GUI option
+    if args.gui:
+        if not GUI_AVAILABLE:
+            print("[ERROR] GUI not available. Please install PyQt6: pip install PyQt6")
+            sys.exit(1)
+        print("[DEBUG] Starting GUI...")
+        sys.exit(gui_main())
     
     # Handle write-config option
     if args.write_config:

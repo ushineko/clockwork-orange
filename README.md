@@ -23,6 +23,7 @@ A comprehensive Python script for managing wallpapers and lock screen background
 - **PyYAML** (`pip install PyYAML`)
 - **qdbus6** (usually included with KDE Plasma 6)
 - **kwriteconfig6** (usually included with KDE Plasma 6)
+- **PyQt6** (optional, for GUI: `pip install PyQt6`)
 
 ## Installation
 
@@ -35,6 +36,9 @@ A comprehensive Python script for managing wallpapers and lock screen background
 2. **Install dependencies:**
    ```bash
    pip install PyYAML
+   
+   # Optional: Install GUI dependencies
+   pip install PyQt6
    ```
 
 3. **Make the script executable:**
@@ -64,6 +68,9 @@ A comprehensive Python script for managing wallpapers and lock screen background
 
 # Cycle through random wallpapers every 5 minutes
 ./clockwork-orange.py -d /path/to/wallpapers -w 300
+
+# Start the graphical user interface
+./clockwork-orange.py --gui
 ```
 
 ### Configuration File
@@ -94,6 +101,7 @@ Create a configuration file for persistent settings:
 - `-w, --wait SECONDS` - Wait interval for cycling (directory mode only)
 - `--write-config` - Write configuration file and exit
 - `--debug-lockscreen` - Show current lock screen configuration
+- `--gui` - Start the graphical user interface
 
 ## Configuration File
 
@@ -159,6 +167,48 @@ kwriteconfig6 --file kscreenlockerrc \
 The script automatically detects image files by:
 - File extension (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tiff`, `.webp`, `.svg`)
 - MIME type detection as fallback
+
+## Graphical User Interface
+
+The script includes a modern Qt-based GUI for easy management of wallpapers and service configuration.
+
+### Starting the GUI
+
+```bash
+./clockwork-orange.py --gui
+```
+
+### GUI Features
+
+- **Service Management Tab:**
+  - View service status (running/stopped/failed)
+  - Start, stop, and restart the service
+  - Install/uninstall the systemd service
+  - View real-time service logs
+  - Auto-refresh status every 5 seconds
+
+- **Configuration Tab:**
+  - Basic settings: wallpaper modes, default paths, wait intervals
+  - Advanced settings: image extensions, debug mode, auto-start
+  - Raw YAML editor with validation and formatting
+  - Load/save configuration files
+  - Reset to defaults
+
+- **System Tray Integration:**
+  - Minimize to system tray
+  - Status notifications
+  - Quick access menu
+
+- **Menu Bar:**
+  - File menu with exit option
+  - View menu with refresh functionality
+  - Help menu with About dialog and Qt information
+  - Keyboard shortcuts (Ctrl+Q, F5)
+
+### GUI Requirements
+
+- PyQt6 (`pip install PyQt6`)
+- System tray support (most desktop environments)
 
 ## Running as a Background Service
 
