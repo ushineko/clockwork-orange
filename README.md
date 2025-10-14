@@ -6,6 +6,37 @@ A comprehensive Python script for managing wallpapers and lock screen background
 
 *Clockwork Orange: Our Choice Is Your Imperative (tm)*
 
+## Table of Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+  - [Basic Usage](#basic-usage)
+  - [Configuration File](#configuration-file)
+- [Command Line Options](#command-line-options)
+- [Configuration File](#configuration-file-1)
+  - [Configuration Options](#configuration-options)
+- [How It Works](#how-it-works)
+  - [Desktop Wallpapers](#desktop-wallpapers)
+  - [Lock Screen Wallpapers](#lock-screen-wallpapers)
+  - [Image Detection](#image-detection)
+- [Graphical User Interface](#graphical-user-interface)
+  - [Starting the GUI](#starting-the-gui)
+  - [GUI Features](#gui-features)
+  - [GUI Requirements](#gui-requirements)
+  - [Desktop Entry Installation](#desktop-entry-installation)
+- [Running as a Background Service](#running-as-a-background-service)
+  - [Option 1: Systemd User Service (Recommended)](#option-1-systemd-user-service-recommended)
+  - [Option 2: Simple Background Process](#option-2-simple-background-process)
+  - [Option 3: Desktop Autostart](#option-3-desktop-autostart)
+- [Service Files](#service-files)
+  - [Service Configuration Notes](#service-configuration-notes)
+- [Troubleshooting](#troubleshooting)
+- [Examples](#examples)
+- [Notes](#notes)
+- [License](#license)
+
 ## Features
 
 - **Multiple Sources**: Download from URLs, use local files, or randomly select from directories
@@ -171,6 +202,8 @@ The script automatically detects image files by:
 ## Graphical User Interface
 
 The script includes a modern Qt-based GUI for easy management of wallpapers and service configuration.
+
+![Clockwork Orange GUI](img/co_gui_example.png)
 
 ### Starting the GUI
 
