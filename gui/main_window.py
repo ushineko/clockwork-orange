@@ -179,6 +179,20 @@ class ClockworkOrangeGUI(QMainWindow):
         import signal
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
+        
+        # Set up geometry change tracking
+        self._geometry_timer = QTimer()
+        self._geometry_timer.setSingleShot(True)
+        self._geometry_timer.timeout.connect(self.save_window_geometry)
+        self._geometry_timer.setInterval(500)  # 500ms delay
+        
+        # Note: Position tracking variables removed for Wayland compatibility
+        
+        # Restore window position and size after window is shown
+        QTimer.singleShot(100, self.restore_window_geometry)
+        
+        # Note: Position monitoring disabled for Wayland compatibility
+        # Wayland doesn't allow applications to detect their own window position changes
     
     def create_menu_bar(self):
         """Create the menu bar"""
@@ -186,6 +200,13 @@ class ClockworkOrangeGUI(QMainWindow):
         
         # File menu
         file_menu = menubar.addMenu('&File')
+        
+        # Save window size action
+        save_size_action = QAction('&Save Window Size', self)
+        save_size_action.triggered.connect(self.save_window_geometry)
+        file_menu.addAction(save_size_action)
+        
+        file_menu.addSeparator()
         
         # Exit action
         exit_action = QAction('&Exit', self)
@@ -339,12 +360,107 @@ class ClockworkOrangeGUI(QMainWindow):
     
     def closeEvent(self, event):
         """Handle window close event"""
+        # Save window geometry before closing
+        self.save_window_geometry()
+        
         if self.tray_icon and self.tray_icon.isVisible():
             # Just hide the window, don't show message every time
             self.hide()
             event.ignore()
         else:
             event.accept()
+    
+    def restore_window_geometry(self):
+        """Restore window size from configuration and center the window"""
+        try:
+            import yaml
+            from pathlib import Path
+            
+            config_path = Path.home() / ".config" / "clockwork-orange.yml"
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f) or {}
+                
+                # Get window size with defaults
+                width = config.get('window_width', 800)
+                height = config.get('window_height', 600)
+                
+                # Set window size
+                self.resize(width, height)
+                
+                # Always center the window
+                self.center_window()
+                    
+        except Exception as e:
+            print(f"[DEBUG] Failed to restore window geometry: {e}")
+            # Center the window as fallback
+            self.center_window()
+    
+    def save_window_geometry(self):
+        """Save current window size to configuration"""
+        print(f"[DEBUG] Timer fired - saving window size")
+        try:
+            import yaml
+            from pathlib import Path
+            
+            config_path = Path.home() / ".config" / "clockwork-orange.yml"
+            config = {}
+            
+            # Load existing config if it exists
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f) or {}
+            
+            # Get current window size only
+            geometry = self.geometry()
+            width, height = geometry.width(), geometry.height()
+            
+            # Save size
+            config['window_width'] = width
+            config['window_height'] = height
+            
+            # Save config
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(config_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, sort_keys=True)
+                
+        except Exception as e:
+            print(f"[DEBUG] Failed to save window geometry: {e}")
+    
+    def center_window(self):
+        """Center the window on the screen"""
+        screen = QApplication.primaryScreen().geometry()
+        window = self.geometry()
+        x = (screen.width() - window.width()) // 2
+        y = (screen.height() - window.height()) // 2
+        self.move(x, y)
+    
+    def resizeEvent(self, event):
+        """Handle window resize event"""
+        super().resizeEvent(event)
+        # Restart the timer to save geometry after user stops resizing
+        print(f"[DEBUG] Window resized - restarting timer")
+        self._geometry_timer.stop()
+        self._geometry_timer.start()
+    
+    def showEvent(self, event):
+        """Handle window show event"""
+        super().showEvent(event)
+        print(f"[DEBUG] Window shown - saving geometry")
+        # Save geometry when window is shown (in case it was moved while hidden)
+        QTimer.singleShot(100, self.save_window_geometry)
+    
+    def changeEvent(self, event):
+        """Handle window state changes"""
+        super().changeEvent(event)
+        if event.type() == event.Type.WindowStateChange:
+            print(f"[DEBUG] Window state changed - saving geometry")
+            QTimer.singleShot(100, self.save_window_geometry)
+    
+    # Position monitoring methods removed for Wayland compatibility
+    # Wayland doesn't allow applications to detect their own window position changes
+    
+    # moveEvent removed - position tracking disabled for Wayland compatibility
 
 
 def main():

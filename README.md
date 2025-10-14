@@ -210,6 +210,24 @@ The script includes a modern Qt-based GUI for easy management of wallpapers and 
 - PyQt6 (`pip install PyQt6`)
 - System tray support (most desktop environments)
 
+### Desktop Entry Installation
+
+To make Clockwork Orange appear in your application launcher and allow pinning to the taskbar:
+
+```bash
+# Install desktop entry
+./install-desktop-entry.sh
+
+# Or manually install
+cp clockwork-orange.desktop ~/.local/share/applications/
+update-desktop-database ~/.local/share/applications/
+```
+
+After installation, you can:
+- Find "Clockwork Orange" in your application launcher
+- Right-click the application to pin it to your taskbar
+- Use the application like any other desktop application
+
 ## Running as a Background Service
 
 ### Option 1: Systemd User Service (Recommended)

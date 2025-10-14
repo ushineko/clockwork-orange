@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Clockwork Orange
+Comment=Wallpaper Manager for KDE Plasma 6
+Exec=python3 /home/nverenin/git/clockwork-orange/clockwork-orange.py --gui
+Icon=/home/nverenin/git/clockwork-orange/gui/icons/clockwork-orange-128x128.png
+Path=/home/nverenin/git/clockwork-orange
+Terminal=false
+StartupNotify=true
+Categories=Graphics;Photography;System;
+Keywords=wallpaper;desktop;background;lockscreen;kde;plasma;
+StartupWMClass=clockwork-orange
+MimeType=

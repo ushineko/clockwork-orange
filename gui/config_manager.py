@@ -154,6 +154,33 @@ class ConfigManagerWidget(QWidget):
         self.restart_delay_spin.setSuffix(" seconds")
         layout.addRow("Restart Delay:", self.restart_delay_spin)
         
+        # Logs refresh interval
+        self.logs_refresh_spin = QSpinBox()
+        self.logs_refresh_spin.setRange(1, 300)
+        self.logs_refresh_spin.setValue(5)
+        self.logs_refresh_spin.setSuffix(" seconds")
+        layout.addRow("Logs Refresh Interval:", self.logs_refresh_spin)
+        
+        self.auto_update_logs_check = QCheckBox("Auto-update service logs")
+        layout.addRow("Auto-update Logs:", self.auto_update_logs_check)
+        
+        # Window size settings
+        window_layout = QHBoxLayout()
+        
+        self.window_width_spin = QSpinBox()
+        self.window_width_spin.setRange(400, 9999)
+        self.window_width_spin.setValue(800)
+        window_layout.addWidget(QLabel("Width:"))
+        window_layout.addWidget(self.window_width_spin)
+        
+        self.window_height_spin = QSpinBox()
+        self.window_height_spin.setRange(300, 9999)
+        self.window_height_spin.setValue(600)
+        window_layout.addWidget(QLabel("Height:"))
+        window_layout.addWidget(self.window_height_spin)
+        
+        layout.addRow("Window Size:", window_layout)
+        
         widget.setLayout(layout)
         return widget
     
@@ -252,6 +279,12 @@ class ConfigManagerWidget(QWidget):
         self.debug_check.setChecked(self.config_data.get('debug', False))
         self.autostart_check.setChecked(self.config_data.get('autostart', False))
         self.restart_delay_spin.setValue(self.config_data.get('restart_delay', 10))
+        self.logs_refresh_spin.setValue(self.config_data.get('logs_refresh_interval', 5))
+        self.auto_update_logs_check.setChecked(self.config_data.get('auto_update_logs', False))
+        
+        # Window size settings
+        self.window_width_spin.setValue(self.config_data.get('window_width', 800))
+        self.window_height_spin.setValue(self.config_data.get('window_height', 600))
     
     def update_yaml_display(self):
         """Update YAML display from current config"""
@@ -292,6 +325,16 @@ class ConfigManagerWidget(QWidget):
             config['autostart'] = True
         if self.restart_delay_spin.value() != 10:
             config['restart_delay'] = self.restart_delay_spin.value()
+        if self.logs_refresh_spin.value() != 5:
+            config['logs_refresh_interval'] = self.logs_refresh_spin.value()
+        if self.auto_update_logs_check.isChecked():
+            config['auto_update_logs'] = True
+        
+        # Window size settings
+        if self.window_width_spin.value() != 800:
+            config['window_width'] = self.window_width_spin.value()
+        if self.window_height_spin.value() != 600:
+            config['window_height'] = self.window_height_spin.value()
         
         return config
     

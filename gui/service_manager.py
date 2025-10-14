@@ -7,7 +7,8 @@ import subprocess
 import os
 from pathlib import Path
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                             QLabel, QTextEdit, QGroupBox, QMessageBox, QProgressBar)
+                             QLabel, QTextEdit, QGroupBox, QMessageBox, QProgressBar,
+                             QCheckBox, QSpinBox)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont
 
@@ -63,7 +64,7 @@ class ServiceManagerWidget(QWidget):
         
         self.status_details = QTextEdit()
         self.status_details.setReadOnly(True)
-        self.status_details.setMinimumHeight(200)  # Set minimum height instead of maximum
+        self.status_details.setMinimumHeight(150)  # Reduced height to give more space to logs
         status_layout.addWidget(self.status_details)
         
         status_group.setLayout(status_layout)
@@ -117,19 +118,100 @@ class ServiceManagerWidget(QWidget):
         logs_group = QGroupBox("Service Logs")
         logs_layout = QVBoxLayout()
         
+        # Logs controls
+        logs_controls_layout = QHBoxLayout()
+        
+        self.auto_update_check = QCheckBox("Auto-update logs")
+        self.auto_update_check.toggled.connect(self.toggle_auto_update)
+        self.auto_update_check.toggled.connect(self.save_auto_update_state)
+        logs_controls_layout.addWidget(self.auto_update_check)
+        
+        logs_controls_layout.addWidget(QLabel("Refresh interval:"))
+        
+        self.refresh_interval_spin = QSpinBox()
+        self.refresh_interval_spin.setRange(1, 300)  # 1 second to 5 minutes
+        self.refresh_interval_spin.setValue(5)
+        self.refresh_interval_spin.setSuffix(" seconds")
+        self.refresh_interval_spin.valueChanged.connect(self.update_refresh_interval)
+        logs_controls_layout.addWidget(self.refresh_interval_spin)
+        
+        logs_controls_layout.addStretch()  # Push controls to the left
+        
+        refresh_logs_button = QPushButton("Refresh Now")
+        refresh_logs_button.clicked.connect(self.refresh_logs)
+        logs_controls_layout.addWidget(refresh_logs_button)
+        
+        logs_layout.addLayout(logs_controls_layout)
+        
         self.logs_text = QTextEdit()
         self.logs_text.setReadOnly(True)
-        self.logs_text.setMinimumHeight(100)  # Set minimum height instead of maximum
+        self.logs_text.setMinimumHeight(300)  # Much larger minimum height for logs
         logs_layout.addWidget(self.logs_text)
         
-        refresh_logs_button = QPushButton("Refresh Logs")
-        refresh_logs_button.clicked.connect(self.refresh_logs)
-        logs_layout.addWidget(refresh_logs_button)
-        
         logs_group.setLayout(logs_layout)
-        layout.addWidget(logs_group, 1)  # Give logs group stretch factor of 1
+        layout.addWidget(logs_group, 2)  # Give logs group stretch factor of 2 (more space)
         
         self.setLayout(layout)
+        
+        # Auto-update timer for logs
+        self.logs_timer = QTimer()
+        self.logs_timer.timeout.connect(self.refresh_logs)
+        self.auto_update_enabled = False
+        
+        # Load configuration
+        self.load_config()
+    
+    def load_config(self):
+        """Load configuration from file"""
+        try:
+            import yaml
+            from pathlib import Path
+            
+            config_path = Path.home() / ".config" / "clockwork-orange.yml"
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f) or {}
+                
+                # Load logs refresh interval
+                logs_refresh = config.get('logs_refresh_interval', 5)
+                self.refresh_interval_spin.setValue(logs_refresh)
+                
+                # Load auto-update state
+                auto_update = config.get('auto_update_logs', False)
+                self.auto_update_check.setChecked(auto_update)
+                if auto_update:
+                    self.toggle_auto_update(True)
+                
+        except Exception as e:
+            print(f"[DEBUG] Failed to load configuration: {e}")
+    
+    def save_auto_update_state(self, enabled):
+        """Save auto-update state to configuration file"""
+        try:
+            import yaml
+            from pathlib import Path
+            
+            config_path = Path.home() / ".config" / "clockwork-orange.yml"
+            config = {}
+            
+            # Load existing config if it exists
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f) or {}
+            
+            # Update auto-update state
+            if enabled:
+                config['auto_update_logs'] = True
+            else:
+                config.pop('auto_update_logs', None)  # Remove if False (default)
+            
+            # Save config
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(config_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, sort_keys=True)
+                
+        except Exception as e:
+            print(f"[DEBUG] Failed to save auto-update state: {e}")
     
     def refresh_status(self):
         """Refresh service status"""
@@ -269,13 +351,37 @@ class ServiceManagerWidget(QWidget):
             self.progress_bar.setVisible(False)
             self.refresh_status()
     
+    def toggle_auto_update(self, enabled):
+        """Toggle auto-update for logs"""
+        self.auto_update_enabled = enabled
+        if enabled:
+            self.logs_timer.start(self.refresh_interval_spin.value() * 1000)
+            # Immediately refresh logs when enabling auto-update
+            self.refresh_logs()
+        else:
+            self.logs_timer.stop()
+    
+    def update_refresh_interval(self, seconds):
+        """Update the refresh interval for auto-update"""
+        if self.auto_update_enabled:
+            self.logs_timer.stop()
+            self.logs_timer.start(seconds * 1000)
+    
     def refresh_logs(self):
         """Refresh service logs"""
         try:
             result = subprocess.run(['journalctl', '--user', '-u', 'clockwork-orange.service', 
                                    '--no-pager', '-n', '50'], capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
+                # Store current scroll position
+                scrollbar = self.logs_text.verticalScrollBar()
+                was_at_bottom = scrollbar.value() >= scrollbar.maximum() - 10
+                
                 self.logs_text.setText(result.stdout)
+                
+                # Auto-scroll to bottom if auto-update is enabled or if user was already at bottom
+                if self.auto_update_enabled or was_at_bottom:
+                    scrollbar.setValue(scrollbar.maximum())
             else:
                 self.logs_text.setText(f"Error retrieving logs: {result.stderr}")
         except Exception as e:
