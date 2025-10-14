@@ -472,6 +472,23 @@ def main():
     # Set application properties for better integration
     app.setQuitOnLastWindowClosed(False)  # Don't quit when window is closed (tray mode)
     
+    # Simple single-instance check using process name
+    import os
+    import psutil
+    current_pid = os.getpid()
+    
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            if (proc.info['name'] == 'python3' and 
+                proc.info['cmdline'] and 
+                'clockwork-orange.py' in ' '.join(proc.info['cmdline']) and
+                '--gui' in ' '.join(proc.info['cmdline']) and
+                proc.info['pid'] != current_pid):
+                print("[DEBUG] Another instance is already running")
+                return 0
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    
     # Check if system tray is available
     if not QSystemTrayIcon.isSystemTrayAvailable():
         QMessageBox.critical(None, "System Tray",
@@ -499,6 +516,9 @@ def main():
         if window.tray_icon:
             window.tray_icon.hide()
         return 0
+    finally:
+        # Cleanup (no lock file to clean up)
+        pass
 
 
 if __name__ == "__main__":
