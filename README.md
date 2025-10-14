@@ -4,7 +4,7 @@ A comprehensive Python script for managing wallpapers and lock screen background
 
 > **⚠️ IMPORTANT:** This script is designed specifically for KDE Plasma 6 and requires `qdbus6` and `kwriteconfig6` commands. It will not work with older KDE versions.
 
-*Named after the automated, mechanical precision with which it changes your visual environment - conditioning you to accept its wallpaper choices whether you want to or not.*
+*Clockwork Orange: Our Choice Is Your Imperative (tm)*
 
 ## Features
 
