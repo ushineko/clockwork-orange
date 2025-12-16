@@ -1,6 +1,6 @@
 # clockwork-orange
 
-A comprehensive Python script for managing wallpapers and lock screen backgrounds on **KDE Plasma 6 only**. The script supports setting wallpapers from URLs, local files, or random selection from directories, with options for both desktop and lock screen backgrounds.
+A Python script for managing wallpapers and lock screen backgrounds on **KDE Plasma 6 only**. The script supports setting wallpapers from URLs, local files, or random selection from directories, with options for both desktop and lock screen backgrounds.
 
 > **⚠️ IMPORTANT:** This script is designed specifically for KDE Plasma 6 and requires `qdbus6` and `kwriteconfig6` commands. It will not work with older KDE versions.
 
@@ -45,7 +45,7 @@ A comprehensive Python script for managing wallpapers and lock screen background
 - **Lock Screen Support**: Configure KDE Plasma 6 lock screen backgrounds
 - **Configuration File**: YAML-based configuration for persistent settings
 - **Service Mode**: Run as a background service with systemd
-- **Comprehensive Debugging**: Detailed logging for troubleshooting
+- **Detailed Debugging**: Detailed logging for troubleshooting
 
 ## Requirements
 

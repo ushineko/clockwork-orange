@@ -59,7 +59,7 @@ class AboutDialog(QDialog):
         desc_text.setReadOnly(True)
         desc_text.setMaximumHeight(80)
         desc_text.setPlainText(
-            "A comprehensive Python script for managing wallpapers and lock screen "
+            "A Python script for managing wallpapers and lock screen "
             "backgrounds on KDE Plasma 6. Features dual wallpaper support, continuous "
             "cycling, and both command-line and graphical interfaces."
         )

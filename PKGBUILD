@@ -2,7 +2,7 @@
 pkgname=clockwork-orange-git
 pkgver=r12.6e2e127
 pkgrel=1
-pkgdesc="A comprehensive Python script for managing wallpapers and lock screen backgrounds on KDE Plasma 6"
+pkgdesc="A Python script for managing wallpapers and lock screen backgrounds on KDE Plasma 6"
 arch=('any')
 url="https://github.com/ushineko/clockwork-orange"
 license=('MIT')
