@@ -11,7 +11,7 @@ optdepends=('python-pyqt6: for GUI support')
 makedepends=('git')
 provides=("${pkgname%-git}")
 conflicts=("${pkgname%-git}")
-source=("git+file://${startdir}")
+source=("git+https://github.com/ushineko/clockwork-orange.git")
 sha256sums=('SKIP')
 install=clockwork-orange.install
 
