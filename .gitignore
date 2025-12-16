@@ -182,3 +182,13 @@ Desktop.ini
 
 # Configuration files (user-specific)
 clockwork-orange.yml
+
+# Arch Linux packaging
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.pkg.tar.gz
+*.pkg.tar
+*.src.tar.*
+pkg/
+src/
+clockwork-orange/
