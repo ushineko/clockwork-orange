@@ -72,10 +72,26 @@ A comprehensive Python script for managing wallpapers and lock screen background
    pip install PyQt6
    ```
 
+
 3. **Make the script executable:**
    ```bash
    chmod +x clockwork-orange.py
    ```
+
+## Arch Linux Installation
+
+### From AUR (Recommended)
+This package is designed for the AUR. Once submitted, you can install it using your favorite AUR helper:
+```bash
+yay -S clockwork-orange-git
+```
+
+### Local Development / Manual Build
+To build the package from your local repository (useful for testing changes before pushing):
+```bash
+./build_local.sh
+sudo pacman -U clockwork-orange-git-*.pkg.tar.zst
+```
 
 ## Quick Start
 
