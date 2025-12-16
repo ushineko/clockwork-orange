@@ -30,7 +30,24 @@ def create_clockwork_orange_logo(size=256):
         Qt.TransformationMode.SmoothTransformation
     )
     
-    return scaled_image
+    # Attempt to remove background
+    # We assume the top-left pixel represents the background color
+    if not scaled_image.isNull():
+        # Get background color from pixel (0,0)
+        bg_color = scaled_image.pixelColor(0, 0)
+        
+        # Create a mask from this color
+        # Qt.MaskMode.MaskOutColor makes the matching color transparent
+        mask = scaled_image.createMaskFromColor(bg_color.rgb(), Qt.MaskMode.MaskOutColor)
+        
+        # Create a new pixmap and set the mask
+        import PyQt6.QtGui
+        pixmap = QPixmap.fromImage(scaled_image)
+        pixmap.setMask(PyQt6.QtGui.QBitmap.fromImage(mask))
+        
+        return pixmap
+    
+    return QPixmap.fromImage(scaled_image)
 
 
 def main():
