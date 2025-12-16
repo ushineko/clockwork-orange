@@ -4,7 +4,7 @@ Create a logo for Clockwork Orange - resizing from source image
 """
 
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QPixmap, QPainter, QImage
+from PyQt6.QtGui import QPainter, QColor, QFont, QPixmap, QImage
 from PyQt6.QtCore import Qt
 import sys
 import os
@@ -33,19 +33,33 @@ def create_clockwork_orange_logo(size=256):
     # Attempt to remove background
     # We assume the top-left pixel represents the background color
     if not scaled_image.isNull():
+        # Convert to ARGB32 to ensure we have an alpha channel
+        scaled_image = scaled_image.convertToFormat(QImage.Format.Format_ARGB32)
+        
         # Get background color from pixel (0,0)
         bg_color = scaled_image.pixelColor(0, 0)
+        bg_rgb = (bg_color.red(), bg_color.green(), bg_color.blue())
         
-        # Create a mask from this color
-        # Qt.MaskMode.MaskOutColor makes the matching color transparent
-        mask = scaled_image.createMaskFromColor(bg_color.rgb(), Qt.MaskMode.MaskOutColor)
+        width = scaled_image.width()
+        height = scaled_image.height()
         
-        # Create a new pixmap and set the mask
-        import PyQt6.QtGui
-        pixmap = QPixmap.fromImage(scaled_image)
-        pixmap.setMask(PyQt6.QtGui.QBitmap.fromImage(mask))
+        # Simple tolerance for background detection (to handle light compression artifacts)
+        tolerance = 10
         
-        return pixmap
+        for y in range(height):
+            for x in range(width):
+                pixel_color = scaled_image.pixelColor(x, y)
+                r, g, b = pixel_color.red(), pixel_color.green(), pixel_color.blue()
+                
+                # Check if pixel is within tolerance of background color
+                if (abs(r - bg_rgb[0]) <= tolerance and
+                    abs(g - bg_rgb[1]) <= tolerance and
+                    abs(b - bg_rgb[2]) <= tolerance):
+                    # Set alpha to 0 (fully transparent)
+                    # We keep rgb values but set alpha to 0
+                    scaled_image.setPixelColor(x, y, QColor(r, g, b, 0))
+        
+        return QPixmap.fromImage(scaled_image)
     
     return QPixmap.fromImage(scaled_image)
 
