@@ -38,26 +38,35 @@ def create_clockwork_orange_logo(size=256):
         
         # Get background color from pixel (0,0)
         bg_color = scaled_image.pixelColor(0, 0)
-        bg_rgb = (bg_color.red(), bg_color.green(), bg_color.blue())
+        bg_r, bg_g, bg_b = bg_color.red(), bg_color.green(), bg_color.blue()
         
         width = scaled_image.width()
         height = scaled_image.height()
         
-        # Simple tolerance for background detection (to handle light compression artifacts)
-        tolerance = 10
+        # Use color distance for better edge handling
+        # threshold: colors closer than this are fully transparent
+        # fuzziness: colors between threshold and this get semi-transparent (fade out halo)
+        threshold = 30.0
+        fuzziness = 70.0
+        
+        import math
         
         for y in range(height):
             for x in range(width):
                 pixel_color = scaled_image.pixelColor(x, y)
                 r, g, b = pixel_color.red(), pixel_color.green(), pixel_color.blue()
                 
-                # Check if pixel is within tolerance of background color
-                if (abs(r - bg_rgb[0]) <= tolerance and
-                    abs(g - bg_rgb[1]) <= tolerance and
-                    abs(b - bg_rgb[2]) <= tolerance):
-                    # Set alpha to 0 (fully transparent)
-                    # We keep rgb values but set alpha to 0
+                # Calculate Euclidean distance in RGB space
+                dist = math.sqrt((r - bg_r)**2 + (g - bg_g)**2 + (b - bg_b)**2)
+                
+                if dist < threshold:
+                    # Fully transparent
                     scaled_image.setPixelColor(x, y, QColor(r, g, b, 0))
+                elif dist < fuzziness:
+                    # Semi-transparent (linear fade) to remove halo
+                    # Map [threshold, fuzziness] -> [0, 255]
+                    alpha = int(255 * (dist - threshold) / (fuzziness - threshold))
+                    scaled_image.setPixelColor(x, y, QColor(r, g, b, alpha))
         
         return QPixmap.fromImage(scaled_image)
     
