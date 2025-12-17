@@ -45,6 +45,8 @@ A Python script for managing wallpapers and lock screen backgrounds on **KDE Pla
 - **Lock Screen Support**: Configure KDE Plasma 6 lock screen backgrounds
 - **Configuration File**: YAML-based configuration for persistent settings
 - **Service Mode**: Run as a background service with systemd
+- **Plugin System**: Extensible plugin architecture (includes Google Images downloader)
+- **Image Review & Blacklist**: built-in tool to review, mark, and delete unwanted wallpapers using hash-based blacklisting
 - **Detailed Debugging**: Detailed logging for troubleshooting
 
 ## Requirements
@@ -215,6 +217,31 @@ The script automatically detects image files by:
 - File extension (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tiff`, `.webp`, `.svg`)
 - MIME type detection as fallback
 
+## Plugin System
+
+Clockwork Orange features a robust plugin system tailored for wallpaper acquisition.
+
+### Google Images Plugin
+The built-in Google Images plugin allows you to scrape high-quality wallpapers based on search terms.
+- **Smart Queries**: Supports multiple comma-separated searches (e.g., "4k space, 4k nature")
+- **Intelligent Processing**: Automatically downloads, resizes, and center-crops images to 4K (3840x2160)
+- **Quality Control**: Skips low-resolution thumbnails or duplicates
+- **Scheduling**: Built-in interval checks (Daily/Weekly/Always)
+- **Retention**: Automatically cleans up old files to save space
+
+**Usage:**
+```bash
+# Run standalone
+python3 plugins/google_images.py --config '{"query": "4k space", "download_dir": "/path/to/wallpapers"}'
+```
+
+### Review & Blacklist System
+The GUI includes a powerful "Review Mode" for managing your downloaded collections:
+1. **Scan**: Load images from the plugin's download directory.
+2. **Review**: Navigate through images using **Left/Right Arrows**.
+3. **Mark**: Press **Space** to mark an unwanted image (indicated by a red cross).
+4. **Blacklist**: Click "Apply Blacklist" to delete the file and ban its hash forever.
+
 ## Graphical User Interface
 
 The script includes a modern Qt-based GUI for easy management of wallpapers and service configuration.
@@ -247,6 +274,14 @@ The script includes a modern Qt-based GUI for easy management of wallpapers and 
   - Minimize to system tray
   - Status notifications
   - Quick access menu
+
+- **Plugins Tab:**
+  - **Plugin Management**: Select, configure, and run plugins (e.g., Google Images)
+  - **Live Preview**: Real-time thumbnail preview of downloaded images
+  - **Review Mode**: Review downloaded images, mark unwanted ones, and blacklist them
+  - **Auto-Save**: Configuration changes are saved automatically
+  - **Execution Logs**: View real-time logs from plugin execution
+  - **Reset & Run**: Clear download directories before starting fresh
 
 - **Menu Bar:**
   - File menu with exit option

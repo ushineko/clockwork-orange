@@ -8,9 +8,10 @@ from pathlib import Path
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                              QLabel, QGroupBox, QCheckBox, QLineEdit, QSpinBox,
                              QFileDialog, QMessageBox, QFormLayout, QTabWidget,
-                             QTextEdit, QComboBox)
-from PyQt6.QtCore import Qt, pyqtSignal
+                             QTextEdit, QComboBox, QProgressBar)
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont
+from .plugins_tab import PluginsTab
 
 
 class ConfigManagerWidget(QWidget):
@@ -22,6 +23,10 @@ class ConfigManagerWidget(QWidget):
         super().__init__()
         self.config_path = Path.home() / ".config" / "clockwork-orange.yml"
         self.config_data = {}
+        self.auto_save_timer = QTimer()
+        self.auto_save_timer.setSingleShot(True)
+        self.auto_save_timer.setInterval(1000) # 1 second debounce
+        self.auto_save_timer.timeout.connect(self.perform_auto_save)
         self.init_ui()
         self.load_config()
     
@@ -29,6 +34,11 @@ class ConfigManagerWidget(QWidget):
         """Initialize the UI"""
         layout = QVBoxLayout()
         
+        # Save Button
+        save_btn = QPushButton("Save Configuration")
+        save_btn.clicked.connect(self.apply_config)
+        layout.addWidget(save_btn)
+
         # Configuration tabs
         self.tab_widget = QTabWidget()
         
@@ -39,6 +49,11 @@ class ConfigManagerWidget(QWidget):
         # Advanced settings tab
         self.advanced_tab = self.create_advanced_tab()
         self.tab_widget.addTab(self.advanced_tab, "Advanced Settings")
+        
+        # Plugins tab
+        self.plugins_tab = PluginsTab(self.config_data)
+        self.plugins_tab.config_changed.connect(self.schedule_auto_save)
+        self.tab_widget.addTab(self.plugins_tab, "Plugins")
         
         # Raw YAML tab
         self.raw_tab = self.create_raw_tab()
@@ -67,8 +82,61 @@ class ConfigManagerWidget(QWidget):
         
         layout.addLayout(button_layout)
         
+        # Progress Bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+        
         self.setLayout(layout)
+        
+    def update_progress(self, value: int, message: str = ""):
+        """Update the progress bar."""
+        if value < 0:
+            self.progress_bar.setVisible(False)
+        else:
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setValue(value)
+            
+        if message:
+            self.progress_bar.setFormat(f"%p% - {message}")
+        else:
+            self.progress_bar.setFormat("%p%")
     
+    def schedule_auto_save(self):
+        """Schedule an auto-save operation."""
+        # Use status bar or progress bar to indicate pending save?
+        # For now, just setting the timer
+        self.auto_save_timer.start()
+        
+    def perform_auto_save(self):
+        """Perform the auto-save operation (silent)."""
+        try:
+            config = self.get_config_from_ui()
+            
+            # Create config directory if it doesn't exist
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Save to default location
+            with open(self.config_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, sort_keys=True)
+            
+            self.config_data = config
+            self.update_yaml_display()
+            self.config_changed.emit()
+            
+            # Indicate saved status subtly
+            if self.progress_bar.isVisible():
+                # If progress bar is visible (plugin running), don't mess with it
+                pass
+            else:
+                 # Perhaps flash a message somewhere? simpler to just update system tray signal if any
+                 pass
+            
+            print("[DEBUG] Auto-saved configuration")
+            
+        except Exception as e:
+            print(f"[ERROR] Auto-save failed: {e}")
+
     def create_basic_tab(self):
         """Create basic settings tab"""
         widget = QWidget()
@@ -88,35 +156,6 @@ class ConfigManagerWidget(QWidget):
         self.dual_wallpapers_check.toggled.connect(self.on_dual_wallpapers_toggled)
         self.desktop_only_check.toggled.connect(self.on_desktop_only_toggled)
         self.lockscreen_only_check.toggled.connect(self.on_lockscreen_only_toggled)
-        
-        # Default directory
-        dir_layout = QHBoxLayout()
-        self.directory_edit = QLineEdit()
-        self.directory_edit.setPlaceholderText("/path/to/wallpapers")
-        dir_layout.addWidget(self.directory_edit)
-        
-        self.browse_dir_button = QPushButton("Browse...")
-        self.browse_dir_button.clicked.connect(self.browse_directory)
-        dir_layout.addWidget(self.browse_dir_button)
-        
-        layout.addRow("Default Directory:", dir_layout)
-        
-        # Default file
-        file_layout = QHBoxLayout()
-        self.file_edit = QLineEdit()
-        self.file_edit.setPlaceholderText("/path/to/wallpaper.jpg")
-        file_layout.addWidget(self.file_edit)
-        
-        self.browse_file_button = QPushButton("Browse...")
-        self.browse_file_button.clicked.connect(self.browse_file)
-        file_layout.addWidget(self.browse_file_button)
-        
-        layout.addRow("Default File:", file_layout)
-        
-        # Default URL
-        self.url_edit = QLineEdit()
-        self.url_edit.setPlaceholderText("https://pic.re/image")
-        layout.addRow("Default URL:", self.url_edit)
         
         # Wait interval
         self.wait_spin = QSpinBox()
@@ -227,21 +266,6 @@ class ConfigManagerWidget(QWidget):
             self.dual_wallpapers_check.setChecked(False)
             self.desktop_only_check.setChecked(False)
     
-    def browse_directory(self):
-        """Browse for wallpaper directory"""
-        directory = QFileDialog.getExistingDirectory(self, "Select Wallpaper Directory")
-        if directory:
-            self.directory_edit.setText(directory)
-    
-    def browse_file(self):
-        """Browse for wallpaper file"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Wallpaper File", "", 
-            "Image Files (*.jpg *.jpeg *.png *.bmp *.gif *.tiff *.webp *.svg);;All Files (*)"
-        )
-        if file_path:
-            self.file_edit.setText(file_path)
-    
     def load_config(self):
         """Load configuration from file"""
         try:
@@ -256,7 +280,7 @@ class ConfigManagerWidget(QWidget):
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load configuration: {e}")
-    
+
     def update_ui_from_config(self):
         """Update UI elements from configuration data"""
         # Wallpaper mode
@@ -268,9 +292,6 @@ class ConfigManagerWidget(QWidget):
             self.lockscreen_only_check.setChecked(True)
         
         # Default values
-        self.directory_edit.setText(self.config_data.get('default_directory', ''))
-        self.file_edit.setText(self.config_data.get('default_file', ''))
-        self.url_edit.setText(self.config_data.get('default_url', ''))
         self.wait_spin.setValue(self.config_data.get('default_wait', 300))
         
         # Advanced settings
@@ -285,6 +306,10 @@ class ConfigManagerWidget(QWidget):
         # Window size settings
         self.window_width_spin.setValue(self.config_data.get('window_width', 800))
         self.window_height_spin.setValue(self.config_data.get('window_height', 600))
+        
+        # Update plugins tab
+        if hasattr(self, 'plugins_tab'):
+            self.plugins_tab.update_config_data(self.config_data)
     
     def update_yaml_display(self):
         """Update YAML display from current config"""
@@ -307,12 +332,6 @@ class ConfigManagerWidget(QWidget):
             config['lockscreen'] = True
         
         # Default values
-        if self.directory_edit.text():
-            config['default_directory'] = self.directory_edit.text()
-        if self.file_edit.text():
-            config['default_file'] = self.file_edit.text()
-        if self.url_edit.text():
-            config['default_url'] = self.url_edit.text()
         if self.wait_spin.value() != 300:
             config['default_wait'] = self.wait_spin.value()
         
@@ -335,6 +354,19 @@ class ConfigManagerWidget(QWidget):
             config['window_width'] = self.window_width_spin.value()
         if self.window_height_spin.value() != 600:
             config['window_height'] = self.window_height_spin.value()
+            
+        # Plugin settings
+        if hasattr(self, 'plugins_tab'):
+            config['plugins'] = self.plugins_tab.get_config()
+            config['active_plugin'] = self.plugins_tab.get_active_plugin()
+            
+            # Clean up invalid plugins
+            available = self.plugins_tab.plugin_manager.get_available_plugins()
+            valid_plugins = {}
+            for name, data in config['plugins'].items():
+                if name in available:
+                    valid_plugins[name] = data
+            config['plugins'] = valid_plugins
         
         return config
     

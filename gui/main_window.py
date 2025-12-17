@@ -5,6 +5,7 @@ Main GUI window for clockwork-orange
 
 import sys
 import os
+import subprocess
 from pathlib import Path
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTabWidget, QVBoxLayout, 
                              QWidget, QMessageBox, QSystemTrayIcon, QMenu, QMenuBar,
@@ -55,23 +56,52 @@ class AboutDialog(QDialog):
         layout.addWidget(copyright_label)
         
         # Description
-        desc_text = QTextEdit()
-        desc_text.setReadOnly(True)
-        desc_text.setMaximumHeight(80)
-        desc_text.setPlainText(
-            "A Python script for managing wallpapers and lock screen "
-            "backgrounds on KDE Plasma 6. Features dual wallpaper support, continuous "
-            "cycling, and both command-line and graphical interfaces."
-        )
-        layout.addWidget(desc_text)
+        # Version
+        version_text = self.get_version_string()
+        version_label = QLabel(version_text)
+        version_label.setFont(QFont("Arial", 9))
+        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(version_label)
+        
+        # Spacer
+        layout.addStretch()
         
         # Close button
-        close_button = QPushButton("Close")
-        close_button.clicked.connect(self.accept)
-        layout.addWidget(close_button)
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        button_layout.addWidget(close_btn)
+        button_layout.addStretch()
+        
+        layout.addLayout(button_layout)
         
         self.setLayout(layout)
-    
+        
+    def get_version_string(self):
+        """Get the application version string with git info if available."""
+        base_version = "1.0"
+        git_ref = ""
+        
+        try:
+            # Try to get git version from project root
+            project_root = Path(__file__).parent.parent
+            result = subprocess.run(
+                ['git', 'describe', '--tags', '--always', '--dirty'], 
+                cwd=project_root,
+                capture_output=True, 
+                text=True, 
+                timeout=1
+            )
+            if result.returncode == 0:
+                git_ref = result.stdout.strip()
+        except Exception:
+            pass
+            
+        if git_ref:
+            return f"Version: {base_version} ({git_ref})"
+        return f"Version: {base_version}"
+        
     def get_logo(self):
         """Get the logo from file or create a default one"""
         # Try to load the actual logo file from gui/icons directory

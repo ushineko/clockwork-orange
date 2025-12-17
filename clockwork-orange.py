@@ -12,6 +12,7 @@ import signal
 import configparser
 import os
 import yaml
+from plugin_manager import PluginManager
 
 # GUI imports (optional)
 try:
@@ -179,6 +180,7 @@ def set_random_wallpaper_from_directory(directory_path: Path):
     """Set wallpaper from a random image in the specified directory."""
     try:
         image_file = get_random_image_from_directory(directory_path)
+        print(f"[DEBUG] Selected random wallpaper: {image_file}")
         return set_wallpaper(image_file)
     except ValueError as e:
         print(f"[ERROR] {e}")
@@ -486,25 +488,25 @@ def merge_config_with_args(config, args):
             merged_args.lockscreen = True
             print(f"[DEBUG] Enabled dual wallpaper mode from config")
         
-        # Default URL
-        if not merged_args.url and not merged_args.file and not merged_args.directory and config.get('default_url'):
-            merged_args.url = config['default_url']
-            print(f"[DEBUG] Set default URL from config: {merged_args.url}")
-        
-        # Default directory
-        if not merged_args.directory and not merged_args.file and not merged_args.url and config.get('default_directory'):
-            merged_args.directory = Path(config['default_directory'])
-            print(f"[DEBUG] Set default directory from config: {merged_args.directory}")
-        
-        # Default file
-        if not merged_args.file and not merged_args.directory and not merged_args.url and config.get('default_file'):
-            merged_args.file = Path(config['default_file'])
-            print(f"[DEBUG] Set default file from config: {merged_args.file}")
-        
-        # Wait interval
+        # Default wait interval (only if wait not specified)
         if not merged_args.wait and config.get('default_wait'):
             merged_args.wait = config['default_wait']
             print(f"[DEBUG] Set default wait interval from config: {merged_args.wait}")
+            
+        # Default plugin
+        if not merged_args.plugin and not merged_args.file and not merged_args.directory:
+            if config.get('active_plugin'):
+                merged_args.plugin = config.get('active_plugin')
+                print(f"[DEBUG] Set default plugin from config: {merged_args.plugin}")
+            elif config.get('plugins'):
+                # Fallback: Use 'local' if available, otherwise first found
+                if 'local' in config['plugins']:
+                    merged_args.plugin = 'local'
+                    print(f"[DEBUG] Fallback: defaulting to 'local' plugin")
+                else:
+                    first_plugin = next(iter(config['plugins']))
+                    merged_args.plugin = first_plugin
+                    print(f"[DEBUG] Fallback: defaulting to first plugin '{first_plugin}'")
     
     return merged_args
 
@@ -588,7 +590,6 @@ def debug_lockscreen_config():
         else:
             print(f"[DEBUG] Wallpaper section {wallpaper_section} not found")
         
-        # Also check the main Greeter wallpaper setting
         if config.has_section('Greeter'):
             if config.has_option('Greeter', 'wallpaper'):
                 main_wallpaper = config.get('Greeter', 'wallpaper')
@@ -598,6 +599,37 @@ def debug_lockscreen_config():
             
     except Exception as e:
         print(f"[ERROR] Failed to read configuration file: {e}")
+
+def clean_config(config):
+    """Clean up invalid plugins from configuration."""
+    if not config.get('plugins'):
+        return
+        
+    plugin_manager = PluginManager()
+    available = plugin_manager.get_available_plugins()
+    
+    plugins = config['plugins']
+    to_remove = []
+    
+    for name in plugins:
+        if name not in available:
+            to_remove.append(name)
+            
+    if to_remove:
+        print(f"[DEBUG] Cleaning up invalid plugins from config: {', '.join(to_remove)}")
+        for name in to_remove:
+            del config['plugins'][name]
+            
+        # Write back changes
+        config_path = Path.home() / ".config" / "clockwork-orange.yml"
+        try:
+            # Create a simplified args object for write_config_file equivalent
+            # But simpler here since we just dump the dict
+            with open(config_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, sort_keys=True)
+            print(f"[DEBUG] Configuration cleaned and saved")
+        except Exception as e:
+            print(f"[ERROR] Failed to save cleaned configuration: {e}")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -643,15 +675,24 @@ Configuration File:
     parser.add_argument('--lockscreen', action='store_true',
                        help='Set lock screen wallpaper instead of desktop wallpaper')
     parser.add_argument('--desktop', action='store_true',
-                       help='Set desktop wallpaper (can be combined with --lockscreen for both)')
+                       help='Set desktop wallpaper (can be combined with operations)')
+    
+    # Plugin Support
+    plugin_manager = PluginManager()
+    available_plugins = plugin_manager.get_available_plugins()
     
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-u', '--url', 
-                      help='Download image from URL and set as wallpaper')
+                      help='Download image from URL and set as wallpaper (Legacy)')
     group.add_argument('-f', '--file', type=Path,
-                      help='Set wallpaper from local file')
+                      help='Set wallpaper from local file (Legacy)')
     group.add_argument('-d', '--directory', type=Path,
-                      help='Set random wallpaper from directory')
+                      help='Set random wallpaper from directory (Legacy)')
+    group.add_argument('--plugin', choices=available_plugins,
+                      help=f'Use a specific plugin source. Available: {", ".join(available_plugins)}')
+    
+    parser.add_argument('--plugin-config', type=str,
+                       help='JSON configuration string for the plugin (overrides config file)')
     
     parser.add_argument('-w', '--wait', type=int, metavar='SECONDS',
                        help='Wait specified seconds between wallpaper changes (only works with -d/--directory)')
@@ -669,11 +710,23 @@ Configuration File:
     
     # Load configuration file and merge with command line arguments
     config = load_config_file()
+    
+    # Auto-clean configuration
+    clean_config(config)
+    
     args = merge_config_with_args(config, args)
     
+    # Handle GUI option early to avoid validation errors from config defaults
+    if args.gui:
+        if not GUI_AVAILABLE:
+            print("[ERROR] GUI not available. Please install PyQt6: pip install PyQt6")
+            sys.exit(1)
+        print("[DEBUG] Starting GUI...")
+        sys.exit(gui_main())
+
     # Validate wait option
-    if args.wait is not None and args.directory is None:
-        parser.error("--wait can only be used with --directory")
+    if args.wait is not None and args.directory is None and args.plugin is None:
+        parser.error("--wait can only be used with --directory or --plugin (returning a directory)")
     
     if args.wait is not None and args.wait <= 0:
         parser.error("--wait must be a positive integer")
@@ -686,21 +739,13 @@ Configuration File:
     if args.desktop and args.lockscreen:
         if args.url:
             parser.error("--url cannot be used with dual wallpaper mode (lock screen requires local files)")
-        if not args.file and not args.directory:
-            parser.error("Dual wallpaper mode requires either --file or --directory")
+        if not args.file and not args.directory and not args.plugin:
+            parser.error("Dual wallpaper mode requires either --file, --directory, or --plugin")
     
     # Handle debug option
     if args.debug_lockscreen:
         debug_lockscreen_config()
         return
-    
-    # Handle GUI option
-    if args.gui:
-        if not GUI_AVAILABLE:
-            print("[ERROR] GUI not available. Please install PyQt6: pip install PyQt6")
-            sys.exit(1)
-        print("[DEBUG] Starting GUI...")
-        sys.exit(gui_main())
     
     # Handle write-config option
     if args.write_config:
@@ -721,6 +766,46 @@ Configuration File:
         target = "desktop"
     else:
         target = "wallpaper"  # Default behavior
+
+    # Resolve plugin if specified
+    if args.plugin:
+        print(f"[DEBUG] Plugin mode: {args.plugin}")
+        # Determine config for plugin
+        plugin_config = {}
+        
+        # Check for config in file first
+        if config.get('plugins', {}).get(args.plugin):
+            plugin_config = config['plugins'][args.plugin]
+        
+        # CLI config overrides file config
+        if args.plugin_config:
+            try:
+                cli_config = json.loads(args.plugin_config)
+                plugin_config.update(cli_config)
+            except json.JSONDecodeError:
+                print(f"[ERROR] Invalid JSON in --plugin-config")
+                sys.exit(1)
+        
+        # Execute plugin
+        print(f"[DEBUG] Executing plugin {args.plugin} with config: {plugin_config}")
+        result = plugin_manager.execute_plugin(args.plugin, plugin_config)
+        
+        if result.get("status") == "success":
+            ret_path = Path(result["path"])
+            print(f"[DEBUG] Plugin returned path: {ret_path}")
+            
+            if ret_path.is_dir():
+                print(f"[DEBUG] Plugin resolved to directory")
+                args.directory = ret_path
+            elif ret_path.is_file():
+                print(f"[DEBUG] Plugin resolved to file")
+                args.file = ret_path
+            else:
+                print(f"[ERROR] Plugin returned invalid path: {ret_path}")
+                sys.exit(1)
+        else:
+            print(f"[ERROR] Plugin execution failed: {result.get('message')}")
+            sys.exit(1)
     
     print(f"[DEBUG] Starting {target} set process")
     
@@ -800,9 +885,10 @@ Configuration File:
                 # Single random wallpaper mode
                 success = set_random_wallpaper_from_directory(args.directory)
         else:
-            # Default behavior: download from default URL
-            print("[DEBUG] Default mode: downloading from https://pic.re/image")
-            success = download_and_set_wallpaper("https://pic.re/image")
+             # Fallback if no source specified
+             print("[ERROR] No source specified. Use --plugin, --file, --directory, or --url.")
+             parser.print_help()
+             sys.exit(1)
     
     if success:
         print(f"[DEBUG] {target.capitalize()} set successfully")

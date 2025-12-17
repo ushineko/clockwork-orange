@@ -4,9 +4,6 @@
 # Enable dual wallpaper mode (both desktop and lock screen with different images)
 dual_wallpapers: true
 
-# Default directory for wallpapers
-default_directory: /home/user/Pictures/Wallpapers
-
 # Default wait interval for cycling (in seconds)
 default_wait: 300
 
@@ -16,8 +13,8 @@ default_wait: 300
 # Alternative: Enable only lock screen mode  
 # lockscreen: true
 
-# Alternative: Set default URL
-# default_url: "https://pic.re/image"
-
-# Alternative: Set default file
-# default_file: "/path/to/specific/wallpaper.jpg"
+# Plugin Configuration
+# plugins:
+#   local:
+#     path: "/path/to/wallpapers"
+#     recursive: true
