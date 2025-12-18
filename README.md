@@ -59,6 +59,7 @@ A Python script for managing wallpapers and lock screen backgrounds on **KDE Pla
 - **qdbus6** (usually included with KDE Plasma 6)
 - **kwriteconfig6** (usually included with KDE Plasma 6)
 - **PyQt6** (optional, for GUI: `pip install PyQt6`)
+- **Pillow** (optional, for image processing: `pip install Pillow`)
 
 ## Installation
 
@@ -72,8 +73,8 @@ A Python script for managing wallpapers and lock screen backgrounds on **KDE Pla
    ```bash
    pip install PyYAML
    
-   # Optional: Install GUI dependencies
-   pip install PyQt6
+   # Optional: Install GUI & Plugin dependencies
+   pip install PyQt6 Pillow
    ```
 
 
@@ -282,25 +283,27 @@ The script includes a modern Qt-based GUI for easy management of wallpapers and 
   - **Live Logs**: View scrolling real-time logs from the background process
   - **Auto-Refresh**: Dashboard updates automatically
 
-- **Configuration Tab:**
+- **Plugins Tab:**
+  - **Plugin Management**: Select, configure, and run plugins
+  - **Visual Interface**:
+    - **Sidebar Navigation**: Organized tree view with system icons (KDE-friendly).
+    - **Resizable Layout**: Adjustable split views for configuration and preview areas.
+    - **Vertical Config**: Clean, scrolling configuration forms.
+  - **Live Preview**: Real-time thumbnail preview of downloaded images
+  - **Review Mode**: Review downloaded images, mark unwanted ones, and blacklist them
+  - **Execution Logs**: View real-time logs and progress bars
+  - **Reset & Run**: Clear download directories before starting fresh
+
+- **Configuration:**
   - Basic settings: wallpaper modes, default paths, wait intervals
   - Advanced settings: image extensions, debug mode, auto-start
   - Raw YAML editor with validation and formatting
-  - Load/save configuration files
-  - Reset to defaults
+  - Save/Restore Window Size automatically
 
 - **System Tray Integration:**
   - Minimize to system tray
   - Status notifications
   - Quick access menu
-
-- **Plugins Tab:**
-  - **Plugin Management**: Select, configure, and run plugins (e.g., Google Images)
-  - **Live Preview**: Real-time thumbnail preview of downloaded images
-  - **Review Mode**: Review downloaded images, mark unwanted ones, and blacklist them
-  - **Auto-Save**: Configuration changes are saved automatically
-  - **Execution Logs**: View real-time logs from plugin execution
-  - **Reset & Run**: Clear download directories before starting fresh
 
 - **Menu Bar:**
   - File menu with exit option
@@ -311,6 +314,7 @@ The script includes a modern Qt-based GUI for easy management of wallpapers and 
 ### GUI Requirements
 
 - PyQt6 (`pip install PyQt6`)
+- Pillow (`pip install Pillow`)
 - System tray support (most desktop environments)
 
 ### Desktop Entry Installation
