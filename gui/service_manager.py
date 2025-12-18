@@ -340,7 +340,8 @@ class ServiceManagerWidget(QWidget):
         try:
             result = subprocess.run(command, capture_output=True, text=True, timeout=30)
             if result.returncode == 0:
-                QMessageBox.information(self, "Success", f"{message} completed successfully!")
+                # Success - no popup needed
+                pass
             else:
                 QMessageBox.warning(self, "Warning", f"{message} completed with warnings:\n{result.stderr}")
         except subprocess.TimeoutExpired:

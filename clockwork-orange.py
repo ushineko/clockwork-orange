@@ -176,19 +176,63 @@ def set_local_wallpaper(file_path: Path):
     
     return set_wallpaper(file_path)
 
-def set_random_wallpaper_from_directory(directory_path: Path):
-    """Set wallpaper from a random image in the specified directory."""
+def get_random_image_from_sources(sources: list) -> Path:
+    """Get a random image, fairly selecting between sources first."""
+    print(f"[DEBUG] Selecting from {len(sources)} sources...")
+    
+    # Resolve all sources
+    valid_sources = []
+    for s in sources:
+        path = Path(s).resolve()
+        if path.exists():
+            valid_sources.append(path)
+        else:
+            print(f"[WARN] Source does not exist: {path}")
+
+    if not valid_sources:
+        raise ValueError("No valid sources found")
+
+    # Shuffle to pick a random source order
+    # (We iterate until we find one that has images)
+    random.shuffle(valid_sources)
+    
+    for source in valid_sources:
+        # print(f"[DEBUG] Checking source: {source}")
+        candidates = []
+        
+        if source.is_file():
+             if is_image_file(source):
+                 candidates.append(source)
+        elif source.is_dir():
+            try:
+                # Scan directory
+                candidates = [f for f in source.iterdir() if is_image_file(f)]
+            except Exception as e:
+                print(f"[ERROR] Failed to scan {source}: {e}")
+                
+        if candidates:
+            selected = random.choice(candidates)
+            print(f"[DEBUG] Selected image from source {source}: {selected}")
+            return selected
+            
+    raise ValueError(f"No image files found in any of the {len(valid_sources)} provided sources")
+
+def set_random_wallpaper_from_sources(sources: list):
+    """Set wallpaper from a random image in the specified sources."""
     try:
-        image_file = get_random_image_from_directory(directory_path)
-        print(f"[DEBUG] Selected random wallpaper: {image_file}")
+        image_file = get_random_image_from_sources(sources)
         return set_wallpaper(image_file)
     except ValueError as e:
         print(f"[ERROR] {e}")
         return False
 
-def cycle_wallpapers_from_directory(directory_path: Path, wait_seconds: int):
-    """Continuously cycle through random wallpapers from directory with wait intervals."""
-    print(f"[DEBUG] Starting continuous wallpaper cycling from directory: {directory_path}")
+def set_random_wallpaper_from_directory(directory_path: Path):
+    """Set wallpaper from a random image in the specified directory."""
+    return set_random_wallpaper_from_sources([directory_path])
+
+def cycle_wallpapers_from_sources(sources: list, wait_seconds: int):
+    """Continuously cycle through random wallpapers from sources with wait intervals."""
+    print(f"[DEBUG] Starting continuous wallpaper cycling from {len(sources)} sources")
     print(f"[DEBUG] Wait interval: {wait_seconds} seconds")
     print(f"[DEBUG] Press Ctrl+C to stop")
     
@@ -202,8 +246,17 @@ def cycle_wallpapers_from_directory(directory_path: Path, wait_seconds: int):
         cycle_count += 1
         print(f"[DEBUG] Cycle #{cycle_count}")
         
+        # Re-resolve dynamic sources here?
+        # User said: "when the checkbox... is enabled/disabled... the directory... will be added/removed".
+        # This implies we need to RELOAD config every cycle if we want true dynamic behavior without restart.
+        # But for now, let's assume 'sources' is passed in.
+        # If we want dynamic, the Caller (main) should be inside the loop or we reload config here.
+        # Doing config reload every 30s is fine.
+        # But 'sources' argument makes it static.
+        # I will implement static sources here first. Dynamic reloading requires more refactoring of 'main'.
+        
         try:
-            success = set_random_wallpaper_from_directory(directory_path)
+            success = set_random_wallpaper_from_sources(sources)
             if success:
                 print(f"[DEBUG] Wallpaper set successfully (cycle #{cycle_count})")
             else:
@@ -220,6 +273,9 @@ def cycle_wallpapers_from_directory(directory_path: Path, wait_seconds: int):
                 time.sleep(1)
     
     print(f"[DEBUG] Wallpaper cycling stopped after {cycle_count} cycles")
+
+def cycle_wallpapers_from_directory(directory_path: Path, wait_seconds: int):
+    return cycle_wallpapers_from_sources([directory_path], wait_seconds)
 
 def set_lockscreen_wallpaper(image_path: Path):
     """Set lock screen wallpaper using kwriteconfig6 (KDE 6)."""
@@ -489,24 +545,23 @@ def merge_config_with_args(config, args):
             print(f"[DEBUG] Enabled dual wallpaper mode from config")
         
         # Default wait interval (only if wait not specified)
-        if not merged_args.wait and config.get('default_wait'):
-            merged_args.wait = config['default_wait']
-            print(f"[DEBUG] Set default wait interval from config: {merged_args.wait}")
+        if not merged_args.wait:
+            if config.get('default_wait'):
+                merged_args.wait = config['default_wait']
+                print(f"[DEBUG] Set default wait interval from config: {merged_args.wait}")
+            elif merged_args.service:
+                # Service mode fallback default
+                merged_args.wait = 900
+                print(f"[DEBUG] Service mode: defaulting to 900s wait interval")
             
         # Default plugin
-        if not merged_args.plugin and not merged_args.file and not merged_args.directory:
-            if config.get('active_plugin'):
-                merged_args.plugin = config.get('active_plugin')
-                print(f"[DEBUG] Set default plugin from config: {merged_args.plugin}")
-            elif config.get('plugins'):
-                # Fallback: Use 'local' if available, otherwise first found
-                if 'local' in config['plugins']:
-                    merged_args.plugin = 'local'
-                    print(f"[DEBUG] Fallback: defaulting to 'local' plugin")
-                else:
-                    first_plugin = next(iter(config['plugins']))
-                    merged_args.plugin = first_plugin
-                    print(f"[DEBUG] Fallback: defaulting to first plugin '{first_plugin}'")
+        # Default plugin
+        # We do NOT want to force a single plugin here. 
+        # If no plugin is specified, we want 'main' to detect this and enter Multi-Plugin Mode.
+        # So we remove the fallback logic entirely.
+        pass
+            
+    return merged_args
     
     return merged_args
 
@@ -600,6 +655,99 @@ def debug_lockscreen_config():
     except Exception as e:
         print(f"[ERROR] Failed to read configuration file: {e}")
 
+def collect_plugin_sources(config, plugin_manager):
+    """Collect source paths from all enabled plugins."""
+    sources = []
+    plugins_config = config.get('plugins', {})
+    
+    for name, plugin_cfg in plugins_config.items():
+        if plugin_cfg.get('enabled', False):
+            # print(f"[DEBUG] Processing enabled plugin: {name}")
+            try:
+                result = plugin_manager.execute_plugin(name, plugin_cfg)
+                if result.get("status") == "success":
+                   path = result.get("path")
+                   if path:
+                       sources.append(Path(path))
+            except Exception as e:
+                print(f"[ERROR] Failed to execute plugin {name}: {e}")
+                
+    return sources
+
+def set_dual_wallpaper_from_sources(sources: list):
+    """Set both desktop and lock screen wallpapers from different random images in sources."""
+    try:
+        image1 = get_random_image_from_sources(sources)
+        image2 = get_random_image_from_sources(sources)
+        
+        # Simple retry if same image picked
+        if image1 == image2:
+             image2 = get_random_image_from_sources(sources)
+             
+        print(f"[DEBUG] Setting desktop wallpaper: {image1}")
+        desktop_success = set_wallpaper(image1)
+        
+        print(f"[DEBUG] Setting lock screen wallpaper: {image2}")
+        lockscreen_success = set_lockscreen_wallpaper(image2)
+        
+        return desktop_success and lockscreen_success
+    except ValueError as e:
+        print(f"[ERROR] {e}")
+        return False
+
+def cycle_dynamic_plugins(plugin_manager: PluginManager, wait_seconds: int, desktop: bool = True, lockscreen: bool = False):
+    """Continuously cycle wallpapers using enabled plugins, reloading config each time."""
+    print(f"[DEBUG] Starting dynamic plugin cycling")
+    print(f"[DEBUG] Wait interval: {wait_seconds} seconds")
+    print(f"[DEBUG] Desktop: {desktop}, Lockscreen: {lockscreen}")
+    print(f"[DEBUG] Press Ctrl+C to stop")
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    cycle_count = 0
+    
+    while not shutdown_requested:
+        cycle_count += 1
+        print(f"[DEBUG] Cycle #{cycle_count}")
+        
+        try:
+            # 1. Reload Config
+            config = load_config_file()
+            
+            # 2. Collect Sources
+            sources = collect_plugin_sources(config, plugin_manager)
+            
+            # 3. Pick and Set
+            if sources:
+                success = False
+                if desktop and lockscreen:
+                    success = set_dual_wallpaper_from_sources(sources)
+                elif lockscreen:
+                     img = get_random_image_from_sources(sources)
+                     success = set_lockscreen_wallpaper(img)
+                else:
+                    success = set_random_wallpaper_from_sources(sources)
+                    
+                if success:
+                     print(f"[DEBUG] Wallpaper set successfully")
+                else:
+                     print(f"[ERROR] Failed to set wallpaper")
+            else:
+                print(f"[DEBUG] No plugins enabled or sources found.")
+                
+        except Exception as e:
+             print(f"[ERROR] Error in cycle: {e}")
+             import traceback
+             traceback.print_exc()
+             
+        if not shutdown_requested:
+            # Sleep
+            for _ in range(wait_seconds):
+                if shutdown_requested: break
+                time.sleep(1)
+    print(f"[DEBUG] Dynamic cycling stopped")
+    
 def clean_config(config):
     """Clean up invalid plugins from configuration."""
     if not config.get('plugins'):
@@ -705,6 +853,9 @@ Configuration File:
     
     parser.add_argument('--gui', action='store_true',
                        help='Start the graphical user interface')
+                       
+    parser.add_argument('--service', action='store_true',
+                       help='Run in background service mode (sets default wait to 900s if unspecified)')
     
     args = parser.parse_args()
     
@@ -716,6 +867,8 @@ Configuration File:
     
     args = merge_config_with_args(config, args)
     
+    args = merge_config_with_args(config, args)
+    
     # Handle GUI option early to avoid validation errors from config defaults
     if args.gui:
         if not GUI_AVAILABLE:
@@ -724,9 +877,18 @@ Configuration File:
         print("[DEBUG] Starting GUI...")
         sys.exit(gui_main())
 
-    # Validate wait option
-    if args.wait is not None and args.directory is None and args.plugin is None:
-        parser.error("--wait can only be used with --directory or --plugin (returning a directory)")
+    # Check for implicit multi-plugin mode capability
+    has_enabled_plugins = False
+    if config.get('plugins'):
+         for p_cfg in config['plugins'].values():
+             if p_cfg.get('enabled'):
+                 has_enabled_plugins = True
+                 break
+
+    # Validate arguments
+    # We allow running without specific args IF we have enabled plugins (Multi-Plugin Mode)
+    if not args.file and not args.directory and not args.plugin and not has_enabled_plugins:
+        parser.error("Operation requires either --file, --directory, --plugin, or enabled plugins in config")
     
     if args.wait is not None and args.wait <= 0:
         parser.error("--wait must be a positive integer")
@@ -739,8 +901,8 @@ Configuration File:
     if args.desktop and args.lockscreen:
         if args.url:
             parser.error("--url cannot be used with dual wallpaper mode (lock screen requires local files)")
-        if not args.file and not args.directory and not args.plugin:
-            parser.error("Dual wallpaper mode requires either --file, --directory, or --plugin")
+        if not args.file and not args.directory and not args.plugin and not has_enabled_plugins:
+            parser.error("Dual wallpaper mode requires either --file, --directory, --plugin, or enabled plugins")
     
     # Handle debug option
     if args.debug_lockscreen:
@@ -827,6 +989,18 @@ Configuration File:
             else:
                 # Single dual wallpaper mode
                 success = set_dual_wallpapers_from_directory(args.directory)
+        elif not args.plugin:
+            # Implicit Dynamic Mode (Configured Plugins)
+            if args.wait:
+                 cycle_dynamic_plugins(plugin_manager, args.wait, desktop=True, lockscreen=True)
+                 success = True
+            else:
+                 sources = collect_plugin_sources(config, plugin_manager)
+                 if sources:
+                     success = set_dual_wallpaper_from_sources(sources)
+                 else:
+                     print("[ERROR] No enabled plugins found for dual wallpaper mode")
+                     success = False
     elif args.lockscreen:
         # Lock screen operations only
         if args.file:
@@ -842,6 +1016,19 @@ Configuration File:
             else:
                 # Single random lock screen wallpaper mode
                 success = set_lockscreen_random_from_directory(args.directory)
+        elif not args.plugin:
+             # Implicit Dynamic Mode
+             if args.wait:
+                 cycle_dynamic_plugins(plugin_manager, args.wait, desktop=False, lockscreen=True)
+                 success = True
+             else:
+                 sources = collect_plugin_sources(config, plugin_manager)
+                 if sources:
+                     img = get_random_image_from_sources(sources)
+                     success = set_lockscreen_wallpaper(img)
+                 else:
+                     print("[ERROR] No enabled plugins found for lock screen mode")
+                     success = False
         else:
             print("[ERROR] Lock screen mode requires either --file or --directory")
             sys.exit(1)
@@ -863,8 +1050,20 @@ Configuration File:
             else:
                 # Single random desktop wallpaper mode
                 success = set_random_wallpaper_from_directory(args.directory)
+        elif not args.plugin:
+             # Implicit Dynamic Mode
+             if args.wait:
+                 cycle_dynamic_plugins(plugin_manager, args.wait, desktop=True, lockscreen=False)
+                 success = True
+             else:
+                 sources = collect_plugin_sources(config, plugin_manager)
+                 if sources:
+                     success = set_random_wallpaper_from_sources(sources)
+                 else:
+                     print("[ERROR] No enabled plugins found for desktop mode")
+                     success = False
         else:
-            print("[ERROR] Desktop mode requires either --url, --file, or --directory")
+            print("[ERROR] Desktop mode requires either --url, --file, --directory or enabled plugins")
             sys.exit(1)
     else:
         # Regular wallpaper operations (default behavior)
@@ -885,10 +1084,20 @@ Configuration File:
                 # Single random wallpaper mode
                 success = set_random_wallpaper_from_directory(args.directory)
         else:
-             # Fallback if no source specified
-             print("[ERROR] No source specified. Use --plugin, --file, --directory, or --url.")
-             parser.print_help()
-             sys.exit(1)
+             # Check for enabled plugins (Dynamic Multi-Plugin Mode)
+             initial_sources = collect_plugin_sources(config, plugin_manager)
+             if initial_sources:
+                 print(f"[DEBUG] Multi-plugin mode active with {len(initial_sources)} sources")
+                 if args.wait:
+                     cycle_dynamic_plugins(plugin_manager, args.wait)
+                     success = True
+                 else:
+                     success = set_random_wallpaper_from_sources(initial_sources)
+             else:
+                 # Fallback if no source specified
+                 print("[ERROR] No source specified and no plugins enabled. Use --plugin, --file, --directory, or --url.")
+                 parser.print_help()
+                 sys.exit(1)
     
     if success:
         print(f"[DEBUG] {target.capitalize()} set successfully")

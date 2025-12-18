@@ -7,7 +7,7 @@ Type=simple
 Environment=DISPLAY=:0
 # Uses system Python 3 - ensure PyYAML is installed system-wide
 # For conda/virtual environments, update the path to your Python interpreter
-ExecStart=/usr/bin/python3 /home/nverenin/git/clockwork-orange/clockwork-orange.py
+ExecStart=/usr/bin/python3 /home/nverenin/git/clockwork-orange/clockwork-orange.py --service
 Restart=always
 RestartSec=10
 

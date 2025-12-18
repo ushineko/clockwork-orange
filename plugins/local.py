@@ -11,6 +11,7 @@ from typing import Dict, Any
 # Ensure we can import the base class
 sys.path.append(str(Path(__file__).parent.parent))
 from plugins.base import PluginBase
+from plugins.blacklist import BlacklistManager
 
 class LocalPlugin(PluginBase):
     def get_description(self) -> str:
@@ -22,7 +23,7 @@ class LocalPlugin(PluginBase):
                 "type": "string",
                 "description": "Path to file or directory",
                 "required": True,
-                "widget": "directory_path"  # Using directory_path as it's more flexible or maybe we need a generic path picker
+                "widget": "directory_path"
             },
             "recursive": {
                 "type": "boolean",
@@ -33,11 +34,23 @@ class LocalPlugin(PluginBase):
     
     def run(self, config: Dict[str, Any]) -> Dict[str, Any]:
         path_str = config.get("path")
+        recursive = config.get("recursive", False)
+        
+        # Initialize BlacklistManager (global)
+        self.blacklist_manager = BlacklistManager()
+
         if not path_str:
             return {"status": "error", "message": "Missing 'path' in configuration"}
             
         path = Path(path_str).expanduser().resolve()
         
+        # Handle blacklist action
+        if config.get("action") == "process_blacklist":
+            targets = config.get("targets", [])
+            print(f"[Local] Processing blacklist for {len(targets)} files...", file=sys.stderr)
+            self.blacklist_manager.process_files(targets, plugin_name="local")
+            return {"status": "success", "message": "Blacklist processed"}
+            
         if not path.exists():
             return {"status": "error", "message": f"Path not found: {path}"}
             

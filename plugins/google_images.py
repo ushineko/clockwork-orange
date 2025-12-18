@@ -20,74 +20,7 @@ from PIL import Image, ImageOps
 # Add parent directory to path to allow importing base
 sys.path.append(str(Path(__file__).parent.parent))
 from plugins.base import PluginBase
-
-class BlacklistManager:
-    """Manages a blacklist of image hashes to prevent re-downloading unwanted images."""
-    
-    def __init__(self, storage_dir: str):
-        self.storage_dir = Path(storage_dir)
-        self.blacklist_file = self.storage_dir / "blacklist.json"
-        self.hashes = set()
-        self.load_blacklist()
-        
-    def load_blacklist(self):
-        """Load blacklist from JSON file."""
-        if self.blacklist_file.exists():
-            try:
-                with open(self.blacklist_file, 'r') as f:
-                    self.hashes = set(json.load(f))
-            except Exception as e:
-                print(f"Error loading blacklist: {e}", file=sys.stderr)
-                self.hashes = set()
-        else:
-            self.hashes = set()
-            
-    def save_blacklist(self):
-        """Save blacklist to JSON file."""
-        try:
-            self.storage_dir.mkdir(parents=True, exist_ok=True)
-            with open(self.blacklist_file, 'w') as f:
-                json.dump(list(self.hashes), f)
-        except Exception as e:
-            print(f"Error saving blacklist: {e}", file=sys.stderr)
-
-    def get_image_hash(self, image_path: str) -> str:
-        """Calculate SHA256 hash of an image file."""
-        sha256_hash = hashlib.sha256()
-        try:
-            with open(image_path, "rb") as f:
-                for byte_block in iter(lambda: f.read(4096), b""):
-                    sha256_hash.update(byte_block)
-            return sha256_hash.hexdigest()
-        except Exception as e:
-            print(f"Error hashing image {image_path}: {e}", file=sys.stderr)
-            return None
-
-    def is_blacklisted(self, image_hash: str) -> bool:
-        """Check if an image hash is in the blacklist."""
-        return image_hash in self.hashes
-
-    def add_to_blacklist(self, image_hash: str):
-        """Add an image hash to the blacklist."""
-        if image_hash:
-            self.hashes.add(image_hash)
-            self.save_blacklist()
-    
-    def process_files(self, file_paths: list):
-        """Process a list of files: hash them, add to blacklist, and delete them."""
-        for file_path in file_paths:
-            path = Path(file_path)
-            if path.exists():
-                img_hash = self.get_image_hash(str(path))
-                if img_hash:
-                    self.add_to_blacklist(img_hash)
-                    try:
-                        os.remove(path)
-                        print(f"Blacklisted and removed: {path.name}")
-                    except Exception as e:
-                        print(f"Error removing file {path}: {e}", file=sys.stderr)
-            else:
-                 print(f"File not found: {file_path}", file=sys.stderr)
+from plugins.blacklist import BlacklistManager
 
 class GoogleImagesPlugin(PluginBase):
     def get_description(self) -> str:
@@ -96,8 +29,8 @@ class GoogleImagesPlugin(PluginBase):
     def get_config_schema(self) -> dict:
         return {
             "query": {
-                "type": "string",
-                "default": "4k nature wallpapers",
+                "type": "string_list",
+                "default": [{"term": "4k nature wallpapers", "enabled": True}],
                 "description": "Search Terms",
                 "suggestions": [
                     "4k nature wallpapers",
@@ -119,9 +52,9 @@ class GoogleImagesPlugin(PluginBase):
             },
             "interval": {
                 "type": "string",
-                "default": "daily",
+                "default": "Daily",
                 "description": "Check Interval",
-                "enum": ["daily", "weekly", "always"]
+                "enum": ["Hourly", "Daily", "Weekly"]
             },
             "limit": {
                 "type": "integer",
@@ -136,23 +69,38 @@ class GoogleImagesPlugin(PluginBase):
         }
 
     def run(self, config: dict) -> dict:
-        queries = [q.strip() for q in config.get("query", "4k nature wallpapers").split(",")]
+        # Parse queries
+        raw_query = config.get("query", "4k nature wallpapers")
+        queries = []
+        if isinstance(raw_query, str):
+            queries = [q.strip() for q in raw_query.split(",") if q.strip()]
+        elif isinstance(raw_query, list):
+            for item in raw_query:
+                if isinstance(item, dict):
+                    if item.get('enabled', True) and item.get('term'):
+                        queries.append(item.get('term'))
+                elif isinstance(item, str):
+                    queries.append(item)
+                    
+        if not queries:
+             queries = ["4k nature wallpapers"]
+             
         download_dir = Path(config.get("download_dir", Path.home() / "Pictures" / "Wallpapers" / "GoogleImages"))
-        interval = config.get("interval", "daily")
+        interval = config.get("interval", "Daily").lower()
         limit = int(config.get("limit", 10))
         max_files = int(config.get("max_files", 50))
         
         # Ensure download directory exists
         download_dir.mkdir(parents=True, exist_ok=True)
         
-        # Initialize BlacklistManager
-        self.blacklist_manager = BlacklistManager(download_dir)
-        
+        # Initialize BlacklistManager (global)
+        self.blacklist_manager = BlacklistManager()
+
         # Handle blacklist action
         if config.get("action") == "process_blacklist":
             targets = config.get("targets", [])
             print(f"[GoogleImages] Processing blacklist for {len(targets)} files...", file=sys.stderr)
-            self.blacklist_manager.process_files(targets)
+            self.blacklist_manager.process_files(targets, plugin_name="google_images")
             return {"status": "success", "message": "Blacklist processed"}
         
         # Handle force run (bypass interval)
@@ -236,7 +184,9 @@ class GoogleImagesPlugin(PluginBase):
             last_run_dt = datetime.fromtimestamp(last_run)
             now = datetime.now()
             
-            if interval == "daily":
+            if interval == "hourly":
+                return now - last_run_dt > timedelta(hours=1)
+            elif interval == "daily":
                 return now - last_run_dt > timedelta(days=1)
             elif interval == "weekly":
                 return now - last_run_dt > timedelta(weeks=1)

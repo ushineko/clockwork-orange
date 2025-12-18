@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont
 from .plugins_tab import PluginsTab
+from .blacklist_tab import BlacklistTab
 
 
 class ConfigManagerWidget(QWidget):
@@ -34,13 +35,19 @@ class ConfigManagerWidget(QWidget):
         """Initialize the UI"""
         layout = QVBoxLayout()
         
-        # Save Button
-        save_btn = QPushButton("Save Configuration")
-        save_btn.clicked.connect(self.apply_config)
-        layout.addWidget(save_btn)
+
 
         # Configuration tabs
         self.tab_widget = QTabWidget()
+        
+        # Plugins tab
+        self.plugins_tab = PluginsTab(self.config_data)
+        self.plugins_tab.config_changed.connect(self.schedule_auto_save)
+        self.tab_widget.addTab(self.plugins_tab, "Plugins")
+        
+        # Blacklist tab
+        self.blacklist_tab = BlacklistTab()
+        self.tab_widget.addTab(self.blacklist_tab, "Blacklist Manager")
         
         # Basic settings tab
         self.basic_tab = self.create_basic_tab()
@@ -49,11 +56,6 @@ class ConfigManagerWidget(QWidget):
         # Advanced settings tab
         self.advanced_tab = self.create_advanced_tab()
         self.tab_widget.addTab(self.advanced_tab, "Advanced Settings")
-        
-        # Plugins tab
-        self.plugins_tab = PluginsTab(self.config_data)
-        self.plugins_tab.config_changed.connect(self.schedule_auto_save)
-        self.tab_widget.addTab(self.plugins_tab, "Plugins")
         
         # Raw YAML tab
         self.raw_tab = self.create_raw_tab()
@@ -68,17 +70,9 @@ class ConfigManagerWidget(QWidget):
         self.load_button.clicked.connect(self.load_from_file)
         button_layout.addWidget(self.load_button)
         
-        self.save_button = QPushButton("Save to File")
-        self.save_button.clicked.connect(self.save_to_file)
-        button_layout.addWidget(self.save_button)
-        
         self.reset_button = QPushButton("Reset to Defaults")
         self.reset_button.clicked.connect(self.reset_to_defaults)
         button_layout.addWidget(self.reset_button)
-        
-        self.apply_button = QPushButton("Apply Configuration")
-        self.apply_button.clicked.connect(self.apply_config)
-        button_layout.addWidget(self.apply_button)
         
         layout.addLayout(button_layout)
         
@@ -162,7 +156,13 @@ class ConfigManagerWidget(QWidget):
         self.wait_spin.setRange(1, 86400)  # 1 second to 24 hours
         self.wait_spin.setValue(300)
         self.wait_spin.setSuffix(" seconds")
+        self.wait_spin.valueChanged.connect(self.schedule_auto_save)
         layout.addRow("Wait Interval:", self.wait_spin)
+        
+        # Connect checkboxes to auto-save
+        self.dual_wallpapers_check.toggled.connect(self.schedule_auto_save)
+        self.desktop_only_check.toggled.connect(self.schedule_auto_save)
+        self.lockscreen_only_check.toggled.connect(self.schedule_auto_save)
         
         widget.setLayout(layout)
         return widget
@@ -220,6 +220,16 @@ class ConfigManagerWidget(QWidget):
         
         layout.addRow("Window Size:", window_layout)
         
+        # Connect signals to auto-save
+        self.extensions_edit.textChanged.connect(self.schedule_auto_save)
+        self.debug_check.toggled.connect(self.schedule_auto_save)
+        self.autostart_check.toggled.connect(self.schedule_auto_save)
+        self.restart_delay_spin.valueChanged.connect(self.schedule_auto_save)
+        self.logs_refresh_spin.valueChanged.connect(self.schedule_auto_save)
+        self.auto_update_logs_check.toggled.connect(self.schedule_auto_save)
+        self.window_width_spin.valueChanged.connect(self.schedule_auto_save)
+        self.window_height_spin.valueChanged.connect(self.schedule_auto_save)
+        
         widget.setLayout(layout)
         return widget
     
@@ -274,6 +284,10 @@ class ConfigManagerWidget(QWidget):
                     self.config_data = yaml.safe_load(f) or {}
             else:
                 self.config_data = {}
+            
+            # Propagate config to tabs
+            if hasattr(self, 'plugins_tab'):
+                self.plugins_tab.set_config(self.config_data)
             
             self.update_ui_from_config()
             self.update_yaml_display()

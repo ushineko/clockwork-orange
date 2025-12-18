@@ -29,7 +29,7 @@ class PluginManager:
             
         # Look for python files in the plugins directory
         for item in self.plugins_dir.iterdir():
-            if item.is_file() and item.suffix == '.py' and item.name != 'base.py' and not item.name.startswith('_'):
+            if item.is_file() and item.suffix == '.py' and item.name not in ['base.py', 'blacklist.py'] and not item.name.startswith('_'):
                 plugin_name = item.stem
                 self.plugins[plugin_name] = item
                 
@@ -57,6 +57,23 @@ class PluginManager:
         except json.JSONDecodeError:
             print(f"[ERROR] Failed to parse schema for plugin {plugin_name}")
             return {}
+
+    def get_plugin_description(self, plugin_name: str) -> str:
+        """Get the description of a plugin."""
+        plugin_path = self.get_plugin_path(plugin_name)
+        if not plugin_path:
+            return ""
+            
+        try:
+            cmd = [sys.executable, str(plugin_path), "--get-description"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            return result.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            print(f"[ERROR] Failed to get description for plugin {plugin_name}: {e.stderr}")
+            return ""
+        except Exception as e:
+            print(f"[ERROR] Failed to get description for plugin {plugin_name}: {e}")
+            return ""
 
     def execute_plugin(self, plugin_name: str, config: Dict[str, Any]) -> Dict[str, Any]:
         """

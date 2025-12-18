@@ -8,13 +8,118 @@ from pathlib import Path
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                              QLabel, QComboBox, QGroupBox, QLineEdit, QCheckBox,
                              QScrollArea, QFormLayout, QFileDialog, QMessageBox, 
-                             QTextEdit, QListWidget, QSpinBox, QSizePolicy)
+                             QTextEdit, QListWidget, QListWidgetItem, QSpinBox, QSizePolicy)
 from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from PyQt6.QtGui import QPixmap, QFont, QPainter, QColor, QPen
 
 # Ensure we can import the plugin manager
 sys.path.append(str(Path(__file__).parent.parent))
 from plugin_manager import PluginManager
+
+class SearchTermsWidget(QWidget):
+    """Widget for managing a list of search terms with enable/disable toggles."""
+    changed = pyqtSignal()
+    
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # List
+        self.list_widget = QListWidget()
+        self.list_widget.setMaximumHeight(120)
+        layout.addWidget(self.list_widget)
+        
+        # Input area
+        input_layout = QHBoxLayout()
+        self.input_field = QComboBox()
+        self.input_field.setEditable(True)
+        self.input_field.setPlaceholderText("Enter search term...")
+        self.input_field.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        
+        self.add_btn = QPushButton("Add")
+        self.add_btn.clicked.connect(self.add_term)
+        self.input_field.lineEdit().returnPressed.connect(self.add_term)
+        
+        input_layout.addWidget(self.input_field)
+        input_layout.addWidget(self.add_btn)
+        layout.addLayout(input_layout)
+        
+        # Remove button
+        self.remove_btn = QPushButton("Remove Selected")
+        self.remove_btn.clicked.connect(self.remove_term)
+        layout.addWidget(self.remove_btn)
+        
+        self.setLayout(layout)
+        
+        # Signals
+        self.list_widget.itemChanged.connect(lambda: self.changed.emit())
+        
+    def add_term(self):
+        text = self.input_field.currentText().strip()
+        if text:
+            item = QListWidgetItem(text)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            item.setCheckState(Qt.CheckState.Checked)
+            self.list_widget.addItem(item)
+            self.input_field.setEditText("")
+            self.input_field.setCurrentIndex(-1)
+            self.changed.emit()
+            
+    def remove_term(self):
+        for item in self.list_widget.selectedItems():
+            row = self.list_widget.row(item)
+            self.list_widget.takeItem(row)
+        self.changed.emit()
+        
+    def get_value(self):
+        """Return list of dicts: [{'term': 'foo', 'enabled': True}, ...]"""
+        result = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            result.append({
+                'term': item.text(),
+                'enabled': item.checkState() == Qt.CheckState.Checked
+            })
+        return result
+        
+    def set_value(self, data):
+        """Set value from config (list of dicts OR string)."""
+        self.list_widget.clear()
+        
+        if isinstance(data, str):
+            # Legacy string parsing
+            terms = [t.strip() for t in data.split(',')]
+            for t in terms:
+                if t:
+                    self.add_item(t, True)
+            # Emit change so config updates to new format eventually? No, only on save.
+        elif isinstance(data, list):
+             for item_data in data:
+                 if isinstance(item_data, dict):
+                     term = item_data.get('term')
+                     enabled = item_data.get('enabled', True)
+                     if term:
+                         self.add_item(term, enabled)
+                 elif isinstance(item_data, str):
+                     self.add_item(item_data, True)
+
+    def add_item(self, text, enabled):
+        item = QListWidgetItem(text)
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+        item.setCheckState(Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked)
+        self.list_widget.addItem(item)
+        
+    def set_suggestions(self, suggestions):
+        self.input_field.clear()
+        if suggestions:
+            self.input_field.addItems(suggestions)
+            self.input_field.setCurrentIndex(-1)
+            self.input_field.setEditText("")
+
 
 class PluginRunner(QThread):
     progress_signal = pyqtSignal(int, str)
@@ -95,16 +200,46 @@ class PluginsTab(QWidget):
         
         self.init_ui()
         
+    def set_config(self, config_data):
+        """Update configuration data and refresh UI."""
+        self.config_data = config_data
+        
+        # Discard current widget state (which belongs to old config)
+        # preventing it from overwriting the new config we just loaded.
+        self.last_plugin_name = None 
+        
+        # specific to how PluginsTab initializes: active plugin might be set in config
+        active_plugin = self.config_data.get('active_plugin')
+        if active_plugin:
+            index = self.plugin_combo.findData(active_plugin)
+            if index >= 0:
+                self.plugin_combo.blockSignals(True)
+                self.plugin_combo.setCurrentIndex(index)
+                self.plugin_combo.blockSignals(False)
+        
+        # Refresh current plugin UI
+        index = self.plugin_combo.currentIndex()
+        if index >= 0:
+            plugin_id = self.plugin_combo.itemData(index)
+            if plugin_id:
+                self.load_plugin_config_ui(plugin_id)
+        
     def on_plugin_selection_changed(self, index):
         """Handle plugin selection change."""
         plugin_id = self.plugin_combo.itemData(index)
         if plugin_id:
+            # Update active plugin in internal config
+            self.config_data['active_plugin'] = plugin_id
+            
             self.load_plugin_config_ui(plugin_id)
             # Reset review state on plugin change
             self.review_images = []
             self.review_index = 0
             self.blacklisted_indices = set()
             self.update_review_ui()
+            
+            # Save the active plugin change (and initial defaults if any)
+            self.config_changed.emit()
 
         
     def init_ui(self):
@@ -117,7 +252,6 @@ class PluginsTab(QWidget):
         selection_group = QGroupBox("Select Plugin")
         selection_layout = QHBoxLayout()
         
-        selection_layout.addWidget(QLabel("Active Plugin:"))
         self.plugin_combo = QComboBox()
         for plugin_id in self.plugin_manager.get_available_plugins():
             friendly_name = plugin_id.replace('_', ' ').title()
@@ -192,14 +326,16 @@ class PluginsTab(QWidget):
         
         # Buttons
         btn_layout = QHBoxLayout()
-        run_btn = QPushButton("Run Plugin Now")
-        run_btn.clicked.connect(self.run_current_plugin)
-        btn_layout.addWidget(run_btn)
+        self.run_btn = QPushButton("Run Plugin Now")
+        self.run_btn.clicked.connect(self.run_current_plugin)
+        btn_layout.addWidget(self.run_btn)
         
-        reset_btn = QPushButton("Reset && Run")
-        reset_btn.setStyleSheet("background-color: #552222;") # Subtle red tint
-        reset_btn.clicked.connect(self.reset_current_plugin)
-        btn_layout.addWidget(reset_btn)
+        self.reset_btn = QPushButton("Reset && Run")
+        self.reset_btn.setStyleSheet("background-color: #552222;") # Subtle red tint
+        self.reset_btn.clicked.connect(self.reset_current_plugin)
+        btn_layout.addWidget(self.reset_btn)
+        btn_layout.addStretch() # Push left or right? Using addStretch to keep them compact if needed
+        # actually layout.addWidget handles it. just updating vars.
         run_layout.addLayout(btn_layout)
         
         run_group.setLayout(run_layout)
@@ -238,6 +374,8 @@ class PluginsTab(QWidget):
                 plugin_config[field] = widget.isChecked()
             elif isinstance(widget, QSpinBox):
                 plugin_config[field] = widget.value()
+            elif isinstance(widget, SearchTermsWidget):
+                plugin_config[field] = widget.get_value()
         
         # Ensure 'plugins' key exists
         if 'plugins' not in self.config_data:
@@ -253,6 +391,22 @@ class PluginsTab(QWidget):
         
         self.last_plugin_name = plugin_name
         
+        # Configure action buttons based on plugin capabilities
+        # Local plugin is a passive source, not a scraper, so running/resetting makes no sense
+        is_runnable = (plugin_name != 'local')
+        if hasattr(self, 'run_btn'):
+            self.run_btn.setEnabled(is_runnable)
+            self.reset_btn.setEnabled(is_runnable)
+            
+            # Update tooltip to explain why
+            if not is_runnable:
+                reason = "This plugin reads existing files and does not need to be run."
+                self.run_btn.setToolTip(reason)
+                self.reset_btn.setToolTip(reason)
+            else:
+                self.run_btn.setToolTip("Run the plugin immediately")
+                self.reset_btn.setToolTip("Delete downloads and run fresh")
+        
         # Clear existing widgets
         while self.config_layout.count():
             item = self.config_layout.takeAt(0)
@@ -267,7 +421,24 @@ class PluginsTab(QWidget):
         
         try:
             schema = self.plugin_manager.get_plugin_schema(plugin_name)
+            description = self.plugin_manager.get_plugin_description(plugin_name)
             current_config = self.config_data.get('plugins', {}).get(plugin_name, {})
+            
+            # --- Description Label ---
+            if description:
+                desc_label = QLabel(description)
+                desc_label.setStyleSheet("color: #888; font-style: italic; margin-bottom: 10px;")
+                desc_label.setWordWrap(True)
+                self.config_layout.addRow(desc_label)
+
+            # --- Enabled Checkbox ---
+            enabled_cb = QCheckBox("Enable this plugin")
+            enabled_cb.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
+            enabled_cb.setChecked(current_config.get('enabled', False))
+            enabled_cb.toggled.connect(lambda: self.config_changed.emit())
+            self.config_layout.addRow(enabled_cb)
+            self.current_plugin_widgets['enabled'] = enabled_cb
+            # ------------------------
             
             for field, props in schema.items():
                 label = QLabel(props.get('description', field))
@@ -284,19 +455,34 @@ class PluginsTab(QWidget):
                 
                 if field_type == 'string':
                     suggestions = props.get('suggestions')
-                    if suggestions:
+                    enum_options = props.get('enum')
+                    
+                    if suggestions or enum_options:
                         widget = QComboBox()
-                        widget.setEditable(True)
-                        widget.addItems(suggestions)
+                        widget.blockSignals(True)
+                        
+                        if enum_options:
+                            widget.addItems(enum_options)
+                            widget.setEditable(False)
+                        else:
+                            widget.setEditable(True)
+                            widget.addItems(suggestions)
+                            
                         if value:
                             widget.setCurrentText(str(value))
+                        widget.blockSignals(False)
+                        
                         widget.editTextChanged.connect(lambda: self.config_changed.emit())
+                        widget.currentTextChanged.connect(lambda: self.config_changed.emit())
                         # Store reference
                         self.current_plugin_widgets[field] = widget
                     else:
                         widget = QLineEdit()
+                        widget.blockSignals(True)
                         if value:
                             widget.setText(str(value))
+                        widget.blockSignals(False)
+                        
                         widget.textChanged.connect(lambda: self.config_changed.emit())
                         
                         # Handle special widgets
@@ -310,7 +496,7 @@ class PluginsTab(QWidget):
                             btn.clicked.connect(lambda checked, w=widget: self.browse_file(w))
                             h_layout.addWidget(btn)
                             widget = container
-                            self.current_plugin_widgets[field] = container.findChild(QLineEdit) # Store the line edit
+                            self.current_plugin_widgets[field] = container.findChild(QLineEdit)
                         elif widget_type == 'directory_path':
                             container = QWidget()
                             h_layout = QHBoxLayout(container)
@@ -326,43 +512,50 @@ class PluginsTab(QWidget):
                         
                 elif field_type == 'boolean':
                     widget = QCheckBox()
+                    widget.blockSignals(True)
                     if value:
                         widget.setChecked(True)
+                    widget.blockSignals(False)
                     widget.toggled.connect(lambda: self.config_changed.emit())
                     self.current_plugin_widgets[field] = widget
                     
-                elif field_type == 'integer':
-                    widget = QSpinBox()
-                    widget.setRange(0, 10000) # Reasonable range
-                    if value is not None:
-                        widget.setValue(int(value))
-                    widget.valueChanged.connect(lambda: self.config_changed.emit())
+                elif field_type == 'string_list':
+                    widget = SearchTermsWidget()
+                    widget.blockSignals(True)
+                    suggestions = props.get('suggestions')
+                    if suggestions:
+                        widget.set_suggestions(suggestions)
+                    widget.set_value(value if value is not None else default_value)
+                    widget.blockSignals(False)
+                    widget.changed.connect(lambda: self.config_changed.emit())
                     self.current_plugin_widgets[field] = widget
 
-                    
                 elif field_type == 'integer':
                     widget = QSpinBox()
-                    widget.setRange(0, 10000) # Reasonable range
+                    widget.blockSignals(True)
+                    widget.setRange(0, 10000)
                     if value is not None:
                         widget.setValue(int(value))
+                    widget.blockSignals(False)
+                    widget.valueChanged.connect(lambda: self.config_changed.emit())
                     self.current_plugin_widgets[field] = widget
                 
                 if widget:
                     self.config_layout.addRow(label, widget)
                     
         except Exception as e:
+            print(f"Error loading schema: {e}", file=sys.stderr)
             self.config_layout.addRow(QLabel(f"Error loading schema: {e}"))
             
-        # Trigger auto-save to persist active_plugin change
-        self.config_changed.emit()
-            
     def browse_file(self, line_edit):
-        path, _ = QFileDialog.getOpenFileName(self, "Select File")
+        start_dir = line_edit.text() if line_edit.text() else ""
+        path, _ = QFileDialog.getOpenFileName(self, "Select File", start_dir)
         if path:
             line_edit.setText(path)
             
     def browse_directory(self, line_edit):
-        path = QFileDialog.getExistingDirectory(self, "Select Directory")
+        start_dir = line_edit.text() if line_edit.text() else ""
+        path = QFileDialog.getExistingDirectory(self, "Select Directory", start_dir)
         if path:
             line_edit.setText(path)
 
@@ -382,6 +575,8 @@ class PluginsTab(QWidget):
                 plugin_config[field] = widget.isChecked()
             elif isinstance(widget, QSpinBox):
                 plugin_config[field] = widget.value()
+            elif isinstance(widget, SearchTermsWidget):
+                plugin_config[field] = widget.get_value()
                 
         # We return the whole plugins structure
         # Preserve other plugins' config if present
@@ -457,6 +652,8 @@ class PluginsTab(QWidget):
                 current_config[field] = widget.isChecked()
             elif isinstance(widget, QSpinBox):
                 current_config[field] = widget.value()
+            elif isinstance(widget, SearchTermsWidget):
+                current_config[field] = widget.get_value()
                 
         # Force run for manual execution
         current_config['force'] = True
@@ -501,16 +698,27 @@ class PluginsTab(QWidget):
     def scan_for_review(self):
         """Scan the current plugin's download directory for images."""
         current_plugin_name = self.get_active_plugin()
+        if not current_plugin_name:
+            return
+
         current_config = self.get_config().get(current_plugin_name, {})
-        download_dir_str = current_config.get('download_dir', '') # might come from schema default if missing in config? 
-        # Actually get_config returns what is in UI. Default is populated in UI.
         
+        # Determine directory based on plugin type
+        download_dir_str = ""
+        if current_plugin_name == 'local':
+             download_dir_str = current_config.get('path', '')
+        else:
+             download_dir_str = current_config.get('download_dir', '')
+
         if not download_dir_str:
-            # Fallback to schema default if not in UI yet?
+            # Fallback to schema default
             schema = self.plugin_manager.get_plugin_schema(current_plugin_name)
-            download_dir_str = schema.get('download_dir', {}).get('default', '')
+            if current_plugin_name == 'local':
+                 download_dir_str = schema.get('path', {}).get('default', '')
+            else:
+                 download_dir_str = schema.get('download_dir', {}).get('default', '')
             
-        download_dir = Path(download_dir_str)
+        download_dir = Path(download_dir_str).expanduser().resolve()
         
         if not download_dir.exists():
             QMessageBox.warning(self, "Directory Not Found", f"Directory does not exist:\n{download_dir}")

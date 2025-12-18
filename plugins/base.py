@@ -17,6 +17,7 @@ class PluginBase(abc.ABC):
         self.parser = argparse.ArgumentParser(description=self.get_description())
         self.parser.add_argument('--config', type=str, help='JSON configuration string')
         self.parser.add_argument('--get-config-schema', action='store_true', help='Print configuration schema')
+        self.parser.add_argument('--get-description', action='store_true', help='Print plugin description')
         
     @abc.abstractmethod
     def get_description(self) -> str:
@@ -54,6 +55,10 @@ class PluginBase(abc.ABC):
     def main(self):
         """Main entry point for CLI execution."""
         args = self.parser.parse_args()
+        
+        if args.get_description:
+            print(self.get_description())
+            return
         
         if args.get_config_schema:
             print(json.dumps(self.get_config_schema(), indent=2))
