@@ -39,14 +39,16 @@ A Python script for managing wallpapers and lock screen backgrounds on **KDE Pla
 
 ## Features
 
-- **Multiple Sources**: Download from URLs, use local files, or randomly select from directories
-- **Dual Wallpaper Support**: Set different wallpapers for desktop and lock screen simultaneously
+- **Dynamic Multi-Plugin Mode**: Concurrently pull wallpapers from multiple enabled plugins (e.g., Google Images + Local Folder)
+- **Fair Source Selection**: Intelligent randomization ensures equal representation from all enabled sources, preventing large local libraries from dominating
+- **Shared Blacklist**: Centralized, hash-based blacklist system shared across all plugins
+- **Dual Wallpaper Support**: Set different wallpapers for desktop and lock screen simultaneously (dynamically pulled from different plugins)
 - **Continuous Cycling**: Automatically cycle through wallpapers at specified intervals
 - **Lock Screen Support**: Configure KDE Plasma 6 lock screen backgrounds
 - **Configuration File**: YAML-based configuration for persistent settings
 - **Service Mode**: Run as a background service with systemd
 - **Plugin System**: Extensible plugin architecture (includes Google Images downloader)
-- **Image Review & Blacklist**: built-in tool to review, mark, and delete unwanted wallpapers using hash-based blacklisting
+- **Image Review**: Built-in GUI tool to review, mark, and ban unwanted wallpapers
 - **Detailed Debugging**: Detailed logging for troubleshooting
 
 ## Requirements
@@ -189,6 +191,17 @@ default_wait: 300
 - `default_url: "https://example.com/image.jpg"` - Default URL
 - `default_wait: 300` - Default wait interval for cycling
 
+## Dynamic Multi-Plugin & Dual Mode
+
+Clockwork Orange now supports a powerful **Dynamic Multi-Plugin Mode**.
+
+If you enable multiple plugins (e.g., Google Images and Local File Source) and run the script without specifying a single source flag (like `-f` or `-d`), it will automatically enter **Dynamic Mode**:
+
+1.  **Aggregation**: It gathers valid image sources from all currently enabled plugins.
+2.  **Fair Selection**: It randomly selects a **source first**, then an image from that source. This ensures that a plugin with 10 images has the same chance of being picked as a plugin with 10,000 images.
+3.  **Dual Wallpapers**: If "Dual Wallpaper" mode is active, it will pick two *distinct* images (potentially from different plugins) and set one for the Desktop and one for the Lock Screen.
+4.  **Service Integration**: The background service uses this mode by default, respecting your "Wait Interval" setting from the GUI.
+
 ## How It Works
 
 ### Desktop Wallpapers
@@ -223,10 +236,10 @@ Clockwork Orange features a robust plugin system tailored for wallpaper acquisit
 
 ### Google Images Plugin
 The built-in Google Images plugin allows you to scrape high-quality wallpapers based on search terms.
-- **Smart Queries**: Supports multiple comma-separated searches (e.g., "4k space, 4k nature")
+- **Smart Search Terms UI**: Easily add, remove, and toggle individual search terms via the GUI
 - **Intelligent Processing**: Automatically downloads, resizes, and center-crops images to 4K (3840x2160)
 - **Quality Control**: Skips low-resolution thumbnails or duplicates
-- **Scheduling**: Built-in interval checks (Daily/Weekly/Always)
+- **Scheduling**: Built-in interval checks (Hourly/Daily/Weekly)
 - **Retention**: Automatically cleans up old files to save space
 
 **Usage:**
@@ -236,11 +249,17 @@ python3 plugins/google_images.py --config '{"query": "4k space", "download_dir":
 ```
 
 ### Review & Blacklist System
-The GUI includes a powerful "Review Mode" for managing your downloaded collections:
+The GUI includes a comprehensive **Review Mode** and **Shared Blacklist Manager**:
+
+**Review Mode (in Plugins Tab):**
 1. **Scan**: Load images from the plugin's download directory.
 2. **Review**: Navigate through images using **Left/Right Arrows**.
-3. **Mark**: Press **Space** to mark an unwanted image (indicated by a red cross).
-4. **Blacklist**: Click "Apply Blacklist" to delete the file and ban its hash forever.
+3. **Mark/Delete**: Press **Button** or use context menu to permanently delete and blacklist an image.
+
+**Blacklist Manager (Tab):**
+- **Centralized Database**: All plugins share a single `blacklist.json` database.
+- **Metadata**: Tracks file hash, deletion date, and source plugin.
+- **Management**: View the list of all banned hashes and remove entries if you made a mistake.
 
 ## Graphical User Interface
 
@@ -256,12 +275,12 @@ The script includes a modern Qt-based GUI for easy management of wallpapers and 
 
 ### GUI Features
 
-- **Service Management Tab:**
-  - View service status (running/stopped/failed)
-  - Start, stop, and restart the service
-  - Install/uninstall the systemd service
-  - View real-time service logs
-  - Auto-refresh status every 5 seconds
+- **Service Manager Tab:**
+  - **One-Click Install/Uninstall**: Easily install the user systemd service without CLI commands
+  - **Status Dashboard**: View real-time service status (running/stopped/failed)
+  - **Control**: Start, stop, and restart the service instantly
+  - **Live Logs**: View scrolling real-time logs from the background process
+  - **Auto-Refresh**: Dashboard updates automatically
 
 - **Configuration Tab:**
   - Basic settings: wallpaper modes, default paths, wait intervals
