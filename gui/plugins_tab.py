@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QTextEdit, QListWidget, QListWidgetItem, QSpinBox, QSizePolicy)
 from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from PyQt6.QtGui import QPixmap, QFont, QPainter, QColor, QPen
+from datetime import datetime, timedelta
 
 # Ensure we can import the plugin manager
 sys.path.append(str(Path(__file__).parent.parent))
@@ -747,12 +748,42 @@ class PluginsTab(QWidget):
         self.apply_blacklist_btn.setText(f"Apply Blacklist ({count} marked)")
         self.apply_blacklist_btn.setEnabled(count > 0)
         
+    
+    def get_friendly_date(self, timestamp):
+        try:
+            dt = datetime.fromtimestamp(timestamp)
+            now = datetime.now()
+            delta = now - dt
+            
+            if delta.total_seconds() < 60:
+                return "Just now"
+            elif delta.total_seconds() < 3600:
+                minutes = int(delta.total_seconds() / 60)
+                return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+            elif dt.date() == now.date():
+                return f"Today at {dt.strftime('%H:%M')}"
+            elif dt.date() == (now - timedelta(days=1)).date():
+                return f"Yesterday at {dt.strftime('%H:%M')}"
+            elif dt.year == now.year:
+                return dt.strftime("%b %d at %H:%M")
+            else:
+                return dt.strftime("%Y-%m-%d")
+        except Exception:
+            return "Unknown date"
+
     def show_review_image(self):
         """Display the current review image with overlays."""
         if not self.review_images or self.review_index >= len(self.review_images):
             return
             
         img_path = self.review_images[self.review_index]
+        
+        # Get date info
+        try:
+            mtime = img_path.stat().st_mtime
+            date_str = self.get_friendly_date(mtime)
+        except Exception:
+            date_str = "Unknown date"
         
         # Load pixmap using existing resize logic (we can reuse display_preview_image or partial logic)
         # But we need to draw over it.
@@ -788,8 +819,23 @@ class PluginsTab(QWidget):
             
         self.preview_label.setPixmap(scaled_pixmap)
         
-        # Update text or status?
-        self.log_viewer.setText(f"Reviewing {self.review_index + 1}/{len(self.review_images)}: {img_path.name}\n[Left/Right] Navigate  [Space] Mark to Delete")
+        
+        # Style for keyboard shortcuts
+        k_style = "background-color: #444; border: 1px solid #666; border-radius: 3px; padding: 1px 5px; font-weight: bold; color: #fff; font-family: monospace;"
+        
+        html = f"""
+        <div style="line-height: 1.4;">
+            <b>Reviewing {self.review_index + 1}/{len(self.review_images)}</b><br>
+            File: {img_path.name}<br>
+            Date: {date_str}
+            <div style="margin-top: 8px; color: #ccc;">
+                <span style="{k_style}">←</span> <span style="{k_style}">→</span> Navigate 
+                &nbsp;&nbsp;&nbsp;
+                <span style="{k_style}">Space</span> Mark/Unmark
+            </div>
+        </div>
+        """
+        self.log_viewer.setHtml(html)
         
     def keyPressEvent(self, event):
         """Handle keyboard navigation for review mode."""
