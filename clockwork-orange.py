@@ -743,7 +743,17 @@ def cycle_dynamic_plugins(plugin_manager: PluginManager, wait_seconds: int, desk
              
         if not shutdown_requested:
             # Sleep
-            for _ in range(wait_seconds):
+            # Prefer dynamic config wait if available, otherwise use initial argument
+            sleep_duration = wait_seconds
+            if 'config' in locals() and config.get('default_wait'):
+                try:
+                    sleep_duration = int(config['default_wait'])
+                except (ValueError, TypeError):
+                    pass
+            
+            # Print update if it changed significantly? No, simpler is better.
+            
+            for _ in range(sleep_duration):
                 if shutdown_requested: break
                 time.sleep(1)
     print(f"[DEBUG] Dynamic cycling stopped")
