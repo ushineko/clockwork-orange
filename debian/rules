@@ -1,0 +1,25 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --without autoreconf
+
+override_dh_install:
+	dh_install
+	# Fix desktop file paths
+	sed -i 's|Exec=.*|Exec=/usr/bin/clockwork-orange --gui|' debian/clockwork-orange/usr/share/applications/clockwork-orange.desktop
+	sed -i 's|Icon=.*|Icon=clockwork-orange|' debian/clockwork-orange/usr/share/applications/clockwork-orange.desktop
+	
+	# Install Icons (mimicking PKGBUILD loop)
+	for res in 16 32 48 64 128 256 512; do \
+		if [ -f gui/icons/clockwork-orange-$$res\x$$res.png ]; then \
+			mkdir -p debian/clockwork-orange/usr/share/icons/hicolor/$$res\x$$res/apps; \
+			install -m 644 gui/icons/clockwork-orange-$$res\x$$res.png debian/clockwork-orange/usr/share/icons/hicolor/$$res\x$$res/apps/clockwork-orange.png; \
+		fi \
+	done
+	# Install main icon
+	mkdir -p debian/clockwork-orange/usr/share/icons/hicolor/128x128/apps
+	install -m 644 gui/icons/clockwork-orange.png debian/clockwork-orange/usr/share/icons/hicolor/128x128/apps/clockwork-orange.png
+
+override_dh_usrlocal:
+	# Avoid error about installing to /usr/local if any
+	true

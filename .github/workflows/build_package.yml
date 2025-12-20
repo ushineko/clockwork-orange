@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-arch:
+    name: Build Arch Package
     runs-on: ubuntu-latest
     container: archlinux:latest
     permissions:
@@ -32,6 +33,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         path: src_repo
+        fetch-depth: 0 # Required for git describe/versioning
 
     - name: Fix Permissions
       run: |
@@ -40,21 +42,67 @@ jobs:
     - name: Build Package
       run: |
         cd src_repo
-        # We need to ignore PGP signature checks if we aren't importing keys
-        # But this package has 'SKIP' for sha256sums which is fine.
+        # Mark directory as safe for git since ownership changed
+        su builder -c "git config --global --add safe.directory $(pwd)"
         su builder -c "makepkg -s --noconfirm"
         
-    - name: Upload Artifact
+    - name: Upload Arch Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: clockwork-orange-package
+        name: arch-package
         path: src_repo/*.pkg.tar.zst
 
+  build-deb:
+    name: Build Debian Package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Required for dynamic versioning
+
+    - name: Install Build Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y dpkg-dev debhelper
+
+    - name: Build Package
+      run: |
+        ./build_deb.sh
+
+    - name: Upload Debian Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: debian-package
+        path: "*.deb"
+
+  release:
+    name: Create Release
+    needs: [build-arch, build-deb]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+    - name: Download Arch Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: arch-package
+        path: dist
+
+    - name: Download Debian Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: debian-package
+        path: dist
+
     - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: src_repo/*.pkg.tar.zst
+        files: dist/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

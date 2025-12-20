@@ -192,3 +192,17 @@ clockwork-orange.yml
 pkg/
 src/
 clockwork-orange/
+
+# Debian packaging
+*.deb
+*.buildinfo
+*.changes
+*.dsc
+*.tar.gz
+*.tar.xz
+debian/clockwork-orange/
+debian/.debhelper/
+debian/files
+debian/*.log
+debian/*.substvars
+debian/debhelper-build-stamp

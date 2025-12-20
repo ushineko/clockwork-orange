@@ -1,0 +1,14 @@
+Source: clockwork-orange
+Section: utils
+Priority: optional
+Maintainer: Your Name <your.email@example.com>
+Build-Depends: debhelper (>= 11)
+Standards-Version: 4.1.3
+Homepage: https://github.com/ushineko/clockwork-orange
+
+Package: clockwork-orange
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}, python3, python3-requests, python3-yaml, python3-pyqt6, python3-pil
+Description: Wallpaper manager for KDE Plasma 6
+ A Python script for managing wallpapers and lock screen backgrounds on KDE Plasma 6.
+ Includes a GUI for configuration and history management.

@@ -1,0 +1,7 @@
+clockwork-orange.py usr/lib/clockwork-orange/
+gui usr/lib/clockwork-orange/
+plugin_manager.py usr/lib/clockwork-orange/
+plugins usr/lib/clockwork-orange/
+clockwork-orange.desktop usr/share/applications/
+LICENSE usr/share/doc/clockwork-orange/
+README.md usr/share/doc/clockwork-orange/
