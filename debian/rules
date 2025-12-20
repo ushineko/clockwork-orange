@@ -20,6 +20,10 @@ override_dh_install:
 	mkdir -p debian/clockwork-orange/usr/share/icons/hicolor/128x128/apps
 	install -m 644 gui/icons/clockwork-orange.png debian/clockwork-orange/usr/share/icons/hicolor/128x128/apps/clockwork-orange.png
 
+	# Generate version.txt from changelog
+	# Format: clockwork-orange (0.r30.abc-1) ... -> 0.r30.abc-1
+	head -n 1 debian/changelog | sed 's/clockwork-orange (\(.*\)) .*/\1/' > debian/clockwork-orange/usr/lib/clockwork-orange/version.txt
+
 override_dh_usrlocal:
 	# Avoid error about installing to /usr/local if any
 	true

@@ -102,27 +102,54 @@ class AboutDialog(QDialog):
 
     def get_version_string(self):
         """Get the application version string with git info if available."""
-        base_version = "1.0"
-        git_ref = ""
+        project_root = Path(__file__).parent.parent
+        git_dir = project_root / ".git"
 
-        try:
+        # Check for version.txt (packaged version)
+        version_file = project_root / "version.txt"
+        if version_file.exists():
+            try:
+                return f"Version: {version_file.read_text().strip()}"
+            except Exception:
+                pass
+
+        if git_dir.exists():
             # Try to get git version from project root
-            project_root = Path(__file__).parent.parent
-            result = subprocess.run(
-                ["git", "describe", "--tags", "--always", "--dirty"],
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                timeout=1,
-            )
-            if result.returncode == 0:
-                git_ref = result.stdout.strip()
-        except Exception:
-            pass
+            try:
+                # Use subproccess to get git describe or short hash
+                # First try describe for tags
+                result = subprocess.run(
+                    ["git", "describe", "--tags"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    return f"Version: {result.stdout.strip()}"
 
-        if git_ref:
-            return f"Version: {base_version} ({git_ref})"
-        return f"Version: {base_version}"
+                # Fallback to count.short_sba
+                count = subprocess.run(
+                    ["git", "rev-list", "--count", "HEAD"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+                sha = subprocess.run(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                
+                return f"Version: r{count}.{sha}"
+                
+            except Exception:
+                pass
+        
+        return "Version: Unknown"
+        
+        return "Version: Unknown"
 
     def get_logo(self):
         """Get the logo from file or create a default one"""
@@ -601,7 +628,7 @@ class ClockworkOrangeGUI(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Clockwork Orange")
-    app.setApplicationVersion("1.0")
+    app.setApplicationVersion("Rolling")
 
     # Process check
     try:

@@ -25,6 +25,7 @@ A Python-based wallpaper manager for KDE Plasma 6.
 ## Packaging
 *   **Versioning**: Dynamic. Format `0.r<count>.<short_sha>` (e.g., `0.r30.abc1234`).
     *   Calculated via `git rev-list --count HEAD` and `git rev-parse --short HEAD`.
+    *   **Injection**: Packages generate a `version.txt` file in the install directory (e.g., `/usr/lib/clockwork-orange/`). The GUI checks this file first to report the version, falling back to git if missing (dev mode).
 *   **Arch Linux**: `PKGBUILD` located in root (symlinked or moved). Deps: `pacman` packages.
 *   **Debian**: `debian/` directory. Deps: `dpkg-dev`, `debhelper`. `build_deb.sh` handles dynamic `changelog` injection.
 *   **CI/CD**: `.github/workflows/build_package.yml`
