@@ -59,5 +59,5 @@ package() {
 	install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
 
     # Generate version.txt
-    pkgver > "${pkgdir}/usr/lib/${pkgname%-git}/version.txt"
+    echo "$pkgver" > "${pkgdir}/usr/lib/${pkgname%-git}/version.txt"
 }
