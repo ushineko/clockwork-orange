@@ -209,6 +209,22 @@ class ScreenshotGenerator:
             "Configure general application behavior like theme and startup options."
         )
 
+        # 6. Settings - Advanced
+        self.navigate_to("Advanced")
+        self.capture_screenshot(
+            "06_settings_advanced",
+            "Advanced Settings",
+            "Fine-tune low-level options, debug flags, and file extension filters."
+        )
+
+        # 7. Settings - YAML
+        self.navigate_to("Raw YAML")
+        self.capture_screenshot(
+            "07_settings_yaml",
+            "Raw Configuration Editor",
+            "Directly edit the underlying configuration file with syntax validation."
+        )
+
         # Write Markdown
         md_path = PROJECT_ROOT / "GUI.md"
         with open(md_path, "w") as f:

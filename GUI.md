@@ -26,3 +26,13 @@ Configure general application behavior like theme and startup options.
 
 ![Basic Settings](docs/img/05_settings_basic.png)
 
+## Advanced Settings
+Fine-tune low-level options, debug flags, and file extension filters.
+
+![Advanced Settings](docs/img/06_settings_advanced.png)
+
+## Raw Configuration Editor
+Directly edit the underlying configuration file with syntax validation.
+
+![Raw Configuration Editor](docs/img/07_settings_yaml.png)
+
