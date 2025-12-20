@@ -379,6 +379,13 @@ class ClockworkOrangeGUI(QMainWindow):
         if index is not None:
             self.stack.setCurrentIndex(index)
 
+            # Auto-refresh pages if needed
+            current_widget = self.stack.widget(index)
+            if current_widget == self.blacklist_page:
+                self.blacklist_page.load_blacklist()
+            elif current_widget == self.history_page:
+                self.history_page.refresh_stats()
+
     def schedule_auto_save(self):
         self.auto_save_timer.start()
 
@@ -427,11 +434,6 @@ class ClockworkOrangeGUI(QMainWindow):
     def create_menu_bar(self):
         menubar = self.menuBar()
         file_menu = menubar.addMenu("&File")
-
-        save_size = QAction("&Save Window Size", self)
-        save_size.triggered.connect(self.save_window_geometry)
-        file_menu.addAction(save_size)
-        file_menu.addSeparator()
 
         exit_action = QAction("&Exit", self)
         exit_action.setShortcut("Ctrl+Q")

@@ -7,11 +7,13 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap
+from PyQt6.QtCore import Qt, QThread, QUrl, pyqtSignal
+from PyQt6.QtGui import QColor, QDesktopServices, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -36,6 +38,27 @@ from PyQt6.QtWidgets import (
 # Ensure we can import the plugin manager
 sys.path.append(str(Path(__file__).parent.parent))
 from plugin_manager import PluginManager
+
+
+def get_relative_time(dt):
+    """Return a friendly relative time string."""
+    now = datetime.now()
+    diff = now - dt
+
+    seconds = diff.total_seconds()
+    if seconds < 60:
+        return "Just now"
+    elif seconds < 3600:
+        minutes = int(seconds / 60)
+        return f"{minutes} min{'s' if minutes != 1 else ''} ago"
+    elif seconds < 86400:
+        hours = int(seconds / 3600)
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    elif seconds < 604800:
+        days = int(seconds / 86400)
+        return f"{days} day{'s' if days != 1 else ''} ago"
+    else:
+        return dt.strftime("%Y-%m-%d")
 
 
 class AutoResizingLabel(QLabel):
@@ -191,6 +214,59 @@ class SearchTermsWidget(QWidget):
             self.input_field.setEditText("")
 
 
+class TermSelectionDialog(QDialog):
+    """Dialog to select which search terms to run."""
+
+    def __init__(self, terms_data, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Select Search Terms")
+        self.setFixedWidth(400)
+        self.setModal(True)
+        self.selected_terms = []
+
+        layout = QVBoxLayout(self)
+
+        layout.addWidget(QLabel("Select terms to include in this run:"))
+
+        self.list_widget = QListWidget()
+
+        # Populate list
+        # terms_data is list of dicts: [{'term': 'foo', 'enabled': True}, ...]
+        for item_data in terms_data:
+            if isinstance(item_data, dict):
+                term = item_data.get("term", "")
+                enabled = item_data.get("enabled", True)
+                if term:
+                    item = QListWidgetItem(term)
+                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                    item.setCheckState(
+                        Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked
+                    )
+                    self.list_widget.addItem(item)
+
+        layout.addWidget(self.list_widget)
+
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def accept(self):
+        # Gather checked items
+        self.selected_terms = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.checkState() == Qt.CheckState.Checked:
+                self.selected_terms.append(item.text())
+        super().accept()
+
+    def get_selected_terms(self):
+        return self.selected_terms
+
+
 class PluginRunner(QThread):
     progress_signal = pyqtSignal(int, str)
     log_signal = pyqtSignal(str)
@@ -321,40 +397,55 @@ class SinglePluginWidget(QWidget):
         content_splitter.addWidget(scroll)
 
         # Bottom Section of Splitter: Preview & Actions
-        # Right Column (now Bottom)
+        # Structure:
+        # [ VBox ]
+        #   [ Progress Bar ]
+        #   [ HSplitter ]
+        #     [ Preview ] | [ Actions ]
+
         bottom_column = QWidget()
         bottom_layout = QVBoxLayout(bottom_column)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Preview
-        self.preview_label = AutoResizingLabel("No preview available")
-        self.preview_label.setMinimumHeight(200)  # Ensure it has some height
-        self.preview_label.setStyleSheet(
-            "border: 1px solid #ccc; background-color: #222;"
-        )
-        bottom_layout.addWidget(self.preview_label, 1)  # Stretch 1
-
-        # Actions
-        action_group = QGroupBox("Actions")
-        action_layout = QVBoxLayout()
-
+        # 1. Progress Bar (Top, spanning full width)
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setFormat("%p% - %v")
-        action_layout.addWidget(self.progress_bar)
+        bottom_layout.addWidget(self.progress_bar)
+
+        # 2. Splitter (Preview | Actions)
+        bottom_splitter = QSplitter(Qt.Orientation.Horizontal)
+        bottom_layout.addWidget(bottom_splitter)
+
+        # Left: Preview
+        self.preview_label = AutoResizingLabel("No preview available")
+        self.preview_label.setMinimumHeight(200)
+        self.preview_label.setStyleSheet(
+            "border: 1px solid #ccc; background-color: #222;"
+        )
+        self.preview_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        bottom_splitter.addWidget(self.preview_label)
+
+        # Right: Actions
+        action_group = QGroupBox("Actions")
+        action_group.setMinimumWidth(250)
+
+        action_layout = QVBoxLayout()
 
         self.log_viewer = QTextEdit()
         self.log_viewer.setReadOnly(True)
-        self.log_viewer.setMaximumHeight(
-            100
-        )  # Reduce height since we are stacking vertically
+        # Remove max height constraint since we have vertical space now
         self.log_viewer.setPlaceholderText("Execution logs...")
         action_layout.addWidget(self.log_viewer)
 
-        btn_layout = QHBoxLayout()
-        self.run_btn = QPushButton("Run Plugin")
+        btn_layout = QVBoxLayout()
+
+        self.run_btn = QPushButton("On Demand")
+        self.run_btn.setToolTip("Run plugin manually with optional query selection")
         self.run_btn.clicked.connect(self.run_current_plugin)
         btn_layout.addWidget(self.run_btn)
 
@@ -375,7 +466,12 @@ class SinglePluginWidget(QWidget):
 
         action_layout.addLayout(btn_layout)
         action_group.setLayout(action_layout)
-        bottom_layout.addWidget(action_group)
+
+        bottom_splitter.addWidget(action_group)
+
+        # Set initial splitter sizes (give priority to image)
+        bottom_splitter.setSizes([550, 250])
+        bottom_splitter.setCollapsible(1, False)  # Don't collapse actions completely
 
         content_splitter.addWidget(bottom_column)
 
@@ -498,9 +594,20 @@ class SinglePluginWidget(QWidget):
             layout = QHBoxLayout(container)
             layout.setContentsMargins(0, 0, 0, 0)
             layout.addWidget(widget)
-            btn = QPushButton("...")
-            btn.clicked.connect(lambda: self.browse_directory(widget))
-            layout.addWidget(btn)
+
+            # Browse button
+            btn_browse = QPushButton("...")
+            btn_browse.setToolTip("Browse...")
+            btn_browse.setMaximumWidth(40)
+            btn_browse.clicked.connect(lambda: self.browse_directory(widget))
+            layout.addWidget(btn_browse)
+
+            # Open Folder button
+            btn_open = QPushButton("Open")
+            btn_open.setToolTip("Open in File Manager")
+            btn_open.clicked.connect(lambda: self.open_file_manager(widget.text()))
+            layout.addWidget(btn_open)
+
             self.current_plugin_widgets[field] = widget
             return container
 
@@ -542,6 +649,17 @@ class SinglePluginWidget(QWidget):
         path = QFileDialog.getExistingDirectory(self, "Select Directory", widget.text())
         if path:
             widget.setText(path)
+
+    def open_file_manager(self, path_str):
+        """Open the directory in the default file manager."""
+        if not path_str:
+            return
+
+        path = Path(path_str).expanduser().resolve()
+        if path.exists() and path.is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        else:
+            QMessageBox.warning(self, "Error", f"Directory does not exist:\n{path}")
 
     def _configure_action_buttons(self, plugin_name):
         is_runnable = plugin_name != "local"
@@ -591,7 +709,50 @@ class SinglePluginWidget(QWidget):
             self.progress_bar.setFormat("%p%")
 
     def run_current_plugin(self):
+        current_config = self.get_config()
+
+        # Check for search terms widget (specifically for Google Images style lists)
+        search_widget_key = None
+        for key, widget in self.current_plugin_widgets.items():
+            if isinstance(widget, SearchTermsWidget):
+                search_widget_key = key
+                break
+
+        if search_widget_key:
+            # We have search terms. Show selection dialog.
+            raw_terms = current_config.get(search_widget_key, [])
+            dialog = TermSelectionDialog(raw_terms, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                selected = dialog.get_selected_terms()
+                if not selected:
+                    QMessageBox.warning(self, "Warning", "No search terms selected.")
+                    return
+                # Override the config for this run only
+                current_config[search_widget_key] = selected
+
+                # We need to pass this modified config to execute_internal
+                # But execute_internal calls get_config() again!
+                # Refactor execute_internal to accept config override.
+                self._execute_plugin_with_config(current_config, False)
+            return
+
         self._execute_plugin_internal(False)
+
+    def _execute_plugin_with_config(self, config, reset=False):
+        """Execute plugin with explicit config dictionary."""
+        config["force"] = True
+        if reset:
+            config["reset"] = True
+
+        self.log_viewer.clear()
+        self.log_viewer.append(f"Starting {self.plugin_name}...")
+
+        self.runner = PluginRunner(self.plugin_manager, self.plugin_name, config)
+        self.runner.log_signal.connect(self.log_viewer.append)
+        self.runner.progress_signal.connect(self.update_progress)
+        self.runner.image_saved_signal.connect(self.display_preview_image)
+        self.runner.finished_signal.connect(self.display_result)
+        self.runner.start()
 
     def reset_current_plugin(self):
         reply = QMessageBox.warning(
@@ -696,7 +857,8 @@ class SinglePluginWidget(QWidget):
         # Update Info
         try:
             mtime = datetime.fromtimestamp(img_path.stat().st_mtime)
-            date_str = mtime.strftime("%Y-%m-%d %H:%M:%S")
+            relative_time = get_relative_time(mtime)
+            date_str = f"{relative_time} ({mtime.strftime('%Y-%m-%d %H:%M')})"
         except:
             date_str = "Unknown"
 
