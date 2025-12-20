@@ -264,9 +264,9 @@ The GUI includes a comprehensive **Review Mode** and **Shared Blacklist Manager*
 
 ## Graphical User Interface
 
-The script includes a modern Qt-based GUI for easy management of wallpapers and service configuration.
+Clockwork Orange includes a comprehensive Qt-based GUI for managing plugins, reviewing wallpapers, and configuring the background service.
 
-![Clockwork Orange GUI](img/co_gui_example.png)
+👉 **[View the full GUI Documentation and Tour](GUI.md)** for detailed screenshots and feature explanations.
 
 ### Starting the GUI
 
@@ -274,66 +274,15 @@ The script includes a modern Qt-based GUI for easy management of wallpapers and 
 ./clockwork-orange.py --gui
 ```
 
-### GUI Features
-
-- **Service Manager Tab:**
-  - **One-Click Install/Uninstall**: Easily install the user systemd service without CLI commands
-  - **Status Dashboard**: View real-time service status (running/stopped/failed)
-  - **Control**: Start, stop, and restart the service instantly
-  - **Live Logs**: View scrolling real-time logs from the background process
-  - **Auto-Refresh**: Dashboard updates automatically
-
-- **Plugins Tab:**
-  - **Plugin Management**: Select, configure, and run plugins
-  - **Visual Interface**:
-    - **Sidebar Navigation**: Organized tree view with system icons (KDE-friendly).
-    - **Resizable Layout**: Adjustable split views for configuration and preview areas.
-    - **Vertical Config**: Clean, scrolling configuration forms.
-  - **Live Preview**: Real-time thumbnail preview of downloaded images
-  - **Review Mode**: Review downloaded images, mark unwanted ones, and blacklist them
-  - **Execution Logs**: View real-time logs and progress bars
-  - **Reset & Run**: Clear download directories before starting fresh
-
-- **Configuration:**
-  - Basic settings: wallpaper modes, default paths, wait intervals
-  - Advanced settings: image extensions, debug mode, auto-start
-  - Raw YAML editor with validation and formatting
-  - Save/Restore Window Size automatically
-
-- **System Tray Integration:**
-  - Minimize to system tray
-  - Status notifications
-  - Quick access menu
-
-- **Menu Bar:**
-  - File menu with exit option
-  - View menu with refresh functionality
-  - Help menu with About dialog and Qt information
-  - Keyboard shortcuts (Ctrl+Q, F5)
-
-### GUI Requirements
-
-- PyQt6 (`pip install PyQt6`)
-- Pillow (`pip install Pillow`)
-- System tray support (most desktop environments)
-
 ### Desktop Entry Installation
 
-To make Clockwork Orange appear in your application launcher and allow pinning to the taskbar:
+To integrate with your system launcher (install `.desktop` file):
 
 ```bash
-# Install desktop entry
 ./install-desktop-entry.sh
-
-# Or manually install
-cp clockwork-orange.desktop ~/.local/share/applications/
-update-desktop-database ~/.local/share/applications/
 ```
 
-After installation, you can:
-- Find "Clockwork Orange" in your application launcher
-- Right-click the application to pin it to your taskbar
-- Use the application like any other desktop application
+After installation, you can launch "Clockwork Orange" from your application menu or pin it to your taskbar.
 
 ## Running as a Background Service
 
