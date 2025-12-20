@@ -27,7 +27,12 @@ fi
 # -us -uc: Do not sign source or changes (no GPG key needed for local build)
 # -b: Build binary-only
 # -d: Do not check build dependencies (useful on Arch where dpkg database is empty)
+# -d: Do not check build dependencies (useful on Arch where dpkg database is empty)
 dpkg-buildpackage -us -uc -b -d
 
-echo "Build complete."
-ls -l ../clockwork-orange_*.deb
+echo "Build complete. Moving artifacts to current directory..."
+mv ../clockwork-orange_*.deb .
+mv ../clockwork-orange_*.changes .
+mv ../clockwork-orange_*.buildinfo . 2>/dev/null || true
+
+ls -l clockwork-orange_*.deb
