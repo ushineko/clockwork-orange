@@ -6,8 +6,8 @@ pkgdesc="A Python script for managing wallpapers and lock screen backgrounds on 
 arch=('any')
 url="https://github.com/ushineko/clockwork-orange"
 license=('MIT')
-depends=('python' 'python-requests' 'python-yaml' 'qt6-tools' 'kconfig')
-optdepends=('python-pyqt6: for GUI support')
+depends=('python' 'python-requests' 'python-yaml' 'python-pillow' 'python-watchdog' 'python-pyqt6' 'qt6-tools' 'kconfig')
+
 makedepends=('git')
 provides=("${pkgname%-git}")
 conflicts=("${pkgname%-git}")

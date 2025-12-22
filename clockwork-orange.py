@@ -14,6 +14,11 @@ from pathlib import Path
 import requests
 import yaml
 
+
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from threading import Event
+
 from plugin_manager import PluginManager
 
 # GUI imports (optional)
@@ -772,21 +777,39 @@ def cycle_dynamic_plugins(
     print(f"[DEBUG] Wait interval: {wait_seconds} seconds")
     print(f"[DEBUG] Desktop: {desktop}, Lockscreen: {lockscreen}")
     print(f"[DEBUG] Press Ctrl+C to stop")
+    
+    # Initialize Watchdog
+    config_path = Path.home() / ".config" / "clockwork-orange.yml"
+    config_change_event = Event()
+    observer = Observer()
+    watcher = ConfigWatcher(config_path, config_change_event)
+    
+    # Ensure config dir exists
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    observer.schedule(watcher, str(config_path.parent), recursive=False)
+    observer.start()
+    print(f"[DEBUG] Started configuration watcher on {config_path}")
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
     cycle_count = 0
 
-    while not shutdown_requested:
-        cycle_count += 1
-        print(f"[DEBUG] Cycle #{cycle_count}")
+    try:
+        while not shutdown_requested:
+            cycle_count += 1
+            print(f"[DEBUG] Cycle #{cycle_count}")
 
-        # Execute one cycle
-        config = _execute_dynamic_cycle(plugin_manager, desktop, lockscreen)
+            # Execute one cycle
+            config = _execute_dynamic_cycle(plugin_manager, desktop, lockscreen)
 
-        if not shutdown_requested:
-            _wait_for_next_cycle(config, wait_seconds)
+            if not shutdown_requested:
+                _wait_for_next_cycle(config, wait_seconds, config_change_event)
+    finally:
+        observer.stop()
+        observer.join()
+        print(f"[DEBUG] Watcher stopped")
 
     print(f"[DEBUG] Dynamic cycling stopped")
 
@@ -1358,8 +1381,46 @@ def _execute_dynamic_cycle(plugin_manager, desktop, lockscreen):
         return {}
 
 
-def _wait_for_next_cycle(config, default_wait):
-    """Wait for the next cycle, respecting interrupt signals."""
+class ConfigWatcher(FileSystemEventHandler):
+    """Watch for configuration file changes."""
+    def __init__(self, config_path, change_event):
+        self.config_path = Path(config_path).resolve()
+        self.change_event = change_event
+
+    def _process_event(self, event):
+        # We try to match by path. 
+        # Note: event.src_path is absolute if we watch a dir with observer, 
+        # but safely check resolve.
+        try:
+            event_path = Path(event.src_path).resolve()
+            
+            # Check for direct match
+            if event_path == self.config_path:
+                print(f"[DEBUG] Config change detected (Event: {event.event_type}), triggering update...")
+                self.change_event.set()
+                return
+
+            # Handle atomic moves (moved_to)
+            if event.event_type == 'moved':
+                dest_path = Path(event.dest_path).resolve()
+                if dest_path == self.config_path:
+                    print(f"[DEBUG] Config move detected (Event: {event.event_type}), triggering update...")
+                    self.change_event.set()
+        except Exception as e:
+            print(f"[DEBUG] Error processing event: {e}")
+
+    def on_modified(self, event):
+        self._process_event(event)
+
+    def on_created(self, event):
+        self._process_event(event)
+        
+    def on_moved(self, event):
+        self._process_event(event)
+
+
+def _wait_for_next_cycle(config, default_wait, change_event=None):
+    """Wait for the next cycle, respecting interrupt signals and config changes."""
     sleep_duration = default_wait
     if config and config.get("default_wait"):
         try:
@@ -1367,10 +1428,34 @@ def _wait_for_next_cycle(config, default_wait):
         except (ValueError, TypeError):
             pass
 
-    for _ in range(sleep_duration):
-        if shutdown_requested:
-            break
-        time.sleep(1)
+    # If we have a change event, wait on it
+    if change_event:
+        # We still loop to check shutdown_requested, but use event.wait with timeout
+        # However, event.wait returns true if event set, false if timeout.
+        # If event set, we return early (triggering next cycle immediately).
+        
+        start_time = time.time()
+        while time.time() - start_time < sleep_duration:
+            if shutdown_requested:
+                break
+            
+            # Wait for 1 second or until event is set
+            # We chunk it to 1s to check shutdown_requested efficiently
+            # OR we could just wait(remaining) if shutdown_requested was handled via another signal event,
+            # but shutdown_requested is a simple bool flag here.
+            
+            # Better: wait for the event with a 1s timeout
+            if change_event.wait(timeout=1.0):
+                print(f"[DEBUG] Config change detected, interrupting wait cycle")
+                change_event.clear() # Reset for next time
+                return # Exit wait immediately
+                
+    else:
+        # Legacy fallback
+        for _ in range(sleep_duration):
+            if shutdown_requested:
+                break
+            time.sleep(1)
 
 
 if __name__ == "__main__":
