@@ -27,20 +27,42 @@ def find_sensitive_widgets(window):
     sensitive_widgets = []
     # Find all QLineEdit, QTextEdit, QPlainTextEdit
     for widget_type in [QLineEdit, QTextEdit, QPlainTextEdit]:
-        sensitive_widgets.extend(window.findChildren(widget_type))
+         widgets = window.findChildren(widget_type)
+         for w in widgets:
+             # Skip if empty or read-only and small (likely labels or incidental)
+             # But Service Logs are ReadOnly, so we MUST include them.
+             # Maybe filter by visibility?
+             if w.isVisible():
+                 sensitive_widgets.append(w)
     return sensitive_widgets
 
 def get_widget_rect(window, widget):
-    """Get the widget's geometry relative to the main window."""
+    """Get the widget's geometry relative to the main window, accounting for DPR."""
     if not widget.isVisible():
         return None
     
-    # Map widget's top-left (0,0) to global screen coordinates
-    global_pos = widget.mapToGlobal(widget.rect().topLeft())
-    # Map global coordinates to window's coordinate system
-    window_pos = window.mapFromGlobal(global_pos)
+    # Get vector from window top-left to widget top-left
+    # mapTo(window, ...) works if window is ancestor.
+    try:
+        top_left = widget.mapTo(window, widget.rect().topLeft())
+    except Exception:
+        # Fallback to global mapping
+        global_pos = widget.mapToGlobal(widget.rect().topLeft())
+        top_left = window.mapFromGlobal(global_pos)
+
+    rect = QRect(top_left, widget.size())
     
-    return QRect(window_pos, widget.size())
+    # Scale for Device Pixel Ratio (High DPI)
+    dpr = window.devicePixelRatio()
+    if dpr != 1.0:
+        rect = QRect(
+            int(rect.x() * dpr),
+            int(rect.y() * dpr),
+            int(rect.width() * dpr),
+            int(rect.height() * dpr)
+        )
+        
+    return rect
 
 def apply_blur(pixmap_path, rects):
     """Apply Gaussian blur to specific regions of the image using Pillow."""
@@ -50,13 +72,22 @@ def apply_blur(pixmap_path, rects):
         # Create a mask or just process regions
         for rect in rects:
             # rect is (x, y, width, height)
-            box = (rect.x(), rect.y(), rect.x() + rect.width(), rect.y() + rect.height())
+            # Ensure coordinates are within bounds
+            x1 = max(0, rect.x())
+            y1 = max(0, rect.y())
+            x2 = min(img.width, rect.x() + rect.width())
+            y2 = min(img.height, rect.y() + rect.height())
+            
+            if x2 <= x1 or y2 <= y1:
+                continue
+
+            box = (x1, y1, x2, y2)
             
             # Crop the region
             region = img.crop(box)
             
             # Apply heavy blur
-            blurred_region = region.filter(ImageFilter.GaussianBlur(radius=10))
+            blurred_region = region.filter(ImageFilter.GaussianBlur(radius=15))
             
             # Paste back
             img.paste(blurred_region, box)
