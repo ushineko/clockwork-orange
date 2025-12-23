@@ -2,9 +2,8 @@
 """
 Plugin management widget (SinglePluginWidget) for the GUI.
 """
-import json
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, QUrl, pyqtSignal
@@ -26,7 +25,6 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QScrollBar,
     QSizePolicy,
     QSpinBox,
     QSplitter,
@@ -859,7 +857,7 @@ class SinglePluginWidget(QWidget):
             mtime = datetime.fromtimestamp(img_path.stat().st_mtime)
             relative_time = get_relative_time(mtime)
             date_str = f"{relative_time} ({mtime.strftime('%Y-%m-%d %H:%M')})"
-        except:
+        except Exception:
             date_str = "Unknown"
 
         status = (

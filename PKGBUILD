@@ -1,12 +1,12 @@
 # Maintainer: Your Name <your.email@example.com>
 pkgname=clockwork-orange-git
-pkgver=r12.6e2e127
+pkgver=r40.49398e6
 pkgrel=1
-pkgdesc="A Python script for managing wallpapers and lock screen backgrounds on KDE Plasma 6"
+pkgdesc="Advanced wallpaper manager and downloader with plugin support (Wallhaven, Google Images) for KDE Plasma 6"
 arch=('any')
 url="https://github.com/ushineko/clockwork-orange"
 license=('MIT')
-depends=('python' 'python-requests' 'python-yaml' 'python-pillow' 'python-watchdog' 'python-pyqt6' 'qt6-tools' 'kconfig')
+depends=('python' 'python-requests' 'python-yaml' 'python-pillow' 'python-watchdog' 'python-pyqt6' 'qt6-tools' 'kconfig' 'python-psutil')
 
 makedepends=('git')
 provides=("${pkgname%-git}")

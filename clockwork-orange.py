@@ -10,14 +10,12 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from threading import Event
 
 import requests
 import yaml
-
-
-from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from threading import Event
+from watchdog.observers import Observer
 
 from plugin_manager import PluginManager
 
@@ -777,16 +775,16 @@ def cycle_dynamic_plugins(
     print(f"[DEBUG] Wait interval: {wait_seconds} seconds")
     print(f"[DEBUG] Desktop: {desktop}, Lockscreen: {lockscreen}")
     print(f"[DEBUG] Press Ctrl+C to stop")
-    
+
     # Initialize Watchdog
     config_path = Path.home() / ".config" / "clockwork-orange.yml"
     config_change_event = Event()
     observer = Observer()
     watcher = ConfigWatcher(config_path, config_change_event)
-    
+
     # Ensure config dir exists
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     observer.schedule(watcher, str(config_path.parent), recursive=False)
     observer.start()
     print(f"[DEBUG] Started configuration watcher on {config_path}")
@@ -1351,23 +1349,20 @@ def _clean_lockscreen_config():
 def _reload_screensaver_config():
     """Reload the screen saver configuration via DBus."""
     print(f"[DEBUG] Attempting to reload screen saver configuration...")
-    
+
     # Try multiple services and methods to ensure reliability
     services = ["org.freedesktop.ScreenSaver", "org.kde.screensaver"]
     methods = ["configure", "org.kde.screensaver.configure"]
-    
+
     success = False
-    
+
     for service in services:
         for method in methods:
             try:
                 cmd = ["qdbus6", service, "/ScreenSaver", method]
                 # print(f"[DEBUG] Calling: {' '.join(cmd)}")
                 result = subprocess.run(
-                    cmd,
-                    check=False,
-                    capture_output=True,
-                    text=True
+                    cmd, check=False, capture_output=True, text=True
                 )
                 if result.returncode == 0:
                     print(f"[DEBUG] Successfully called {method} on {service}")
@@ -1424,28 +1419,33 @@ def _execute_dynamic_cycle(plugin_manager, desktop, lockscreen):
 
 class ConfigWatcher(FileSystemEventHandler):
     """Watch for configuration file changes."""
+
     def __init__(self, config_path, change_event):
         self.config_path = Path(config_path).resolve()
         self.change_event = change_event
 
     def _process_event(self, event):
-        # We try to match by path. 
-        # Note: event.src_path is absolute if we watch a dir with observer, 
+        # We try to match by path.
+        # Note: event.src_path is absolute if we watch a dir with observer,
         # but safely check resolve.
         try:
             event_path = Path(event.src_path).resolve()
-            
+
             # Check for direct match
             if event_path == self.config_path:
-                print(f"[DEBUG] Config change detected (Event: {event.event_type}), triggering update...")
+                print(
+                    f"[DEBUG] Config change detected (Event: {event.event_type}), triggering update..."
+                )
                 self.change_event.set()
                 return
 
             # Handle atomic moves (moved_to)
-            if event.event_type == 'moved':
+            if event.event_type == "moved":
                 dest_path = Path(event.dest_path).resolve()
                 if dest_path == self.config_path:
-                    print(f"[DEBUG] Config move detected (Event: {event.event_type}), triggering update...")
+                    print(
+                        f"[DEBUG] Config move detected (Event: {event.event_type}), triggering update..."
+                    )
                     self.change_event.set()
         except Exception as e:
             print(f"[DEBUG] Error processing event: {e}")
@@ -1455,7 +1455,7 @@ class ConfigWatcher(FileSystemEventHandler):
 
     def on_created(self, event):
         self._process_event(event)
-        
+
     def on_moved(self, event):
         self._process_event(event)
 
@@ -1474,23 +1474,23 @@ def _wait_for_next_cycle(config, default_wait, change_event=None):
         # We still loop to check shutdown_requested, but use event.wait with timeout
         # However, event.wait returns true if event set, false if timeout.
         # If event set, we return early (triggering next cycle immediately).
-        
+
         start_time = time.time()
         while time.time() - start_time < sleep_duration:
             if shutdown_requested:
                 break
-            
+
             # Wait for 1 second or until event is set
             # We chunk it to 1s to check shutdown_requested efficiently
             # OR we could just wait(remaining) if shutdown_requested was handled via another signal event,
             # but shutdown_requested is a simple bool flag here.
-            
+
             # Better: wait for the event with a 1s timeout
             if change_event.wait(timeout=1.0):
                 print(f"[DEBUG] Config change detected, interrupting wait cycle")
-                change_event.clear() # Reset for next time
-                return # Exit wait immediately
-                
+                change_event.clear()  # Reset for next time
+                return  # Exit wait immediately
+
     else:
         # Legacy fallback
         for _ in range(sleep_duration):

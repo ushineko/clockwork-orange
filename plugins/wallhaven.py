@@ -4,7 +4,6 @@ Wallhaven Plugin for Clockwork Orange.
 Downloads wallpapers from Wallhaven.cc API v1.
 """
 
-import hashlib
 import sys
 import time
 from datetime import datetime, timedelta
@@ -12,7 +11,6 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
-from PIL import Image
 
 # Add parent directory to path to allow importing base
 sys.path.append(str(Path(__file__).parent.parent))
@@ -48,7 +46,14 @@ class WallhavenPlugin(PluginBase):
                 "type": "string",
                 "description": "Sort Order",
                 "default": "relevance",
-                "enum": ["relevance", "random", "date_added", "views", "favorites", "toplist"],
+                "enum": [
+                    "relevance",
+                    "random",
+                    "date_added",
+                    "views",
+                    "favorites",
+                    "toplist",
+                ],
             },
             "top_range": {
                 "type": "string",
@@ -130,9 +135,13 @@ class WallhavenPlugin(PluginBase):
 
     def run(self, config: Dict[str, Any]) -> Dict[str, Any]:
         # Setup directories
-        download_dir = Path(config.get("download_dir", Path.home() / "Pictures" / "Wallpapers" / "Wallhaven"))
+        download_dir = Path(
+            config.get(
+                "download_dir", Path.home() / "Pictures" / "Wallpapers" / "Wallhaven"
+            )
+        )
         download_dir.mkdir(parents=True, exist_ok=True)
-        
+
         limit = int(config.get("limit", 10))
         max_files = int(config.get("max_files", 100))
 
@@ -142,15 +151,15 @@ class WallhavenPlugin(PluginBase):
 
         # Handle GUI/Review actions
         if config.get("action") == "process_blacklist":
-             return self._handle_blacklist_action(config)
-        
+            return self._handle_blacklist_action(config)
+
         if config.get("reset", False):
             self._perform_reset(download_dir)
 
         # Handle force run (bypass interval)
         interval = config.get("interval", "Daily").lower()
         force = config.get("force", False)
-        
+
         if not force and not self._should_run(download_dir, interval):
             print(f"[Wallhaven] Skipping run (interval: {interval})", file=sys.stderr)
             return {"status": "success", "path": str(download_dir)}
@@ -160,43 +169,7 @@ class WallhavenPlugin(PluginBase):
         if not queries:
             queries = ["landscape"]
 
-        total_downloaded = 0
-        for i, query in enumerate(queries):
-            term_progress_base = int((i / len(queries)) * 90)
-            print(f"::PROGRESS:: {term_progress_base} :: Searching API for '{query}'...", file=sys.stderr)
-
-            # Build API Parameters with specific query
-            params = self._build_api_params(config, query)
-            
-            print(f"[Wallhaven] Starting search for '{query}' with params: {params}", file=sys.stderr)
-
-            # Search API
-            try:
-                results = self._search_api(params)
-                print(f"[Wallhaven] Found {len(results)} wallpapers for '{query}'", file=sys.stderr)
-            except Exception as e:
-                print(f"[Wallhaven] API Error for '{query}': {e}", file=sys.stderr)
-                continue
-
-            # Download Images
-            count = 0
-            # Limit per query or total? Google Images does limit per query. Let's do that.
-            limit_per_query = limit 
-            total_results = len(results)
-            
-            for j, item in enumerate(results):
-                if count >= limit_per_query:
-                    break
-                    
-                # Calculate granular progress
-                term_slice = 90 / len(queries)
-                current_percent = int(term_progress_base + (j / total_results) * term_slice)
-
-                print(f"::PROGRESS:: {current_percent} :: Processing image {j+1}/{total_results}...", file=sys.stderr)
-                
-                if self._process_item(item, download_dir):
-                    count += 1
-                    total_downloaded += count
+        self._process_queries(queries, config, download_dir, limit)
 
         # Update last run timestamp
         self._update_last_run(download_dir)
@@ -207,6 +180,58 @@ class WallhavenPlugin(PluginBase):
 
         print(f"::PROGRESS:: 100 :: Done!", file=sys.stderr)
         return {"status": "success", "path": str(download_dir)}
+
+    def _process_queries(self, queries: List[str], config: Dict[str, Any], download_dir: Path, limit: int):
+        total_downloaded = 0
+        for i, query in enumerate(queries):
+            term_progress_base = int((i / len(queries)) * 90)
+            print(
+                f"::PROGRESS:: {term_progress_base} :: Searching API for '{query}'...",
+                file=sys.stderr,
+            )
+
+            # Build API Parameters with specific query
+            params = self._build_api_params(config, query)
+
+            print(
+                f"[Wallhaven] Starting search for '{query}' with params: {params}",
+                file=sys.stderr,
+            )
+
+            # Search API
+            try:
+                results = self._search_api(params)
+                print(
+                    f"[Wallhaven] Found {len(results)} wallpapers for '{query}'",
+                    file=sys.stderr,
+                )
+            except Exception as e:
+                print(f"[Wallhaven] API Error for '{query}': {e}", file=sys.stderr)
+                continue
+
+            # Download Images
+            count = 0
+            limit_per_query = limit
+            total_results = len(results)
+
+            for j, item in enumerate(results):
+                if count >= limit_per_query:
+                    break
+
+                # Calculate granular progress
+                term_slice = 90 / len(queries)
+                current_percent = int(
+                    term_progress_base + (j / total_results) * term_slice
+                )
+
+                print(
+                    f"::PROGRESS:: {current_percent} :: Processing image {j+1}/{total_results}...",
+                    file=sys.stderr,
+                )
+
+                if self._process_item(item, download_dir):
+                    count += 1
+                    total_downloaded += count
 
     def _parse_queries(self, raw_query):
         queries = []
@@ -227,33 +252,33 @@ class WallhavenPlugin(PluginBase):
             "apikey": config.get("api_key", ""),
             "sorting": config.get("sorting", "relevance"),
             "order": "desc",
-            "page": 1, 
+            "page": 1,
         }
 
         if params["sorting"] == "toplist":
             params["topRange"] = config.get("top_range", "1M")
 
         # Categories: General/Anime/People (111)
-        c_gen = '1' if config.get("category_general", True) else '0'
-        c_ani = '1' if config.get("category_anime", True) else '0'
-        c_ppl = '1' if config.get("category_people", True) else '0'
+        c_gen = "1" if config.get("category_general", True) else "0"
+        c_ani = "1" if config.get("category_anime", True) else "0"
+        c_ppl = "1" if config.get("category_people", True) else "0"
         params["categories"] = f"{c_gen}{c_ani}{c_ppl}"
 
         # Purity: SFW/Sketchy/NSFW (100)
-        p_sfw = '1' if config.get("purity_sfw", True) else '0'
-        p_sky = '1' if config.get("purity_sketchy", False) else '0'
-        p_nsfw = '1' if config.get("purity_nsfw", False) else '0'
+        p_sfw = "1" if config.get("purity_sfw", True) else "0"
+        p_sky = "1" if config.get("purity_sketchy", False) else "0"
+        p_nsfw = "1" if config.get("purity_nsfw", False) else "0"
         params["purity"] = f"{p_sfw}{p_sky}{p_nsfw}"
 
         # Resolutions
         resolutions = config.get("resolutions", "").strip()
         if resolutions:
             params["resolutions"] = resolutions
-        
+
         atleast = config.get("atleast", "").strip()
         if atleast:
             params["atleast"] = atleast
-            
+
         ratios = config.get("ratios", "").strip()
         if ratios:
             params["ratios"] = ratios
@@ -262,23 +287,26 @@ class WallhavenPlugin(PluginBase):
 
     def _search_api(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
         url = "https://wallhaven.cc/api/v1/search"
-        # Only include seed if random to ensure randomness or consistency? 
+        # Only include seed if random to ensure randomness or consistency?
         # Actually random needs seed to paging, but we just fetch page 1 for now.
         if params["sorting"] == "random":
-             import random
-             params["seed"] = ''.join([str(random.choice("0123456789abcdef")) for _ in range(6)])
+            import random
+
+            params["seed"] = "".join(
+                [str(random.choice("0123456789abcdef")) for _ in range(6)]
+            )
 
         response = requests.get(url, params=params, timeout=10)
         if response.status_code != 200:
             raise Exception(f"HTTP {response.status_code}: {response.text}")
-        
+
         data = response.json()
         return data.get("data", [])
 
     def _process_item(self, item: Dict[str, Any], download_dir: Path) -> bool:
         url = item.get("path")
         img_id = item.get("id")
-        
+
         if not url:
             return False
 
@@ -290,7 +318,7 @@ class WallhavenPlugin(PluginBase):
         # Check History (URL)
         if self.history_manager.seen_url(url):
             return False
-            
+
         if filepath.exists():
             return False
 
@@ -300,36 +328,45 @@ class WallhavenPlugin(PluginBase):
             res = requests.get(url, timeout=20)
             if res.status_code == 200:
                 filepath.write_bytes(res.content)
-                
+
                 # Check Blacklist
                 img_hash = self.blacklist_manager.get_image_hash(filepath)
                 if self.blacklist_manager.is_blacklisted(img_hash):
-                    print(f"[Wallhaven] Blacklisted image detected. Removing.", file=sys.stderr)
+                    print(
+                        f"[Wallhaven] Blacklisted image detected. Removing.",
+                        file=sys.stderr,
+                    )
                     filepath.unlink()
                     return False
-                
+
                 # Check History (Content)
                 if self.history_manager.seen_image(filepath):
-                    print(f"[Wallhaven] Duplicate content detected. Removing.", file=sys.stderr)
+                    print(
+                        f"[Wallhaven] Duplicate content detected. Removing.",
+                        file=sys.stderr,
+                    )
                     filepath.unlink()
                     self.history_manager.add_entry(url, filepath, source="wallhaven")
                     return False
-                
+
                 # Success
                 self.history_manager.add_entry(url, filepath, source="wallhaven")
                 print(f"[Wallhaven] Saved {filepath.name}", file=sys.stderr)
                 print(f"::IMAGE_SAVED:: {filepath}", file=sys.stderr)
                 return True
-                
+
         except Exception as e:
             print(f"[Wallhaven] Error downloading {url}: {e}", file=sys.stderr)
             return False
-            
+
         return False
 
     def _handle_blacklist_action(self, config):
         targets = config.get("targets", [])
-        print(f"[Wallhaven] Processing blacklist for {len(targets)} files...", file=sys.stderr)
+        print(
+            f"[Wallhaven] Processing blacklist for {len(targets)} files...",
+            file=sys.stderr,
+        )
         self.blacklist_manager.process_files(targets, plugin_name="wallhaven")
         return {"status": "success", "message": "Blacklist processed"}
 
@@ -337,6 +374,7 @@ class WallhavenPlugin(PluginBase):
         print(f"[Wallhaven] Resetting directory {download_dir}...", file=sys.stderr)
         try:
             import shutil
+
             for item in download_dir.iterdir():
                 if item.is_file():
                     item.unlink()
@@ -347,16 +385,19 @@ class WallhavenPlugin(PluginBase):
 
     def _cleanup_old_files(self, download_dir: Path, max_files: int):
         try:
-            files = sorted([f for f in download_dir.iterdir() if f.is_file()], key=lambda f: f.stat().st_mtime)
+            files = sorted(
+                [f for f in download_dir.iterdir() if f.is_file()],
+                key=lambda f: f.stat().st_mtime,
+            )
             if len(files) > max_files:
-                for f in files[:len(files) - max_files]:
+                for f in files[: len(files) - max_files]:
                     f.unlink()
         except Exception:
             pass
 
         except Exception:
             pass
-            
+
     def _should_run(self, download_dir: Path, interval: str) -> bool:
         if interval == "always":
             return True
@@ -377,13 +418,14 @@ class WallhavenPlugin(PluginBase):
             elif interval == "weekly":
                 return now - last_run_dt > timedelta(weeks=1)
         except Exception:
-            return True 
+            return True
 
         return False
 
     def _update_last_run(self, download_dir: Path):
         timestamp_file = download_dir / ".last_run"
         timestamp_file.write_text(str(time.time()))
+
 
 if __name__ == "__main__":
     plugin = WallhavenPlugin()

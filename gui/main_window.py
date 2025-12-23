@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMenu,
-    QMessageBox,
     QPushButton,
     QSplitter,
     QStackedWidget,
@@ -25,9 +24,7 @@ from PyQt6.QtWidgets import (
     QTreeWidget,
     QTreeWidgetItem,
 )
-from PyQt6.QtWidgets import QVBoxLayout
 from PyQt6.QtWidgets import QVBoxLayout as QVBoxLayoutDialog
-from PyQt6.QtWidgets import QWidget
 
 from plugin_manager import PluginManager
 
@@ -141,14 +138,14 @@ class AboutDialog(QDialog):
                     capture_output=True,
                     text=True,
                 ).stdout.strip()
-                
+
                 return f"Version: r{count}.{sha}"
-                
+
             except Exception:
                 pass
-        
+
         return "Version: Unknown"
-        
+
         return "Version: Unknown"
 
     def get_logo(self):
