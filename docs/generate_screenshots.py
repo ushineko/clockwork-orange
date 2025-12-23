@@ -103,7 +103,7 @@ DUMMY_CONFIG = {
         # Ensure google_images key exists so we can navigate to it. 
         # The key in available_plugins for google_images is "google_images"
         "google_images": {"enabled": True, "query": [{"term": "cats", "enabled": True}]},
-        "wallhaven": {"enabled": False}
+        "wallhaven": {"enabled": True, "query": "cyberpunk"}
     },
     "history": [],
     "blacklist": [], 
@@ -214,6 +214,13 @@ class ScreenshotGenerator:
             "02_plugin_google",
             "Plugin Configuration",
             "Configure individual plugins. Features include search terms, enablement toggles, and on-demand execution controls."
+        )
+
+        self.navigate_to("Wallhaven")
+        self.capture_screenshot(
+            "02b_plugin_wallhaven",
+            "Wallhaven Plugin",
+            "Download high-quality wallpapers from Wallhaven.cc with filters for categories, purity, and ratios.",
         )
         
         # 3. History

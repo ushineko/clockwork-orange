@@ -11,6 +11,11 @@ Configure individual plugins. Features include search terms, enablement toggles,
 
 ![Plugin Configuration](docs/img/02_plugin_google.png)
 
+## Wallhaven Plugin
+Download high-quality wallpapers from Wallhaven.cc with filters for categories, purity, and ratios.
+
+![Wallhaven Plugin](docs/img/02b_plugin_wallhaven.png)
+
 ## Wallpaper History
 View a log of previously set wallpapers. Includes stats on plugin usage.
 

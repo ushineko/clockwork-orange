@@ -1323,6 +1323,26 @@ def _clean_lockscreen_config():
             text=True,
             check=False,
         )
+
+        # Cleanup [Daemon] section duplicates (lockonresume vs LockOnResume, etc)
+        # These cause python configparser to fail and might confuse KDE
+        for key in ["lockonresume", "timeout", "autolock"]:
+            subprocess.run(
+                [
+                    "kwriteconfig6",
+                    "--file",
+                    "kscreenlockerrc",
+                    "--group",
+                    "Daemon",
+                    "--key",
+                    key,
+                    "--delete",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
         print(f"[DEBUG] Redundant entries cleaned up")
     except Exception as e:
         print(f"[WARNING] Could not clean up redundant entries: {e}")
@@ -1330,17 +1350,38 @@ def _clean_lockscreen_config():
 
 def _reload_screensaver_config():
     """Reload the screen saver configuration via DBus."""
-    try:
-        print(f"[DEBUG] Attempting to reload screen saver configuration...")
-        subprocess.run(
-            ["qdbus6", "org.freedesktop.ScreenSaver", "/ScreenSaver", "configure"],
-            check=False,
-            capture_output=True,
-        )
-        print(f"[DEBUG] Screen saver configuration reloaded")
-    except Exception as e:
-        print(f"[WARNING] Could not reload screen saver configuration: {e}")
+    print(f"[DEBUG] Attempting to reload screen saver configuration...")
+    
+    # Try multiple services and methods to ensure reliability
+    services = ["org.freedesktop.ScreenSaver", "org.kde.screensaver"]
+    methods = ["configure", "org.kde.screensaver.configure"]
+    
+    success = False
+    
+    for service in services:
+        for method in methods:
+            try:
+                cmd = ["qdbus6", service, "/ScreenSaver", method]
+                # print(f"[DEBUG] Calling: {' '.join(cmd)}")
+                result = subprocess.run(
+                    cmd,
+                    check=False,
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    print(f"[DEBUG] Successfully called {method} on {service}")
+                    success = True
+                # else:
+                #    print(f"[DEBUG] Failed call {method} on {service}: {result.stderr.strip()}")
+            except Exception as e:
+                print(f"[WARNING] Error calling {method} on {service}: {e}")
+
+    if not success:
+        print(f"[WARNING] All attempts to reload screen saver configuration failed")
         print(f"[DEBUG] You may need to log out and back in for changes to take effect")
+    else:
+        print(f"[DEBUG] Screen saver configuration reload signal sent")
 
 
 def _execute_dynamic_cycle(plugin_manager, desktop, lockscreen):

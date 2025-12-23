@@ -21,6 +21,11 @@ A Python script for managing wallpapers and lock screen backgrounds on **KDE Pla
   - [Desktop Wallpapers](#desktop-wallpapers)
   - [Lock Screen Wallpapers](#lock-screen-wallpapers)
   - [Image Detection](#image-detection)
+- [Plugin System](#plugin-system)
+  - [Local Plugin](#local-plugin)
+  - [Wallhaven Plugin](#wallhaven-plugin)
+  - [Google Images Plugin](#google-images-plugin)
+  - [Review & Blacklist System](#review--blacklist-system)
 - [Graphical User Interface](#graphical-user-interface)
   - [Starting the GUI](#starting-the-gui)
   - [GUI Features](#gui-features)
@@ -180,6 +185,25 @@ default_wait: 300
 
 # Alternative: Set default file
 # default_file: "/path/to/specific/wallpaper.jpg"
+
+# Plugin Configuration (Dynamic Mode)
+plugins:
+  # Local file source
+  local:
+    enabled: true
+    path: "/home/user/Pictures/Wallpapers"
+    recursive: true
+
+  # Google Images downloader
+  google_images:
+    enabled: true
+    query: 
+      - term: "4k nature wallpapers"
+        enabled: true
+      - term: "james webb telescope"
+        enabled: true
+    max_files: 200
+    interval: "Hourly"
 ```
 
 ### Configuration Options
@@ -235,6 +259,44 @@ The script automatically detects image files by:
 
 Clockwork Orange features a robust plugin system tailored for wallpaper acquisition.
 
+### Local Plugin
+The default source for local files and directories.
+- **Configurable Path**: Point to any directory or specific file.
+- **Recursive Search**: Optionally scan subdirectories for images.
+- **Blacklist Integration**: Respects the global blacklist.
+
+**Configuration:**
+```yaml
+plugins:
+  local:
+    enabled: true
+    path: "/home/user/Wallpapers"
+    recursive: true
+```
+
+### Wallhaven Plugin
+Downloads wallpapers from Wallhaven.cc API.
+- **Sorting**: Relevance, Random, Date Added, Views, Favorites, Toplist.
+- **Filters**: Categories (General/Anime/People) and Purity (SFW/Sketchy/NSFW).
+- **Resolutions**: Filter by exact resolution or minimum size.
+- **API Key**: Optional (required for NSFW content).
+
+**Configuration:**
+```yaml
+plugins:
+  wallhaven:
+    enabled: true
+    query: 
+      - term: "cyberpunk"
+        enabled: true
+      - term: "pixel art"
+        enabled: true
+    api_key: "YOUR_API_KEY"  # Optional
+    purity_nsfw: false
+    sorting: "relevance"
+    resolutions: "2560x1440,3840x2160"
+```
+
 ### Google Images Plugin
 The built-in Google Images plugin allows you to scrape high-quality wallpapers based on search terms.
 - **Smart Search Terms UI**: Easily add, remove, and toggle individual search terms via the GUI
@@ -244,9 +306,15 @@ The built-in Google Images plugin allows you to scrape high-quality wallpapers b
 - **Retention**: Automatically cleans up old files to save space
 
 **Usage:**
-```bash
-# Run standalone
-python3 plugins/google_images.py --config '{"query": "4k space", "download_dir": "/path/to/wallpapers"}'
+Configure via the GUI "Plugins" tab or manually in `config.yml`:
+```yaml
+plugins:
+  google_images:
+    enabled: true
+    download_dir: "/home/user/Pictures/Wallpapers/Google"
+    query:
+      - term: "4k cyberpunk city"
+        enabled: true
 ```
 
 ### Review & Blacklist System
