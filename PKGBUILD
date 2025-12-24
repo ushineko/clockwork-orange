@@ -1,6 +1,6 @@
 # Maintainer: Your Name <your.email@example.com>
 pkgname=clockwork-orange-git
-pkgver=r41.0a94df2
+pkgver=r42.7dfd503
 pkgrel=1
 pkgdesc="Advanced wallpaper manager and downloader with plugin support (Wallhaven, Google Images) for KDE Plasma 6"
 arch=('any')
@@ -62,6 +62,10 @@ package() {
 	# Install license and documentation
 	install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 	install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+    
+    # Install Systemd Service
+    install -Dm644 clockwork-orange.service "${pkgdir}/usr/lib/systemd/user/clockwork-orange.service"
+    sed -i 's|ExecStart=.*|ExecStart=/usr/bin/clockwork-orange --service|' "${pkgdir}/usr/lib/systemd/user/clockwork-orange.service"
 
     # Generate version.txt
     echo "$pkgver" > "${pkgdir}/usr/lib/${pkgname%-git}/version.txt"
