@@ -24,7 +24,8 @@ try:
     from gui.main_window import main as gui_main
 
     GUI_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"GUI Import Error: {e}")
     GUI_AVAILABLE = False
 
 # Supported image file extensions
