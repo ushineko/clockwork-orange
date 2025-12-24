@@ -1,6 +1,6 @@
 # Maintainer: Your Name <your.email@example.com>
 pkgname=clockwork-orange-git
-pkgver=r44.20cd1e1
+pkgver=r45.7aa15bc
 pkgrel=1
 pkgdesc="Advanced wallpaper manager and downloader with plugin support (Wallhaven, Google Images) for KDE Plasma 6"
 arch=('any')
@@ -49,6 +49,7 @@ package() {
     # Update Exec and Icon lines for system installation
     sed -i 's|Exec=.*|Exec=/usr/bin/clockwork-orange --gui|' "${pkgdir}/usr/share/applications/clockwork-orange.desktop"
     sed -i 's|Icon=.*|Icon=clockwork-orange|' "${pkgdir}/usr/share/applications/clockwork-orange.desktop"
+    sed -i '/Path=/d' "${pkgdir}/usr/share/applications/clockwork-orange.desktop"
 
 	# Install icons
     for res in 16 32 48 64 128 256 512; do
