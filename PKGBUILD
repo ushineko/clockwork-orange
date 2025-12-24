@@ -1,6 +1,6 @@
 # Maintainer: Your Name <your.email@example.com>
 pkgname=clockwork-orange-git
-pkgver=r40.49398e6
+pkgver=r41.0a94df2
 pkgrel=1
 pkgdesc="Advanced wallpaper manager and downloader with plugin support (Wallhaven, Google Images) for KDE Plasma 6"
 arch=('any')
@@ -25,10 +25,15 @@ package() {
 
 	# Install main script
 	install -Dm755 clockwork-orange.py "${pkgdir}/usr/lib/${pkgname%-git}/clockwork-orange.py"
+    install -Dm644 plugin_manager.py "${pkgdir}/usr/lib/${pkgname%-git}/plugin_manager.py"
     
     # Install GUI files
     install -d "${pkgdir}/usr/lib/${pkgname%-git}/gui"
     cp -r gui/* "${pkgdir}/usr/lib/${pkgname%-git}/gui/"
+
+    # Install Plugins
+    install -d "${pkgdir}/usr/lib/${pkgname%-git}/plugins"
+    cp -r plugins/* "${pkgdir}/usr/lib/${pkgname%-git}/plugins/"
     
     # Create /usr/bin symlink
     install -d "${pkgdir}/usr/bin"
