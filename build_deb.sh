@@ -4,11 +4,16 @@ set -e
 # Ensure we are in the project root
 cd "$(dirname "$0")"
 
-# Calculate version (Same logic as Arch PKGBUILD)
-# Format: 0.r<count>.<sha> (Debian requires starting with digit)
+# Calculate version from .tag file
+# Format: <tag>.<count>.g<sha> (Debian requires starting with digit)
+# e.g. 2.2.6.48.g861ecad
+_TAG=$(cat .tag 2>/dev/null || echo "v0.0.0")
+CLEAN_TAG=${_TAG#v}
+
 REV_COUNT=$(git rev-list --count HEAD)
 SHORT_SHA=$(git rev-parse --short HEAD)
-PKGVER="0.r${REV_COUNT}.${SHORT_SHA}"
+
+PKGVER="${CLEAN_TAG}.${REV_COUNT}.g${SHORT_SHA}"
 
 echo "Detected version: ${PKGVER}"
 
@@ -35,4 +40,4 @@ mv ../clockwork-orange_*.deb .
 mv ../clockwork-orange_*.changes .
 mv ../clockwork-orange_*.buildinfo . 2>/dev/null || true
 
-ls -l clockwork-orange_*.deb
+ls -l *.deb
