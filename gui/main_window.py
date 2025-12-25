@@ -98,24 +98,6 @@ class AboutDialog(QDialog):
         self.setLayout(layout)
 
     def get_version_string(self):
-        """Get the application version string with git info if available."""
-        project_root = Path(__file__).parent.parent
-        git_dir = project_root / ".git"
-
-        # Check for version.txt (packaged version)
-        version_file = project_root / "version.txt"
-        if version_file.exists():
-            try:
-                return f"Version: {version_file.read_text().strip()}"
-            except Exception:
-                pass
-
-        if git_dir.exists():
-            # Try to get git version from project root
-            try:
-                # Use subproccess to get git describe or short hash
-                # First try describe for tags
-                result = subprocess.run(
                     ["git", "describe", "--tags"],
                     cwd=project_root,
                     capture_output=True,
@@ -624,7 +606,9 @@ class ClockworkOrangeGUI(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("Clockwork Orange")
+    app.setApplicationName("clockwork-orange")
+    app.setApplicationDisplayName("Clockwork Orange")
+    app.setDesktopFileName("clockwork-orange.desktop")
     app.setApplicationVersion("Rolling")
 
     # Process check

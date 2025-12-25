@@ -1,6 +1,6 @@
 # Maintainer: Your Name <your.email@example.com>
 pkgname=clockwork-orange-git
-pkgver=r46.b1d1a56
+pkgver=2.2.6.r48.g861ecad
 pkgrel=1
 pkgdesc="Advanced wallpaper manager and downloader with plugin support (Wallhaven, Google Images) for KDE Plasma 6"
 arch=('any')
@@ -17,7 +17,13 @@ install=clockwork-orange.install
 
 pkgver() {
 	cd "${pkgname%-git}"
-	printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+    # Read tag content (e.g. v2.2.6)
+    _tag=$(cat .tag 2>/dev/null || echo "v0.0.0")
+    # Clean 'v' prefix for Arch compliance
+    _clean_tag=${_tag#v}
+    
+    # Generate git info
+	printf "%s.r%s.g%s" "$_clean_tag" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 package() {
@@ -27,6 +33,7 @@ package() {
 	install -Dm755 clockwork-orange.py "${pkgdir}/usr/lib/${pkgname%-git}/clockwork-orange.py"
     install -Dm644 plugin_manager.py "${pkgdir}/usr/lib/${pkgname%-git}/plugin_manager.py"
     install -Dm644 clockwork-orange.service "${pkgdir}/usr/lib/${pkgname%-git}/clockwork-orange.service"
+    install -Dm644 .tag "${pkgdir}/usr/lib/${pkgname%-git}/.tag"
     sed -i 's|ExecStart=.*|ExecStart=/usr/bin/clockwork-orange --service|' "${pkgdir}/usr/lib/${pkgname%-git}/clockwork-orange.service"
     
     # Install GUI files
