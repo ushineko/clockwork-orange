@@ -9,6 +9,7 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QFontComboBox,
     QFormLayout,
     QHBoxLayout,
     QLineEdit,
@@ -65,6 +66,19 @@ class BasicSettingsWidget(QWidget):
         self.lockscreen_only_check.toggled.connect(self.setting_changed.emit)
         self.wait_spin.valueChanged.connect(self.setting_changed.emit)
 
+        # Console Font settings
+        self.font_combo = QFontComboBox()
+        self.font_combo.setCurrentFont(QFont("Monospace"))
+        layout.addRow("Console Font:", self.font_combo)
+
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setRange(6, 48)
+        self.font_size_spin.setValue(10)
+        layout.addRow("Console Font Size:", self.font_size_spin)
+
+        self.font_combo.currentFontChanged.connect(self.setting_changed.emit)
+        self.font_size_spin.valueChanged.connect(self.setting_changed.emit)
+
         self.setLayout(layout)
 
     def on_dual_wallpapers_toggled(self, checked):
@@ -93,6 +107,12 @@ class BasicSettingsWidget(QWidget):
 
         self.wait_spin.setValue(self.config_data.get("default_wait", 300))
 
+        font_family = self.config_data.get("console_font_family")
+        if font_family:
+            self.font_combo.setCurrentFont(QFont(font_family))
+
+        self.font_size_spin.setValue(self.config_data.get("console_font_size", 10))
+
     def get_config(self):
         """Get config dictionary from UI"""
         config = {}
@@ -105,6 +125,10 @@ class BasicSettingsWidget(QWidget):
 
         if self.wait_spin.value() != 300:
             config["default_wait"] = self.wait_spin.value()
+
+        config["console_font_family"] = self.font_combo.currentFont().family()
+        config["console_font_size"] = self.font_size_spin.value()
+
         return config
 
 

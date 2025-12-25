@@ -398,6 +398,11 @@ class ClockworkOrangeGUI(QMainWindow):
                 self.blacklist_page.load_blacklist()
             elif current_widget == self.history_page:
                 self.history_page.refresh_stats()
+            elif isinstance(current_widget, SinglePluginWidget):
+                # Ensure latest config (including fonts) is applied
+                current_widget.set_config(self.config_data)
+                # Auto-enter review mode
+                current_widget.scan_for_review()
 
     def schedule_auto_save(self):
         self.auto_save_timer.start()

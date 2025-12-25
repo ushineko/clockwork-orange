@@ -6,8 +6,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QThread, QUrl, pyqtSignal
-from PyQt6.QtGui import QColor, QDesktopServices, QPainter, QPen, QPixmap
+from PyQt6.QtCore import QFileSystemWatcher, Qt, QThread, QUrl, pyqtSignal
+from PyQt6.QtGui import QColor, QDesktopServices, QFont, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -357,6 +357,9 @@ class SinglePluginWidget(QWidget):
         self.review_index = 0
         self.blacklisted_indices = set()
 
+        self.watcher = QFileSystemWatcher()
+        self.watcher.directoryChanged.connect(self.on_directory_changed)
+
         self.init_ui()
         self.load_plugin_ui()
 
@@ -440,6 +443,14 @@ class SinglePluginWidget(QWidget):
         self.log_viewer.setPlaceholderText("Execution logs...")
         action_layout.addWidget(self.log_viewer)
 
+        self.navigate_legend = QLabel("←/→: Navigate | Space: Mark/Unmark")
+        self.navigate_legend.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.navigate_legend.setStyleSheet(
+            "color: cadetblue; font-style: italic; font-weight: bold;"
+        )
+        self.navigate_legend.setVisible(False)
+        action_layout.addWidget(self.navigate_legend)
+
         btn_layout = QVBoxLayout()
 
         self.run_btn = QPushButton("On Demand")
@@ -504,7 +515,21 @@ class SinglePluginWidget(QWidget):
     def set_config(self, config_data):
         """Update global config data."""
         self.config_data = config_data
-        pass
+
+        # Update fonts
+        font_family = self.config_data.get("console_font_family", "Monospace")
+        font_size = self.config_data.get("console_font_size", 10)
+        self.log_viewer.setFont(QFont(font_family, font_size))
+
+    def on_directory_changed(self, path):
+        """Handle directory changes for auto-refresh."""
+        if not self.isVisible():
+            return
+
+        # Refresh review if we are in review mode (or effectively so)
+        # We can just call scan_for_review as it updates the internal list
+        print(f"[DEBUG] Directory changed: {path} - Refreshing review...")
+        self.scan_for_review()
 
     def load_plugin_config_ui(self, plugin_name, schema):
         plugin_config = self.config_data.get("plugins", {}).get(plugin_name, {})
@@ -798,6 +823,12 @@ class SinglePluginWidget(QWidget):
             return
 
         # Find images
+
+        # Update Watcher
+        if self.watcher.directories():
+            self.watcher.removePaths(self.watcher.directories())
+        self.watcher.addPath(str(download_dir))
+
         self.review_images = sorted(
             [
                 f
@@ -822,9 +853,8 @@ class SinglePluginWidget(QWidget):
 
         # Grab focus for keyboard navigation
         self.setFocus()
-        self.log_viewer.append(
-            f"Found {len(self.review_images)} images. Use Arrow Keys to navigate, Space to mark."
-        )
+        self.log_viewer.append(f"Found {len(self.review_images)} images.")
+        self.navigate_legend.setVisible(True)
 
     def show_review_image(self):
         """Display current review image."""
@@ -872,7 +902,6 @@ class SinglePluginWidget(QWidget):
         Date: {date_str}<br>
         <b style="color:red">{status}</b>
         <br><br>
-        <i>←/→: Navigate | Space: Mark/Unmark</i>
         """
         self.log_viewer.setHtml(info_html)
 
