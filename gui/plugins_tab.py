@@ -66,8 +66,9 @@ class AutoResizingLabel(QLabel):
         super().__init__(text, parent)
         self._pixmap = None
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Change policy to allow shrinking
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
-        self.setMinimumHeight(200)
+        self.setMinimumHeight(50)  # Reduce minimum height to allow resizing
 
     def setPixmap(self, pixmap):
         self._pixmap = pixmap
@@ -83,12 +84,142 @@ class AutoResizingLabel(QLabel):
 
     def _update_scaled_pixmap(self):
         if self._pixmap and not self._pixmap.isNull():
+            # Scale based on current size
             scaled = self._pixmap.scaled(
                 self.size(),
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
             super().setPixmap(scaled)
+
+
+# ... (SearchTermsWidget and TermSelectionDialog remain unchanged) ...
+
+
+class PluginExecutionDialog(QDialog):
+    """Dialog to run a plugin and show progress/logs."""
+
+    def __init__(
+        self,
+        manager,
+        plugin_name,
+        config,
+        title="Running Plugin",
+        search_terms_config=None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.manager = manager
+        self.plugin_name = plugin_name
+        self.config = config
+        self.search_terms_config = search_terms_config
+        self.runner = None
+
+        self.setWindowTitle(title)
+        self.resize(600, 450)  # Slightly larger
+        self.setModal(True)
+
+        self.layout = QVBoxLayout(self)
+
+        # 1. Search Terms Selection (if applicable)
+        self.list_widget = None
+        if self.search_terms_config:
+            self.layout.addWidget(QLabel("Select terms to include:"))
+            self.list_widget = QListWidget()
+            terms_data = self.search_terms_config.get("data", [])
+            for item_data in terms_data:
+                if isinstance(item_data, dict):
+                    term = item_data.get("term", "")
+                    enabled = item_data.get("enabled", True)
+                    if term:
+                        item = QListWidgetItem(term)
+                        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                        item.setCheckState(
+                            Qt.CheckState.Checked
+                            if enabled
+                            else Qt.CheckState.Unchecked
+                        )
+                        self.list_widget.addItem(item)
+            self.layout.addWidget(self.list_widget)
+
+        # 2. Progress
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.layout.addWidget(self.progress_bar)
+
+        # 3. Logs
+        self.log_viewer = QTextEdit()
+        self.log_viewer.setReadOnly(True)
+        self.log_viewer.setPlaceholderText("Waiting to start...")
+
+        # Apply font from config (ensure keys exist)
+        font_family = config.get("console_font_family", "Monospace")
+        font_size = config.get("console_font_size", 10)
+        self.log_viewer.setFont(QFont(font_family, font_size))
+
+        self.layout.addWidget(self.log_viewer)
+
+        # 4. Buttons
+        btn_layout = QHBoxLayout()
+        self.start_btn = QPushButton(
+            "Start Download" if search_terms_config else "Start"
+        )
+        self.start_btn.clicked.connect(self.start_run)
+        btn_layout.addWidget(self.start_btn)
+
+        self.close_btn = QPushButton("Close")
+        self.close_btn.clicked.connect(self.close)
+        self.close_btn.setEnabled(True)
+        btn_layout.addWidget(self.close_btn)
+
+        self.layout.addLayout(btn_layout)
+
+        # Auto-start checks
+        if not self.search_terms_config:
+            self.start_btn.hide()
+            from PyQt6.QtCore import QTimer
+
+            QTimer.singleShot(100, self.start_run)
+        else:
+            self.log_viewer.setPlaceholderText(
+                "Select terms and click Start Download..."
+            )
+
+    def start_run(self):
+        self.start_btn.setEnabled(False)
+        self.close_btn.setEnabled(False)
+        self.log_viewer.clear()
+        self.log_viewer.append(f"Starting {self.plugin_name}...")
+
+        run_config = self.config.copy()
+        if self.search_terms_config and self.list_widget:
+            selected_terms = []
+            for i in range(self.list_widget.count()):
+                item = self.list_widget.item(i)
+                if item.checkState() == Qt.CheckState.Checked:
+                    selected_terms.append(item.text())
+
+            key = self.search_terms_config["key"]
+            run_config[key] = selected_terms
+
+        self.runner = PluginRunner(self.manager, self.plugin_name, run_config)
+        self.runner.log_signal.connect(self.log_viewer.append)
+        self.runner.progress_signal.connect(self.update_progress)
+        self.runner.finished_signal.connect(self.on_finished)
+        self.runner.start()
+
+    def update_progress(self, percent, message):
+        self.progress_bar.setValue(percent)
+        self.progress_bar.setFormat(f"{percent}% - {message}" if message else "%p%")
+
+    def on_finished(self, result):
+        self.log_viewer.append("\nDone.")
+        self.close_btn.setEnabled(True)
+        self.start_btn.setEnabled(True)
+
+        if result.get("status") == "error":
+            self.log_viewer.append(f"Error: {result.get('message')}")
 
 
 class SearchTermsWidget(QWidget):
@@ -408,15 +539,7 @@ class SinglePluginWidget(QWidget):
         bottom_layout = QVBoxLayout(bottom_column)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
 
-        # 1. Progress Bar (Top, spanning full width)
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(True)
-        self.progress_bar.setFormat("%p% - %v")
-        bottom_layout.addWidget(self.progress_bar)
-
-        # 2. Splitter (Preview | Actions)
+        # 2. Splitter (Preview | Review)
         bottom_splitter = QSplitter(Qt.Orientation.Horizontal)
         bottom_layout.addWidget(bottom_splitter)
 
@@ -432,15 +555,16 @@ class SinglePluginWidget(QWidget):
         bottom_splitter.addWidget(self.preview_label)
 
         # Right: Actions
-        action_group = QGroupBox("Actions")
+        action_group = QGroupBox("Review")
         action_group.setMinimumWidth(250)
 
         action_layout = QVBoxLayout()
 
         self.log_viewer = QTextEdit()
         self.log_viewer.setReadOnly(True)
-        # Remove max height constraint since we have vertical space now
-        self.log_viewer.setPlaceholderText("Execution logs...")
+        # Constrain height effectively for 3 lines (approx 80px)
+        self.log_viewer.setMaximumHeight(80)
+        self.log_viewer.setPlaceholderText("Review status...")
         action_layout.addWidget(self.log_viewer)
 
         self.navigate_legend = QLabel("←/→: Navigate | Space: Mark/Unmark")
@@ -451,9 +575,12 @@ class SinglePluginWidget(QWidget):
         self.navigate_legend.setVisible(False)
         action_layout.addWidget(self.navigate_legend)
 
+        # Spacer to push buttons down
+        action_layout.addStretch()
+
         btn_layout = QVBoxLayout()
 
-        self.run_btn = QPushButton("On Demand")
+        self.run_btn = QPushButton("Download Now")
         self.run_btn.setToolTip("Run plugin manually with optional query selection")
         self.run_btn.clicked.connect(self.run_current_plugin)
         btn_layout.addWidget(self.run_btn)
@@ -462,10 +589,7 @@ class SinglePluginWidget(QWidget):
         self.reset_btn.clicked.connect(self.reset_current_plugin)
         btn_layout.addWidget(self.reset_btn)
 
-        # Review buttons
-        self.scan_btn = QPushButton("Review Images")
-        self.scan_btn.clicked.connect(self.scan_for_review)
-        btn_layout.addWidget(self.scan_btn)
+        # Review buttons (Review Images removed as it's auto)
 
         self.apply_blacklist_btn = QPushButton("Apply Blacklist (0)")
         self.apply_blacklist_btn.clicked.connect(self.apply_blacklist)
@@ -539,13 +663,74 @@ class SinglePluginWidget(QWidget):
 
         # Config Fields
         if schema:
-            for key, field_info in schema.items():
-                self._add_config_field(key, field_info, plugin_config)
+            keys = list(schema.keys())
+            i = 0
+            while i < len(keys):
+                key = keys[i]
+                field_info = schema[key]
+                group_name = field_info.get("group")
+
+                if group_name:
+                    # Collect all consecutive fields in this group
+                    group_keys = [key]
+                    i += 1
+                    while i < len(keys):
+                        next_key = keys[i]
+                        next_info = schema[next_key]
+                        if next_info.get("group") == group_name:
+                            group_keys.append(next_key)
+                            i += 1
+                        else:
+                            break
+
+                    self._add_grouped_config_fields(
+                        group_name, group_keys, schema, plugin_config
+                    )
+                else:
+                    self._add_config_field(key, field_info, plugin_config)
+                    i += 1
         else:
             self.config_layout.addRow(QLabel("No configuration options."))
 
         # Configure buttons
         self._configure_action_buttons(plugin_name)
+
+    def _add_grouped_config_fields(self, group_name, keys, schema, current_config):
+        # Create a horizontal layout for the group
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Add label for the group
+        group_label = QLabel(f"{group_name}:")
+        group_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(group_label)
+
+        for key in keys:
+            props = schema[key]
+            # Use short description or label
+            label_text = props.get("description", key)
+
+            field_type = props.get("type")
+            default_value = props.get("default")
+            value = current_config.get(key, default_value)
+
+            if field_type == "boolean":
+                # compact checkbox
+                cb = QCheckBox(label_text)
+                if value:
+                    cb.setChecked(True)
+                cb.toggled.connect(lambda: self.config_changed.emit())
+                self.current_plugin_widgets[key] = cb
+                layout.addWidget(cb)
+            else:
+                layout.addWidget(QLabel(label_text))
+                widget = self._create_input_widget(key, field_type, props, value)
+                if widget:
+                    layout.addWidget(widget)
+
+        layout.addStretch()
+        self.config_layout.addRow(container)
 
     def _add_enabled_checkbox(self, is_enabled):
         cb = QCheckBox("Enable this plugin")
@@ -703,79 +888,45 @@ class SinglePluginWidget(QWidget):
                 config[field] = widget.value()
             elif isinstance(widget, SearchTermsWidget):
                 config[field] = widget.get_value()
-        return config
 
-    def _execute_plugin_internal(self, reset=False):
-        current_config = self.get_config()
-        current_config["force"] = True
-        if reset:
-            current_config["reset"] = True
-
-        self.log_viewer.clear()
-        self.log_viewer.append(f"Starting {self.plugin_name}...")
-
-        self.runner = PluginRunner(
-            self.plugin_manager, self.plugin_name, current_config
+        # Merge global font settings for the execution dialog
+        config["console_font_family"] = self.config_data.get(
+            "console_font_family", "Monospace"
         )
-        self.runner.log_signal.connect(self.log_viewer.append)
-        self.runner.progress_signal.connect(self.update_progress)
-        self.runner.image_saved_signal.connect(self.display_preview_image)
-        self.runner.finished_signal.connect(self.display_result)
-        self.runner.start()
+        config["console_font_size"] = self.config_data.get("console_font_size", 10)
 
-    def update_progress(self, percent, message):
-        """Update the progress bar."""
-        self.progress_bar.setValue(percent)
-        if message:
-            self.progress_bar.setFormat(f"{percent}% - {message}")
-        else:
-            self.progress_bar.setFormat("%p%")
+        return config
 
     def run_current_plugin(self):
         current_config = self.get_config()
+        current_config["force"] = True  # Always force on demand
 
-        # Check for search terms widget (specifically for Google Images style lists)
-        search_widget_key = None
+        # Check for search terms widget
+        search_terms_config = None
         for key, widget in self.current_plugin_widgets.items():
             if isinstance(widget, SearchTermsWidget):
-                search_widget_key = key
+                search_terms_config = {"key": key, "data": current_config.get(key, [])}
                 break
 
-        if search_widget_key:
-            # We have search terms. Show selection dialog.
-            raw_terms = current_config.get(search_widget_key, [])
-            dialog = TermSelectionDialog(raw_terms, self)
-            if dialog.exec() == QDialog.DialogCode.Accepted:
-                selected = dialog.get_selected_terms()
-                if not selected:
-                    QMessageBox.warning(self, "Warning", "No search terms selected.")
-                    return
-                # Override the config for this run only
-                current_config[search_widget_key] = selected
+        # Disable watcher during run to prevent crash/conflict
+        original_watcher_paths = self.watcher.directories()
+        if original_watcher_paths:
+            self.watcher.removePaths(original_watcher_paths)
 
-                # We need to pass this modified config to execute_internal
-                # But execute_internal calls get_config() again!
-                # Refactor execute_internal to accept config override.
-                self._execute_plugin_with_config(current_config, False)
-            return
-
-        self._execute_plugin_internal(False)
-
-    def _execute_plugin_with_config(self, config, reset=False):
-        """Execute plugin with explicit config dictionary."""
-        config["force"] = True
-        if reset:
-            config["reset"] = True
-
-        self.log_viewer.clear()
-        self.log_viewer.append(f"Starting {self.plugin_name}...")
-
-        self.runner = PluginRunner(self.plugin_manager, self.plugin_name, config)
-        self.runner.log_signal.connect(self.log_viewer.append)
-        self.runner.progress_signal.connect(self.update_progress)
-        self.runner.image_saved_signal.connect(self.display_preview_image)
-        self.runner.finished_signal.connect(self.display_result)
-        self.runner.start()
+        try:
+            # Launch Dialog
+            dialog = PluginExecutionDialog(
+                self.plugin_manager,
+                self.plugin_name,
+                current_config,
+                title="Download Now",
+                search_terms_config=search_terms_config,
+                parent=self,
+            )
+            dialog.exec()
+        finally:
+            # Re-enable watcher
+            self.scan_for_review()
 
     def reset_current_plugin(self):
         reply = QMessageBox.warning(
@@ -785,12 +936,28 @@ class SinglePluginWidget(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self._execute_plugin_internal(True)
+            current_config = self.get_config()
+            current_config["force"] = True
+            current_config["reset"] = True
 
-    def display_result(self, result):
-        self.log_viewer.append("\nDone.")
-        if "logs" in result:
-            self.log_viewer.append(result["logs"])
+            # Disable watcher
+            original_watcher_paths = self.watcher.directories()
+            if original_watcher_paths:
+                self.watcher.removePaths(original_watcher_paths)
+
+            try:
+                dialog = PluginExecutionDialog(
+                    self.plugin_manager,
+                    self.plugin_name,
+                    current_config,
+                    title="Reset & Run",
+                    parent=self,
+                )
+                dialog.exec()
+            finally:
+                self.scan_for_review()
+
+    # display_result, update_progress removed
 
     def display_preview_image(self, path):
         pixmap = QPixmap(path)
@@ -853,7 +1020,6 @@ class SinglePluginWidget(QWidget):
 
         # Grab focus for keyboard navigation
         self.setFocus()
-        self.log_viewer.append(f"Found {len(self.review_images)} images.")
         self.navigate_legend.setVisible(True)
 
     def show_review_image(self):
@@ -945,17 +1111,16 @@ class SinglePluginWidget(QWidget):
         current_config["targets"] = targets
         current_config["force"] = True
 
-        self.log_viewer.clear()
-        self.log_viewer.append(f"Applying blacklist to {len(targets)} files...")
-
-        self.runner = PluginRunner(
-            self.plugin_manager, self.plugin_name, current_config
+        dialog = PluginExecutionDialog(
+            self.plugin_manager,
+            self.plugin_name,
+            current_config,
+            title="Applying Blacklist",
+            parent=self,
         )
-        self.runner.log_signal.connect(self.log_viewer.append)
-        self.runner.finished_signal.connect(self.on_blacklist_complete)
-        self.runner.start()
+        dialog.exec()
 
-    def on_blacklist_complete(self, result):
-        self.display_result(result)
         # Rescan to refresh list
         self.scan_for_review()
+
+    # on_blacklist_complete removed
