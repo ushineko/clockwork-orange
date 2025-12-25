@@ -181,7 +181,9 @@ class WallhavenPlugin(PluginBase):
         print(f"::PROGRESS:: 100 :: Done!", file=sys.stderr)
         return {"status": "success", "path": str(download_dir)}
 
-    def _process_queries(self, queries: List[str], config: Dict[str, Any], download_dir: Path, limit: int):
+    def _process_queries(
+        self, queries: List[str], config: Dict[str, Any], download_dir: Path, limit: int
+    ):
         total_downloaded = 0
         for i, query in enumerate(queries):
             term_progress_base = int((i / len(queries)) * 90)

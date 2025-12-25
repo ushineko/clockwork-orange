@@ -458,12 +458,14 @@ class ServiceManagerWidget(QWidget):
             )
             if result.returncode == 0:
                 if not result.stdout.strip():
-                    self.logs_text.setText("No logs found (journalctl returned empty output).")
+                    self.logs_text.setText(
+                        "No logs found (journalctl returned empty output)."
+                    )
                     # Debug: Try checking all user units
                     print(f"[DEBUG] journalctl cmd: {' '.join(result.args)}")
                 else:
                     self.logs_text.setText(result.stdout)
-                    
+
                     # Store current scroll position
                     scrollbar = self.logs_text.verticalScrollBar()
                     was_at_bottom = scrollbar.value() >= scrollbar.maximum() - 10
@@ -472,6 +474,8 @@ class ServiceManagerWidget(QWidget):
                     if self.auto_update_enabled or was_at_bottom:
                         scrollbar.setValue(scrollbar.maximum())
             else:
-                self.logs_text.setText(f"Error retrieving logs (exit code {result.returncode}):\n{result.stderr}")
+                self.logs_text.setText(
+                    f"Error retrieving logs (exit code {result.returncode}):\n{result.stderr}"
+                )
         except Exception as e:
             self.logs_text.setText(f"Error retrieving logs: {e}")

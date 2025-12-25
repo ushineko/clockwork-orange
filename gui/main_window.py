@@ -98,37 +98,44 @@ class AboutDialog(QDialog):
         self.setLayout(layout)
 
     def get_version_string(self):
-                    ["git", "describe", "--tags"],
-                    cwd=project_root,
-                    capture_output=True,
-                    text=True,
-                )
-                if result.returncode == 0:
-                    return f"Version: {result.stdout.strip()}"
+        """Get the application version string"""
+        # 1. Check for packaged version.txt (PKGBUILD/Debian)
+        try:
+            version_file = Path(__file__).parent.parent / "version.txt"
+            if version_file.exists():
+                return f"v{version_file.read_text().strip()}"
+        except Exception:
+            pass
 
-                # Fallback to count.short_sba
-                count = subprocess.run(
+        # 2. Check for .tag file (Development mode)
+        tag_version = "Unknown"
+        try:
+            tag_file = Path(__file__).parent.parent / ".tag"
+            if tag_file.exists():
+                tag_version = tag_file.read_text().strip()
+        except Exception:
+            pass
+
+        # 3. Append Git info if available
+        try:
+            # Check if running from git repo
+            if (Path(__file__).parent.parent / ".git").exists():
+                rev_count = subprocess.check_output(
                     ["git", "rev-list", "--count", "HEAD"],
-                    cwd=project_root,
-                    capture_output=True,
                     text=True,
-                ).stdout.strip()
-
-                sha = subprocess.run(
+                    stderr=subprocess.DEVNULL,
+                ).strip()
+                short_hash = subprocess.check_output(
                     ["git", "rev-parse", "--short", "HEAD"],
-                    cwd=project_root,
-                    capture_output=True,
                     text=True,
-                ).stdout.strip()
+                    stderr=subprocess.DEVNULL,
+                ).strip()
 
-                return f"Version: r{count}.{sha}"
+                return f"{tag_version}-r{rev_count}-{short_hash}"
+        except Exception:
+            pass
 
-            except Exception:
-                pass
-
-        return "Version: Unknown"
-
-        return "Version: Unknown"
+        return tag_version
 
     def get_logo(self):
         """Get the logo from file or create a default one"""
@@ -608,7 +615,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("clockwork-orange")
     app.setApplicationDisplayName("Clockwork Orange")
-    app.setDesktopFileName("clockwork-orange.desktop")
+    app.setDesktopFileName("clockwork-orange")
     app.setApplicationVersion("Rolling")
 
     # Process check

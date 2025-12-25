@@ -14,12 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from PIL import Image, ImageFilter
 from PyQt6.QtCore import QCoreApplication, QRect
-from PyQt6.QtWidgets import (
-    QApplication,
-    QLineEdit,
-    QPlainTextEdit,
-    QTextEdit,
-)
+from PyQt6.QtWidgets import QApplication, QLineEdit, QPlainTextEdit, QTextEdit
 
 # Mock configuration to avoid needing real config files
 from gui.main_window import ClockworkOrangeGUI
