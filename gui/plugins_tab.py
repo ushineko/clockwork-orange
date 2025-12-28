@@ -148,17 +148,36 @@ class PluginExecutionDialog(QDialog):
         self.progress_bar.setValue(0)
         self.layout.addWidget(self.progress_bar)
 
-        # 3. Logs
+        # 3. Content Area (Splitter: Logs | Preview)
+        content_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.layout.addWidget(content_splitter)
+
+        # Left: Logs
         self.log_viewer = QTextEdit()
         self.log_viewer.setReadOnly(True)
         self.log_viewer.setPlaceholderText("Waiting to start...")
 
-        # Apply font from config (ensure keys exist)
+        # Apply font
         font_family = config.get("console_font_family", "Monospace")
         font_size = config.get("console_font_size", 10)
         self.log_viewer.setFont(QFont(font_family, font_size))
 
-        self.layout.addWidget(self.log_viewer)
+        content_splitter.addWidget(self.log_viewer)
+
+        # Right: Image Preview
+        self.preview_label = AutoResizingLabel("Checking for images...")
+        self.preview_label.setStyleSheet(
+            "border: 1px solid #444; background-color: #222;"
+        )
+        self.preview_label.setMinimumWidth(200)
+        self.preview_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored
+        )
+        content_splitter.addWidget(self.preview_label)
+
+        # Set splitter proportions (Logs getting more space initially)
+        content_splitter.setSizes([400, 200])
+        content_splitter.setCollapsible(1, True)
 
         # 4. Buttons
         btn_layout = QHBoxLayout()
@@ -191,6 +210,8 @@ class PluginExecutionDialog(QDialog):
         self.close_btn.setEnabled(False)
         self.log_viewer.clear()
         self.log_viewer.append(f"Starting {self.plugin_name}...")
+        self.preview_label.setText("Waiting for download...")
+        self.preview_label.setPixmap(QPixmap())  # Clear previous image
 
         run_config = self.config.copy()
         if self.search_terms_config and self.list_widget:
@@ -206,12 +227,21 @@ class PluginExecutionDialog(QDialog):
         self.runner = PluginRunner(self.manager, self.plugin_name, run_config)
         self.runner.log_signal.connect(self.log_viewer.append)
         self.runner.progress_signal.connect(self.update_progress)
+        self.runner.image_saved_signal.connect(self.update_preview)
         self.runner.finished_signal.connect(self.on_finished)
         self.runner.start()
 
     def update_progress(self, percent, message):
         self.progress_bar.setValue(percent)
         self.progress_bar.setFormat(f"{percent}% - {message}" if message else "%p%")
+
+    def update_preview(self, image_path):
+        """Update the preview label with the newly downloaded image."""
+        pixmap = QPixmap(image_path)
+        if not pixmap.isNull():
+            self.preview_label.setPixmap(pixmap)
+        else:
+            self.preview_label.setText(f"Failed to load: {Path(image_path).name}")
 
     def on_finished(self, result):
         self.log_viewer.append("\nDone.")
@@ -545,12 +575,8 @@ class SinglePluginWidget(QWidget):
 
         # Left: Preview
         self.preview_label = AutoResizingLabel("No preview available")
-        self.preview_label.setMinimumHeight(200)
         self.preview_label.setStyleSheet(
             "border: 1px solid #ccc; background-color: #222;"
-        )
-        self.preview_label.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         bottom_splitter.addWidget(self.preview_label)
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
+from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon,
     QTreeWidget,
     QTreeWidgetItem,
+    QTreeWidgetItemIterator,
 )
 from PyQt6.QtWidgets import QVBoxLayout as QVBoxLayoutDialog
 
@@ -235,9 +236,7 @@ class ClockworkOrangeGUI(QMainWindow):
         self.toolbar.setMovable(False)
 
         toggle_sidebar_action = QAction("Toggle Sidebar", self)
-        toggle_sidebar_action.setIcon(
-            QIcon.fromTheme("view-sidebar")
-        )  # Try to use system theme icon or text
+        toggle_sidebar_action.setIcon(self._get_hamburger_icon())
         toggle_sidebar_action.triggered.connect(self.toggle_sidebar)
         self.toolbar.addAction(toggle_sidebar_action)
 
@@ -279,8 +278,32 @@ class ClockworkOrangeGUI(QMainWindow):
         # Connect signals
         self._connect_signals()
 
-        # Set initial splitter sizes (Sidebar: 200, Content: Remaining)
-        self.splitter.setSizes([200, 600])
+        # Set initial splitter sizes based on content
+        # Calculate optimal sidebar width using font metrics (resizeColumnToContents is unreliable here)
+        fm = self.tree.fontMetrics()
+        max_width = 180  # Minimum start width
+
+        iterator = QTreeWidgetItemIterator(self.tree)
+        while iterator.value():
+            item = iterator.value()
+            text_width = fm.boundingRect(item.text(0)).width()
+
+            # Calculate depth for indentation
+            depth = 0
+            parent = item.parent()
+            while parent:
+                depth += 1
+                parent = parent.parent()
+
+            # depth * indentation (20) + icon/gap (25) + text + right_padding (35)
+            # 35px covers scrollbar and visual breathing room
+            item_width = (depth * 20) + 25 + text_width + 35
+            if item_width > max_width:
+                max_width = item_width
+
+            iterator += 1
+
+        self.splitter.setSizes([int(max_width), 600])
 
     def toggle_sidebar(self):
         """Toggle visibility of the sidebar."""
@@ -288,6 +311,41 @@ class ClockworkOrangeGUI(QMainWindow):
             self.tree.hide()
         else:
             self.tree.show()
+
+    def _get_hamburger_icon(self):
+        """Get a hamburger menu icon, falling back to manual drawing if needed."""
+        # 1. Try standard theme icons
+        for icon_name in ["open-menu", "application-menu", "view-list"]:
+            if QIcon.hasThemeIcon(icon_name):
+                return QIcon.fromTheme(icon_name)
+
+        # 2. Fallback: Draw manually
+        pixmap = QPixmap(24, 24)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Use a visible color (assuming dark theme based on other UI hints, or neutral grey)
+        # Using a light grey which works on dark backgrounds and readable on light ones
+        pen = QPen(QColor(200, 200, 200))
+        pen.setWidth(2)
+        painter.setPen(pen)
+
+        # Draw 3 horizontal lines
+        # 24x24 canvas
+        margin = 4
+        w = 24 - 2 * margin
+
+        # Top
+        painter.drawLine(margin, 7, margin + w, 7)
+        # Middle
+        painter.drawLine(margin, 12, margin + w, 12)
+        # Bottom
+        painter.drawLine(margin, 17, margin + w, 17)
+
+        painter.end()
+        return QIcon(pixmap)
 
     def load_config(self):
         """Load global configuration."""
