@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import platform_utils
 from pathlib import Path
 from threading import Event
 
@@ -102,46 +103,7 @@ def set_wallpaper(p: Path):
     file_size = p.stat().st_size
     print(f"[DEBUG] File size: {file_size} bytes")
 
-    script = """
-    desktops().forEach(d => {
-        d.currentConfigGroup = Array("Wallpaper",
-                                     "org.kde.image",
-                                     "General");
-        d.writeConfig("Image", "file://FILEPATH");
-        d.reloadConfig();
-    });
-    """.replace(
-        "FILEPATH", str(p)
-    )
-
-    print(f"[DEBUG] Generated KDE script with file path: {p}")
-
-    cmd = [
-        "qdbus6",
-        "org.kde.plasmashell",
-        "/PlasmaShell",
-        "org.kde.PlasmaShell.evaluateScript",
-        script,
-    ]
-
-    print(f"[DEBUG] Executing qdbus6 command: {' '.join(cmd[:4])} [script content]")
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        print(f"[DEBUG] qdbus6 command executed successfully")
-        if result.stdout:
-            print(f"[DEBUG] qdbus6 stdout: {result.stdout}")
-        if result.stderr:
-            print(f"[DEBUG] qdbus6 stderr: {result.stderr}")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"[ERROR] qdbus6 command failed with return code {e.returncode}")
-        print(f"[ERROR] stdout: {e.stdout}")
-        print(f"[ERROR] stderr: {e.stderr}")
-        return False
-    except FileNotFoundError:
-        print(f"[ERROR] qdbus6 command not found. Is qdbus6 installed?")
-        return False
+    return platform_utils.set_wallpaper(p)
 
 
 def download_and_set_wallpaper(url: str):
@@ -313,13 +275,11 @@ def cycle_wallpapers_from_directory(directory_path: Path, wait_seconds: int):
 
 
 def set_lockscreen_wallpaper(image_path: Path):
-    """Set lock screen wallpaper using kwriteconfig6 (KDE 6)."""
+    """Set lock screen wallpaper."""
     print(f"[DEBUG] set_lockscreen_wallpaper called with: {image_path}")
 
     image_path = image_path.resolve()
     print(f"[DEBUG] Resolved path: {image_path}")
-    print(f"[DEBUG] Path exists: {image_path.exists()}")
-    print(f"[DEBUG] Is file: {image_path.is_file()}")
 
     if not image_path.exists():
         print(f"[ERROR] Image file does not exist: {image_path}")
@@ -329,65 +289,7 @@ def set_lockscreen_wallpaper(image_path: Path):
         print(f"[ERROR] File is not a supported image format: {image_path}")
         return False
 
-    # Use kwriteconfig6 to set the lock screen wallpaper (recommended approach for KDE 6)
-    wallpaper_path = f"file://{image_path}"
-    print(
-        f"[DEBUG] Setting lock screen wallpaper using kwriteconfig6: {wallpaper_path}"
-    )
-
-    try:
-        # Use kwriteconfig6 with the correct syntax for KDE 6
-        result = subprocess.run(
-            [
-                "kwriteconfig6",
-                "--file",
-                "kscreenlockerrc",
-                "--group",
-                "Greeter",
-                "--group",
-                "Wallpaper",
-                "--group",
-                "org.kde.image",
-                "--group",
-                "General",
-                "--key",
-                "Image",  # Use uppercase Image as per documentation
-                wallpaper_path,
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        print(f"[DEBUG] kwriteconfig6 executed successfully")
-        if result.stdout:
-            print(f"[DEBUG] kwriteconfig6 stdout: {result.stdout}")
-        if result.stderr:
-            print(f"[DEBUG] kwriteconfig6 stderr: {result.stderr}")
-
-        # Clean up redundant entries
-        _clean_lockscreen_config()
-
-        # Try to reload the screen saver configuration
-        _reload_screensaver_config()
-
-        # Show debug information about the current configuration
-        print(f"[DEBUG] Current lock screen configuration after change:")
-        debug_lockscreen_config()
-
-        return True
-
-    except subprocess.CalledProcessError as e:
-        print(f"[ERROR] kwriteconfig6 failed with return code {e.returncode}")
-        print(f"[ERROR] stdout: {e.stdout}")
-        print(f"[ERROR] stderr: {e.stderr}")
-        return False
-    except FileNotFoundError:
-        print(f"[ERROR] kwriteconfig6 command not found. Is KDE 6 installed?")
-        return False
-    except Exception as e:
-        print(f"[ERROR] Unexpected error: {e}")
-        return False
+    return platform_utils.set_lockscreen_wallpaper(image_path)
 
 
 def set_lockscreen_random_from_directory(directory_path: Path):
@@ -549,26 +451,24 @@ def cycle_dual_wallpapers_from_directory(directory_path: Path, wait_seconds: int
 
 
 def load_config_file():
-    """Load configuration from YAML file."""
-    config_path = Path.home() / ".config" / "clockwork-orange.yml"
-    print(f"[DEBUG] Looking for configuration file: {config_path}")
+    """Load configuration from file."""
+    config_paths = [
+        Path.home() / ".config" / "clockwork-orange.yml",
+        Path("C:/Users/Public/clockwork_config.yml"),  # Shared config for service
+    ]
 
-    if not config_path.exists():
-        print(f"[DEBUG] Configuration file not found, using defaults")
-        return {}
+    for config_path in config_paths:
+        if config_path.exists():
+            try:
+                print(f"[DEBUG] Loading configuration from {config_path}")
+                with open(config_path, "r") as f:
+                    return yaml.safe_load(f) or {}
+            except Exception as e:
+                print(f"[ERROR] Failed to load config file {config_path}: {e}")
+    
+    # Defaults handled by caller
+    return {}
 
-    try:
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-        print(f"[DEBUG] Loaded configuration from {config_path}")
-        print(f"[DEBUG] Configuration: {config}")
-        return config or {}
-    except yaml.YAMLError as e:
-        print(f"[ERROR] Failed to parse YAML configuration file: {e}")
-        return {}
-    except Exception as e:
-        print(f"[ERROR] Failed to read configuration file: {e}")
-        return {}
 
 
 def merge_config_with_args(config, args):
@@ -848,8 +748,100 @@ def clean_config(config):
 
 
 def main():
+    # Helper: specific check to default to GUI on double-click (Windows mostly)
+    if len(sys.argv) == 1:
+        sys.argv.append("--gui")
+
+    start_time = time.time()
+    print(f"[DEBUG] Startup initiated at {start_time}")
+
     parser = _create_argument_parser()
     args = parser.parse_args()
+    
+    print(f"[DEBUG] Arguments parsed in {time.time() - start_time:.4f}s")
+
+    # Handle Plugin Execution (App-as-Interpreter)
+    if args.run_plugin:
+        try:
+            from plugin_manager import PluginManager
+            
+            plugin_name = args.run_plugin
+            config = {}
+            if args.plugin_config:
+                try:
+                    config = json.loads(args.plugin_config)
+                except json.JSONDecodeError:
+                    print(json.dumps({"status": "error", "message": "Invalid config JSON"}))
+                    sys.exit(1)
+
+            # We use the internal method that runs in-process
+            # Redirect stdout to stderr so logs are streamed
+            # Final result is printed to original stdout
+            sys.stdout = sys.stderr
+            try:
+                pm = PluginManager()
+                # Access private method directly to avoid capture overhead of other methods
+                instance = pm._get_plugin_instance(plugin_name)
+                result = instance.run(config)
+            finally:
+                sys.stdout = sys.__stdout__
+
+            print(json.dumps(result))
+            sys.exit(0)
+        except Exception as e:
+            # Restore stdout just in case
+            sys.stdout = sys.__stdout__
+            error = {"status": "error", "message": str(e), "logs": str(e)}
+            print(json.dumps(error))
+            sys.exit(1)
+
+
+    # Handle Self-Test
+    if args.self_test:
+        print("Running Cloudwork Orange Self-Test...")
+        results = {}
+        
+        # Test 1: Python Info
+        print(f"Python: {sys.version}")
+        print(f"Platform: {sys.platform}")
+        print(f"Frozen: {getattr(sys, 'frozen', False)}")
+        
+        # Test 2: Critical Imports
+        modules = ["ctypes", "sqlite3", "ssl", "PIL", "requests", "yaml", "watchdog"]
+        for mod in modules:
+            try:
+                __import__(mod)
+                print(f"[OK] Import {mod}")
+                results[mod] = True
+            except ImportError as e:
+                print(f"[FAIL] Import {mod}: {e}")
+                results[mod] = False
+        
+        # Test 3: SSL/Network
+        try:
+            import requests
+            print("Testing Network/SSL...")
+            requests.get("https://www.google.com", timeout=5)
+            print("[OK] Network/SSL Request")
+            results["network"] = True
+        except Exception as e:
+            print(f"[FAIL] Network/SSL Request: {e}")
+            results["network"] = False
+
+        # Test 4: Plugins
+        try:
+            from plugin_manager import PluginManager
+            pm = PluginManager()
+            plugins = pm.get_available_plugins()
+            print(f"Plugins Found: {plugins}")
+            if not plugins:
+                 print("[WARN] No plugins found!")
+            results["plugins_count"] = len(plugins)
+        except Exception as e:
+            print(f"[FAIL] Plugin System: {e}")
+        
+        sys.exit(0 if all(results.values()) else 1)
+
 
     # Load configuration file and merge with command line arguments
     config = load_config_file()
@@ -1018,7 +1010,19 @@ Configuration File:
         help="Run in background service mode (sets default wait to 900s if unspecified)",
     )
 
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Run self-diagnostic to verify environment and dependencies",
+    )
+
+    parser.add_argument(
+        "--run-plugin",
+        help="Run a specific plugin (internal use for frozen builds)",
+    )
+
     return parser
+
 
 
 def _validate_args(parser, args, has_enabled_plugins):
@@ -1275,9 +1279,18 @@ def _handle_gui_mode(args):
     if args.gui:
         if not GUI_AVAILABLE:
             print("[ERROR] GUI not available. Please install PyQt6: pip install PyQt6")
+            input("Press Enter to exit...")
             sys.exit(1)
-        print("[DEBUG] Starting GUI...")
-        sys.exit(gui_main())
+        print(f"[DEBUG] Starting GUI... SysArgv: {sys.argv}")
+        try:
+            sys.exit(gui_main())
+        except Exception as e:
+            print(f"[FATAL] GUI Crashed: {e}")
+            import traceback
+            traceback.print_exc()
+            input("Press Enter to exit...")
+            sys.exit(1)
+
 
 
 def _clean_lockscreen_config():
@@ -1500,5 +1513,115 @@ def _wait_for_next_cycle(config, default_wait, change_event=None):
             time.sleep(1)
 
 
+
+# --- Windows Service Support ---
+if platform_utils.is_windows():
+    try:
+        import win32serviceutil
+        import win32service
+        import win32event
+        import servicemanager
+
+        class ClockworkOrangeService(win32serviceutil.ServiceFramework):
+            _svc_name_ = platform_utils.SERVICE_NAME_WINDOWS
+            _svc_display_name_ = "Clockwork Orange Service"
+            _svc_description_ = "Background service for Clockwork Orange wallpaper manager"
+
+            def __init__(self, args):
+                win32serviceutil.ServiceFramework.__init__(self, args)
+                self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
+                # Use a public directory for logs so it's accessible
+                self.log_file = Path("C:/Users/Public/clockwork_service.log")
+
+
+            def log(self, msg):
+                try:
+                    with open(self.log_file, "a") as f:
+                        f.write(f"{time.ctime()}: {msg}\n")
+                except Exception:
+                    pass
+
+            def SvcStop(self):
+                self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+                self.log("Stop signal received")
+                win32event.SetEvent(self.hWaitStop)
+                global shutdown_requested
+                shutdown_requested = True
+
+            def SvcDoRun(self):
+                self.log("Service Starting...")
+                servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE,
+                                      servicemanager.PYS_SERVICE_STARTED,
+                                      (self._svc_name_, ''))
+                self.main()
+
+            def main(self):
+                self.log("Entering Service Main Loop")
+                # Initialize PluginManager
+                try:
+                    plugin_manager = PluginManager()
+                    
+                    # Initial wait time (default 5 minutes)
+                    wait_time = 300 
+                    
+                    while not shutdown_requested:
+                        try:
+                            self.log("Executing dynamic cycle...")
+                            # Execute one cycle
+                            # Use default settings: desktop=True, lockscreen=False
+                            config = _execute_dynamic_cycle(plugin_manager, desktop=True, lockscreen=False)
+                            
+                            if config and config.get("default_wait"):
+                                try:
+                                    wait_time = int(config["default_wait"])
+                                except (ValueError, TypeError):
+                                    pass
+                        except Exception as e:
+                            self.log(f"Error in service cycle: {e}")
+                            
+                        # Wait for next cycle or stop event
+                        self.log(f"Waiting for {wait_time} seconds...")
+                        rc = win32event.WaitForSingleObject(self.hWaitStop, wait_time * 1000)
+                        if rc == win32event.WAIT_OBJECT_0:
+                            self.log("Stop event received during wait")
+                            break
+                            
+                except Exception as e:
+                    self.log(f"Service crashed: {e}")
+
+                self.log("Service Stopped")
+
+    except ImportError:
+        pass
+
+
 if __name__ == "__main__":
-    main()
+    if platform_utils.is_windows():
+        try:
+            import win32serviceutil
+            import servicemanager
+            
+            # Check for service-specific command line arguments
+            service_args = ['install', 'remove', 'update', 'start', 'stop', 'restart', 'debug']
+            
+            if len(sys.argv) > 1 and sys.argv[1] in service_args:
+                 # Delegate to OS service manager
+                 win32serviceutil.HandleCommandLine(ClockworkOrangeService)
+            elif len(sys.argv) == 1:
+                # Potential service start (no args)
+                try:
+                    servicemanager.Initialize()
+                    servicemanager.PrepareToHostSingle(ClockworkOrangeService)
+                    servicemanager.StartServiceCtrlDispatcher()
+                except Exception:
+                    # Not started by SCM, run standard main
+                    main()
+            else:
+                 # Standard execution with other args (e.g. --gui, --desktop)
+                 main()
+        except ImportError:
+            # Fallback if pywin32 not present
+            main()
+    else:
+        main()
+

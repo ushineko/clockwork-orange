@@ -1022,15 +1022,24 @@ class SinglePluginWidget(QWidget):
             self.watcher.removePaths(self.watcher.directories())
         self.watcher.addPath(str(download_dir))
 
-        self.review_images = sorted(
-            [
-                f
-                for f in download_dir.glob("*")
-                if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".bmp")
-            ],
-            key=lambda f: f.stat().st_mtime,
-            reverse=True,
-        )
+        # Collect, filter, and sort with race condition handling
+        images_and_times = []
+        for f in download_dir.glob("*"):
+            if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".bmp"):
+                try:
+                    mtime = f.stat().st_mtime
+                    images_and_times.append((f, mtime))
+                except FileNotFoundError:
+                    # File disappeared between glob and stat
+                    continue
+                except Exception as e:
+                    print(f"[ERROR] Failed to stat file {f}: {e}")
+                    continue
+
+        # Sort by mtime (descending)
+        images_and_times.sort(key=lambda x: x[1], reverse=True)
+        self.review_images = [x[0] for x in images_and_times]
+
 
         if not self.review_images:
             self.preview_label.setText("No images found for review.")

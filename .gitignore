@@ -206,3 +206,10 @@ debian/files
 debian/*.log
 debian/*.substvars
 debian/debhelper-build-stamp
+
+# Local test build artifacts
+build_test/
+dist_test/
+
+build_test_service/
+dist_test_service/

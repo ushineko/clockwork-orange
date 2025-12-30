@@ -571,17 +571,28 @@ class ClockworkOrangeGUI(QMainWindow):
                 self.show_window()
 
     def _get_icon(self):
-        # Implementation from previous file
+        """Get the application icon, handling frozen state."""
+        if getattr(sys, "frozen", False):
+            # In frozen PyInstaller bundle
+            # We added data 'gui/icons;gui/icons' so it should be in sys._MEIPASS/gui/icons
+            base_path = Path(sys._MEIPASS) / "gui"
+        else:
+            # In development: gui/main_window.py -> gui/
+            base_path = Path(__file__).parent
+
         logo_paths = [
-            Path(__file__).parent / "icons" / "clockwork-orange-128x128.png",
-            Path(__file__).parent / "icons" / "clockwork-orange.png",
-            Path(__file__).parent / "icons" / "clockwork-orange-64x64.png",
-            Path(__file__).parent.parent / "icon.png",
+            base_path / "icons" / "clockwork-orange-128x128.png",
+            base_path / "icons" / "clockwork-orange.png",
+            base_path / "icons" / "clockwork-orange-64x64.png",
+            # Fallback to root (less likely in frozen but good for dev)
+            base_path.parent / "icon.png",
         ]
 
         for logo_path in logo_paths:
             if logo_path.exists():
                 return QIcon(str(logo_path))
+        
+        print(f"[WARNING] No icon found. Searched: {[str(p) for p in logo_paths]}")
         return QIcon()
 
     def _init_window_state(self):
@@ -597,6 +608,8 @@ class ClockworkOrangeGUI(QMainWindow):
         height = self.config_data.get("window_height", 600)
         self.resize(width, height)
         self.center_window()
+        print(f"[DEBUG] Window restored to {width}x{height} at {self.pos()}")
+
 
     def save_window_geometry(self):
         self.config_data["window_width"] = self.width()
@@ -682,24 +695,25 @@ def main():
     app.setApplicationVersion("Rolling")
 
     # Process check
+    # Process check (Singleton)
     try:
-        import os
+        import time
+        import platform_utils
+        
+        start_time = time.time()
+        print(f"[DEBUG] Checking for existing instances...")
+        
+        # Use fast Named Mutex (Windows) or File Lock (Linux)
+        # This is instant compared to iterating processes
+        if not platform_utils.acquire_instance_lock("clockwork_orange_gui_lock"):
+             print("[DEBUG] Another instance is already running (Lock held)")
+             return 0
 
-        import psutil
+        print(f"[DEBUG] Instance check took {time.time() - start_time:.4f}s")
+    except Exception as e:
+         print(f"[WARNING] Failed to check for existing instances: {e}")
 
-        current_pid = os.getpid()
-        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-            if (
-                proc.info["name"] == "python3"
-                and proc.info["cmdline"]
-                and "clockwork-orange.py" in " ".join(proc.info["cmdline"])
-                and "--gui" in " ".join(proc.info["cmdline"])
-                and proc.info["pid"] != current_pid
-            ):
-                print("[DEBUG] Another instance is already running")
-                return 0
-    except Exception:
-        pass
+
 
     window = ClockworkOrangeGUI()
     if window.tray_icon:
@@ -712,6 +726,12 @@ def main():
         )
 
     window.show()
+    print(f"[DEBUG] Window shown. Geometry: {window.geometry()}")
+    
+    # Force window to front
+    window.raise_()
+    window.activateWindow()
+
     return app.exec()
 
 

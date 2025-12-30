@@ -22,6 +22,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import platform_utils
+
 
 class ServiceStatusThread(QThread):
     """Thread for checking service status"""
@@ -31,29 +33,8 @@ class ServiceStatusThread(QThread):
     def run(self):
         """Check service status"""
         try:
-            result = subprocess.run(
-                ["systemctl", "--user", "is-active", "clockwork-orange.service"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            status = result.stdout.strip()
-
-            # Get more detailed status
-            detail_result = subprocess.run(
-                [
-                    "systemctl",
-                    "--user",
-                    "status",
-                    "clockwork-orange.service",
-                    "--no-pager",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            details = detail_result.stdout
-
+            status = platform_utils.service_is_active()
+            details = platform_utils.service_get_status_details()
             self.status_updated.emit(status, details)
         except Exception as e:
             self.status_updated.emit("error", f"Error checking status: {e}")
@@ -285,6 +266,23 @@ class ServiceManagerWidget(QWidget):
             self.uninstall_button.setEnabled(True)
             self.install_button.setToolTip("Install the service")
             self.uninstall_button.setToolTip("Uninstall the service")
+        elif status == "activating":
+             self.status_label.setText("🟡 Service is Starting")
+             self.status_label.setStyleSheet("color: #FFC107;") # Amber
+             self.start_button.setEnabled(False)
+             self.stop_button.setEnabled(True)
+             self.restart_button.setEnabled(False)
+             self.install_button.setEnabled(False)
+             self.uninstall_button.setEnabled(False)
+        elif status == "deactivating":
+             self.status_label.setText("🟡 Service is Stopping")
+             self.status_label.setStyleSheet("color: #FFC107;")
+             self.start_button.setEnabled(False)
+             self.stop_button.setEnabled(False)
+             self.restart_button.setEnabled(False)
+             # Probably wait until inactive
+             self.install_button.setEnabled(False)
+             self.uninstall_button.setEnabled(False)
         elif status == "failed":
             self.status_label.setText("⚠️ Service Failed")
             self.status_label.setStyleSheet("color: orange;")
@@ -313,50 +311,24 @@ class ServiceManagerWidget(QWidget):
 
     def start_service(self):
         """Start the service"""
-        self._run_service_command(
-            ["systemctl", "--user", "start", "clockwork-orange.service"],
-            "Starting service...",
-        )
+        self._sync_config_to_public()
+        self._wrap_service_action(platform_utils.service_start, "Starting service...")
 
     def stop_service(self):
         """Stop the service"""
-        self._run_service_command(
-            ["systemctl", "--user", "stop", "clockwork-orange.service"],
-            "Stopping service...",
-        )
+        self._wrap_service_action(platform_utils.service_stop, "Stopping service...")
 
     def restart_service(self):
         """Restart the service"""
-        self._run_service_command(
-            ["systemctl", "--user", "restart", "clockwork-orange.service"],
-            "Restarting service...",
-        )
+        self._sync_config_to_public()
+        self._wrap_service_action(platform_utils.service_restart, "Restarting service...")
 
     def install_service(self):
         """Install the service"""
         try:
-            # Check if service file exists
-            service_file = Path(__file__).parent.parent / "clockwork-orange.service"
-            if not service_file.exists():
-                QMessageBox.critical(self, "Error", "Service file not found!")
-                return
-
-            # Create systemd user directory
-            systemd_dir = Path.home() / ".config" / "systemd" / "user"
-            systemd_dir.mkdir(parents=True, exist_ok=True)
-
-            # Copy service file
-            import shutil
-
-            shutil.copy2(service_file, systemd_dir / "clockwork-orange.service")
-
-            # Reload systemd and enable service
-            subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
-            subprocess.run(
-                ["systemctl", "--user", "enable", "clockwork-orange.service"],
-                check=True,
-            )
-
+            self._sync_config_to_public()
+            base_path = Path(__file__).parent.parent
+            platform_utils.service_install(base_path)
             QMessageBox.information(
                 self, "Success", "Service installed and enabled successfully!"
             )
@@ -365,32 +337,27 @@ class ServiceManagerWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to install service: {e}")
 
+    def _sync_config_to_public(self):
+        """Copy user config to public location for service access."""
+        if not platform_utils.is_windows():
+            return
+            
+        try:
+            user_config = Path.home() / ".config" / "clockwork-orange.yml"
+            public_config = Path("C:/Users/Public/clockwork_config.yml")
+            
+            if user_config.exists():
+                import shutil
+                shutil.copy2(user_config, public_config)
+                print(f"[DEBUG] Synced config to {public_config}")
+        except Exception as e:
+            print(f"[ERROR] Failed to sync config: {e}")
+            # Don't show popup as this is background op, just log
+            
     def uninstall_service(self):
         """Uninstall the service"""
         try:
-            # Stop and disable service
-            subprocess.run(
-                ["systemctl", "--user", "stop", "clockwork-orange.service"], check=False
-            )
-            subprocess.run(
-                ["systemctl", "--user", "disable", "clockwork-orange.service"],
-                check=False,
-            )
-
-            # Remove service file
-            service_file = (
-                Path.home()
-                / ".config"
-                / "systemd"
-                / "user"
-                / "clockwork-orange.service"
-            )
-            if service_file.exists():
-                service_file.unlink()
-
-            # Reload systemd
-            subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
-
+            platform_utils.service_uninstall()
             QMessageBox.information(
                 self, "Success", "Service uninstalled successfully!"
             )
@@ -399,29 +366,20 @@ class ServiceManagerWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to uninstall service: {e}")
 
-    def _run_service_command(self, command, message):
-        """Run a service command with progress indication"""
+    def _wrap_service_action(self, action_func, message):
+        """Run a service action with progress indication"""
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)  # Indeterminate progress
 
         try:
-            result = subprocess.run(command, capture_output=True, text=True, timeout=30)
-            if result.returncode == 0:
-                # Success - no popup needed
-                pass
-            else:
-                QMessageBox.warning(
-                    self,
-                    "Warning",
-                    f"{message} completed with warnings:\n{result.stderr}",
-                )
-        except subprocess.TimeoutExpired:
-            QMessageBox.critical(self, "Error", f"{message} timed out!")
+            action_func()
+            # Success logic handled by caller refreshing usually, but here we just return
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to {message.lower()}: {e}")
         finally:
             self.progress_bar.setVisible(False)
             self.refresh_status()
+
 
     def toggle_auto_update(self, enabled):
         """Toggle auto-update for logs"""
@@ -442,40 +400,31 @@ class ServiceManagerWidget(QWidget):
     def refresh_logs(self):
         """Refresh service logs"""
         try:
-            result = subprocess.run(
-                [
-                    "journalctl",
-                    "--user",
-                    "-u",
-                    "clockwork-orange.service",
-                    "--no-pager",
-                    "-n",
-                    "50",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0:
-                if not result.stdout.strip():
-                    self.logs_text.setText(
-                        "No logs found (journalctl returned empty output)."
-                    )
-                    # Debug: Try checking all user units
-                    print(f"[DEBUG] journalctl cmd: {' '.join(result.args)}")
-                else:
-                    self.logs_text.setText(result.stdout)
-
-                    # Store current scroll position
-                    scrollbar = self.logs_text.verticalScrollBar()
-                    was_at_bottom = scrollbar.value() >= scrollbar.maximum() - 10
-
-                    # Auto-scroll to bottom if auto-update is enabled or if user was already at bottom
-                    if self.auto_update_enabled or was_at_bottom:
-                        scrollbar.setValue(scrollbar.maximum())
+            # Use Public logs path on Windows
+            if platform_utils.is_windows():
+                 log_path = Path("C:/Users/Public/clockwork_service.log")
+                 if log_path.exists():
+                     with open(log_path, "r") as f:
+                         logs = f.read()[-10000:] # Last 10k chars
+                 else:
+                     logs = "Log file not found."
             else:
-                self.logs_text.setText(
-                    f"Error retrieving logs (exit code {result.returncode}):\n{result.stderr}"
-                )
+                 logs = platform_utils.service_get_logs()
+
+            if not logs or not logs.strip():
+
+                 self.logs_text.setText("No logs found.")
+            else:
+                 self.logs_text.setText(logs)
+
+                 # Store current scroll position
+                 scrollbar = self.logs_text.verticalScrollBar()
+                 was_at_bottom = scrollbar.value() >= scrollbar.maximum() - 10
+
+                 # Auto-scroll to bottom if auto-update is enabled or if user was already at bottom
+                 if self.auto_update_enabled or was_at_bottom:
+                     scrollbar.setValue(scrollbar.maximum())
+
         except Exception as e:
             self.logs_text.setText(f"Error retrieving logs: {e}")
+
