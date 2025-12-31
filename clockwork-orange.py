@@ -7,6 +7,7 @@ import random
 import signal
 import subprocess
 import sys
+import ctypes
 import tempfile
 import time
 import platform_utils
@@ -751,6 +752,14 @@ def main():
     # Helper: specific check to default to GUI on double-click (Windows mostly)
     if len(sys.argv) == 1:
         sys.argv.append("--gui")
+
+    # Set AppUserModelID on Windows for correct taskbar icon
+    if sys.platform == 'win32':
+        myappid = 'ushineko.clockworkorange.gui.1.0' # arbitrary string
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        except Exception:
+            pass
 
     start_time = time.time()
     

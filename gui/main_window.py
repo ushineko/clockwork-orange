@@ -217,11 +217,16 @@ class AboutDialog(QDialog):
 
     def get_version_string(self):
         """Get the application version string"""
-        # 1. Check for packaged version.txt (PKGBUILD/Debian)
+        base_path = Path(__file__).parent.parent
+        if getattr(sys, 'frozen', False):
+             # In frozen mode, PyInstaller unpacks to sys._MEIPASS
+             base_path = Path(sys._MEIPASS)
+
+        # 1. Check for packaged version.txt (PKGBUILD/Debian/Windows Frozen)
         try:
-            version_file = Path(__file__).parent.parent / "version.txt"
+            version_file = base_path / "version.txt"
             if version_file.exists():
-                return f"v{version_file.read_text().strip()}"
+                return version_file.read_text().strip()
         except Exception:
             pass
 

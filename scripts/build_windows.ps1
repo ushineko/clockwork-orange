@@ -4,8 +4,25 @@ Write-Host "Cleaning previous builds..."
 if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
 if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
 
+# Generate version info
+try {
+    $Version = git describe --tags --always --dirty
+    $Branch = git rev-parse --abbrev-ref HEAD
+    if ($LASTEXITCODE -ne 0) { throw "Git failed" }
+    
+    $FullVersion = "$Version-$Branch"
+    $FullVersion | Out-File -Encoding ascii "version.txt"
+    Write-Host "Detected version: $FullVersion"
+}
+catch {
+    Write-Host "Warning: Could not detect version from git, using 'Unknown'"
+    "Unknown" | Out-File -Encoding ascii "version.txt"
+}
+
 Write-Host "Building Clockwork Orange for Windows..."
 pyinstaller --noconfirm --clean --onefile --name "clockwork-orange" `
+    --icon "gui/icons/icon.ico" `
+    --add-data "version.txt;." `
     --add-data "img;img" `
     --add-data "plugins;plugins" `
     --add-data "gui/icons;gui/icons" `
@@ -26,6 +43,9 @@ pyinstaller --noconfirm --clean --onefile --name "clockwork-orange" `
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build successful! Executable is in dist/clockwork-orange.exe"
     Write-Host "This is a DEBUG build (with console window for troubleshooting)"
+    
+    # Clean up temporary version file
+    if (Test-Path "version.txt") { Remove-Item "version.txt" }
 }
 else {
     Write-Host "Build failed!"
