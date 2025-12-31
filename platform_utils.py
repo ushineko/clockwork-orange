@@ -45,36 +45,20 @@ def set_lockscreen_wallpaper(image_path: Path) -> bool:
 
 
 def get_monitor_count() -> int:
-    """Get the number of connected monitors on Windows using PowerShell."""
+    """Get the number of connected monitors on Windows using screeninfo."""
     if not IS_WINDOWS:
         return 1
     try:
-        # Use PowerShell to get monitor count from Screens collection
-        # This is very fast and robust
-        cmd = [
-            "powershell",
-            "-NoProfile",
-            "-Command",
-            "[Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') > $null; [System.Windows.Forms.Screen]::AllScreens.Count",
-        ]
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=5,
-            creationflags=CREATE_NO_WINDOW,
-        )
-        if result.returncode == 0:
-            count = int(result.stdout.strip())
-            print(f"[DEBUG] Detected {count} monitor(s) via PowerShell")
-            return count
+        import screeninfo
+
+        return len(screeninfo.get_monitors())
     except Exception as e:
-        print(f"[DEBUG] Failed to get monitor count via PS, assuming 1: {e}")
-    return 1
+        print(f"[DEBUG] Failed to get monitor count via screeninfo, assuming 1: {e}")
+        return 1
 
 
 def set_wallpaper_multi_monitor(image_paths: list) -> bool:
-    """Set different wallpaper for each monitor on Windows via PowerShell."""
+    """Set different wallpaper for each monitor on Windows."""
     if not IS_WINDOWS:
         return False
 
@@ -93,47 +77,25 @@ def set_wallpaper_multi_monitor(image_paths: list) -> bool:
         print("[ERROR] No valid image paths found")
         return False
 
-    # Spanned Wallpaper Approach:
-    # Instead of fighting with finicky COM interfaces that fail when Elevated,
-    # we stitch the images together into one giant "canvas" that spans all monitors.
-    # Windows then treats this as a single "Spanned" wallpaper.
+    # Spanned Wallpaper Approach with screeninfo
     try:
         import ctypes
         import os
         import winreg
-        from ctypes import wintypes
 
+        import screeninfo
         from PIL import Image
 
-        # 1. Get monitor geometries
-        monitors = []
-
-        def _enum_proc(hMonitor, hdcMonitor, lprcMonitor, dwData):
-            rect = lprcMonitor.contents
-            monitors.append(
-                {
-                    "x": rect.left,
-                    "y": rect.top,
-                    "w": rect.right - rect.left,
-                    "h": rect.bottom - rect.top,
-                }
-            )
-            return True
-
-        MonitorEnumProc = ctypes.WINFUNCTYPE(
-            ctypes.c_bool,
-            wintypes.HMONITOR,
-            wintypes.HDC,
-            ctypes.POINTER(wintypes.RECT),
-            wintypes.LPARAM,
-        )
-        ctypes.windll.user32.EnumDisplayMonitors(
-            None, None, MonitorEnumProc(_enum_proc), 0
-        )
-
-        if not monitors:
-            print("[ERROR] No monitors detected via EnumDisplayMonitors")
+        # 1. Get monitor geometries via screeninfo
+        # screeninfo returns a list of Monitor(x, y, width, height, ...)
+        monitors_obj = screeninfo.get_monitors()
+        if not monitors_obj:
+            print("[ERROR] No monitors detected via screeninfo")
             return False
+
+        monitors = [
+            {"x": m.x, "y": m.y, "w": m.width, "h": m.height} for m in monitors_obj
+        ]
 
         print(f"[DEBUG] Stitching wallpapers for {len(monitors)} monitor(s)")
 
