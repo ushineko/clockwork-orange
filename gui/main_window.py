@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import yaml
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
@@ -38,6 +38,68 @@ from .settings_widgets import (
     BasicSettingsWidget,
     YamlEditorWidget,
 )
+
+
+# Worker thread for wallpaper changes
+class WallpaperWorker(QThread):
+    """Background worker for changing wallpapers without blocking GUI."""
+    log_message = pyqtSignal(str)
+    
+    def __init__(self, config_data, plugin_manager):
+        super().__init__()
+        self.config_data = config_data
+        self.plugin_manager = plugin_manager
+        
+    def run(self):
+        try:
+            self.log_message.emit("=== Wallpaper Change Cycle ===")
+            
+            from pathlib import Path
+            import platform_utils
+            import random
+            
+            # Collect sources
+            sources = []
+            plugins_config = self.config_data.get("plugins", {})
+            for name, plugin_cfg in plugins_config.items():
+                if plugin_cfg.get("enabled", False):
+                    self.log_message.emit(f"Executing plugin: {name}")
+                    try:
+                        result = self.plugin_manager.execute_plugin(name, plugin_cfg)
+                        if result.get("status") == "success":
+                            path = result.get("path")
+                            if path:
+                                sources.append(Path(path))
+                                self.log_message.emit(f"✓ Plugin {name} returned: {path}")
+                        else:
+                            self.log_message.emit(f"✗ Plugin {name} failed: {result.get('error', 'Unknown')}")
+                    except Exception as e:
+                        self.log_message.emit(f"✗ Plugin {name} error: {e}")
+            
+            self.log_message.emit(f"Collected {len(sources)} sources")
+            
+            if sources:
+                all_images = []
+                for source in sources:
+                    if source.is_dir():
+                        all_images.extend(list(source.glob("*.jpg")) + list(source.glob("*.png")))
+                    elif source.is_file():
+                        all_images.append(source)
+                
+                if all_images:
+                    image = random.choice(all_images)
+                    result = platform_utils.set_wallpaper(image)
+                    if result:
+                        self.log_message.emit(f"✓ Wallpaper changed: {image.name}")
+                    else:
+                        self.log_message.emit("✗ Failed to set wallpaper")
+                else:
+                    self.log_message.emit("✗ No images found in sources")
+            else:
+                self.log_message.emit("No wallpaper sources available")
+                
+        except Exception as e:
+            self.log_message.emit(f"Error: {e}")
 
 
 class AboutDialog(QDialog):
@@ -304,7 +366,53 @@ class ClockworkOrangeGUI(QMainWindow):
             iterator += 1
 
         self.splitter.setSizes([int(max_width), 600])
+        
+        # Initialize automatic wallpaper changing
+        self._init_wallpaper_timer()
 
+
+    def _init_wallpaper_timer(self):
+        """Initialize timer for automatic wallpaper changes."""
+        self.wallpaper_worker = None
+        self.wallpaper_timer = QTimer()
+        self.wallpaper_timer.timeout.connect(self._trigger_wallpaper_change)
+        
+        # Get interval from config
+        self._update_timer_interval()
+        
+        # Do first change after 2 seconds
+        QTimer.singleShot(2000, self._trigger_wallpaper_change)
+        
+    def _update_timer_interval(self):
+        """Update timer interval from config."""
+        interval_seconds = self.config_data.get("default_wait", 300)
+        self.wallpaper_timer.start(interval_seconds * 1000)
+        
+        # Log to Activity Log if it exists
+        if hasattr(self, 'service_page') and self.service_page and hasattr(self.service_page, 'log_buffer'):
+            self.service_page.log_buffer.append(f"Wallpaper timer: every {interval_seconds} seconds")
+            self.service_page.refresh_logs()
+        
+    def _trigger_wallpaper_change(self):
+        """Trigger wallpaper change in background thread."""
+        # Don't start new worker if one is already running
+        if self.wallpaper_worker and self.wallpaper_worker.isRunning():
+            return
+        
+        self.wallpaper_worker = WallpaperWorker(self.config_data, self.plugin_manager)
+        self.wallpaper_worker.log_message.connect(self._on_wallpaper_log)
+        self.wallpaper_worker.start()
+        
+    def _on_wallpaper_log(self, message):
+        """Handle log messages from wallpaper worker."""
+        # Add to Activity Log widget
+        if hasattr(self, 'service_page') and self.service_page and hasattr(self.service_page, 'log_buffer'):
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self.service_page.log_buffer.append(f"{timestamp} {message}")
+            self.service_page.refresh_logs()
+        
+    
     def toggle_sidebar(self):
         """Toggle visibility of the sidebar."""
         if self.tree.isVisible():
@@ -353,17 +461,32 @@ class ClockworkOrangeGUI(QMainWindow):
             try:
                 with open(self.config_path, "r") as f:
                     self.config_data = yaml.safe_load(f) or {}
+                    
+                # Update wallpaper timer interval if it exists
+                if hasattr(self, 'wallpaper_timer') and self.wallpaper_timer:
+                    self._update_timer_interval()
             except Exception as e:
                 print(f"Error loading config: {e}")
                 self.config_data = {}
 
     def init_pages(self):
         """Initialize all pages and populate the tree."""
-        # 1. Service Manager
-        self.service_page = ServiceManagerWidget()
-        self.add_page(
-            "Service Control", self.service_page, icon_name="utilities-system-monitor"
-        )
+        # 1. Service Manager (Linux) / Activity Log (Windows)
+        import platform_utils
+        if not platform_utils.is_windows():
+            # Linux: Show Service Control
+            self.service_page = ServiceManagerWidget()
+            self.add_page(
+                "Service Control", self.service_page, icon_name="utilities-system-monitor"
+            )
+        else:
+            # Windows: Show Activity Log instead
+            from gui.activity_log import ActivityLogWidget
+            self.service_page = ActivityLogWidget()
+            self.add_page(
+                "Activity Log", self.service_page, icon_name="utilities-system-monitor"
+            )
+
 
         # 2. Plugins (Group)
         plugins_root = QTreeWidgetItem(self.tree, ["Plugins"])

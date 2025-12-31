@@ -41,7 +41,8 @@ class PluginManager:
         # if PyInstaller collected them as data or separate files.
         # Ideally, we include them as a package.
         
-        print(f"[DEBUG] Discovering plugins in {self.plugins_dir}")
+        # print(f"[DEBUG] Discovering plugins in {self.plugins_dir}")
+
 
         for item in self.plugins_dir.iterdir():
             if (

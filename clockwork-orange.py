@@ -753,12 +753,15 @@ def main():
         sys.argv.append("--gui")
 
     start_time = time.time()
-    print(f"[DEBUG] Startup initiated at {start_time}")
-
+    
     parser = _create_argument_parser()
     args = parser.parse_args()
     
-    print(f"[DEBUG] Arguments parsed in {time.time() - start_time:.4f}s")
+    # Only print debug messages if not running a plugin (to keep JSON output clean)
+    if not hasattr(args, 'run_plugin') or not args.run_plugin:
+        print(f"[DEBUG] Startup initiated at {start_time}")
+        print(f"[DEBUG] Arguments parsed in {time.time() - start_time:.4f}s")
+
 
     # Handle Plugin Execution (App-as-Interpreter)
     if args.run_plugin:
@@ -1514,114 +1517,10 @@ def _wait_for_next_cycle(config, default_wait, change_event=None):
 
 
 
-# --- Windows Service Support ---
-if platform_utils.is_windows():
-    try:
-        import win32serviceutil
-        import win32service
-        import win32event
-        import servicemanager
 
-        class ClockworkOrangeService(win32serviceutil.ServiceFramework):
-            _svc_name_ = platform_utils.SERVICE_NAME_WINDOWS
-            _svc_display_name_ = "Clockwork Orange Service"
-            _svc_description_ = "Background service for Clockwork Orange wallpaper manager"
-
-            def __init__(self, args):
-                win32serviceutil.ServiceFramework.__init__(self, args)
-                self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
-                # Use a public directory for logs so it's accessible
-                self.log_file = Path("C:/Users/Public/clockwork_service.log")
-
-
-            def log(self, msg):
-                try:
-                    with open(self.log_file, "a") as f:
-                        f.write(f"{time.ctime()}: {msg}\n")
-                except Exception:
-                    pass
-
-            def SvcStop(self):
-                self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
-                self.log("Stop signal received")
-                win32event.SetEvent(self.hWaitStop)
-                global shutdown_requested
-                shutdown_requested = True
-
-            def SvcDoRun(self):
-                self.log("Service Starting...")
-                servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE,
-                                      servicemanager.PYS_SERVICE_STARTED,
-                                      (self._svc_name_, ''))
-                self.main()
-
-            def main(self):
-                self.log("Entering Service Main Loop")
-                # Initialize PluginManager
-                try:
-                    plugin_manager = PluginManager()
-                    
-                    # Initial wait time (default 5 minutes)
-                    wait_time = 300 
-                    
-                    while not shutdown_requested:
-                        try:
-                            self.log("Executing dynamic cycle...")
-                            # Execute one cycle
-                            # Use default settings: desktop=True, lockscreen=False
-                            config = _execute_dynamic_cycle(plugin_manager, desktop=True, lockscreen=False)
-                            
-                            if config and config.get("default_wait"):
-                                try:
-                                    wait_time = int(config["default_wait"])
-                                except (ValueError, TypeError):
-                                    pass
-                        except Exception as e:
-                            self.log(f"Error in service cycle: {e}")
-                            
-                        # Wait for next cycle or stop event
-                        self.log(f"Waiting for {wait_time} seconds...")
-                        rc = win32event.WaitForSingleObject(self.hWaitStop, wait_time * 1000)
-                        if rc == win32event.WAIT_OBJECT_0:
-                            self.log("Stop event received during wait")
-                            break
-                            
-                except Exception as e:
-                    self.log(f"Service crashed: {e}")
-
-                self.log("Service Stopped")
-
-    except ImportError:
-        pass
 
 
 if __name__ == "__main__":
-    if platform_utils.is_windows():
-        try:
-            import win32serviceutil
-            import servicemanager
-            
-            # Check for service-specific command line arguments
-            service_args = ['install', 'remove', 'update', 'start', 'stop', 'restart', 'debug']
-            
-            if len(sys.argv) > 1 and sys.argv[1] in service_args:
-                 # Delegate to OS service manager
-                 win32serviceutil.HandleCommandLine(ClockworkOrangeService)
-            elif len(sys.argv) == 1:
-                # Potential service start (no args)
-                try:
-                    servicemanager.Initialize()
-                    servicemanager.PrepareToHostSingle(ClockworkOrangeService)
-                    servicemanager.StartServiceCtrlDispatcher()
-                except Exception:
-                    # Not started by SCM, run standard main
-                    main()
-            else:
-                 # Standard execution with other args (e.g. --gui, --desktop)
-                 main()
-        except ImportError:
-            # Fallback if pywin32 not present
-            main()
-    else:
-        main()
-
+    # Windows: No service support (services can't change wallpapers due to Session 0 isolation)
+    # Linux: Service support handled by systemd
+    main()
