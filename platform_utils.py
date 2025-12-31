@@ -3,6 +3,10 @@ import os
 import subprocess
 from pathlib import Path
 
+# Windows specific flag to hide console window when spawning processes
+# This prevents blank CMD windows from popping up in GUI applications
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == 'win32' else 0
+
 # Note: import ctypes moved to function scope to avoid PyInstaller freeze issues?
 
 IS_WINDOWS = sys.platform == 'win32'
@@ -35,12 +39,173 @@ def set_lockscreen_wallpaper(image_path: Path) -> bool:
 
 # --- Windows Implementations ---
 
+def get_monitor_count() -> int:
+    """Get the number of connected monitors on Windows using PowerShell."""
+    if not IS_WINDOWS:
+        return 1
+    try:
+        # Use PowerShell to get monitor count from Screens collection
+        # This is very fast and robust
+        cmd = ["powershell", "-NoProfile", "-Command", 
+               "[Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') > $null; [System.Windows.Forms.Screen]::AllScreens.Count"]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5, creationflags=CREATE_NO_WINDOW)
+        if result.returncode == 0:
+            count = int(result.stdout.strip())
+            print(f"[DEBUG] Detected {count} monitor(s) via PowerShell")
+            return count
+    except Exception as e:
+        print(f"[DEBUG] Failed to get monitor count via PS, assuming 1: {e}")
+    return 1
+
+def set_wallpaper_multi_monitor(image_paths: list) -> bool:
+    """Set different wallpaper for each monitor on Windows via PowerShell."""
+    if not IS_WINDOWS:
+        return False
+    
+    if not image_paths:
+        print(f"[ERROR] No image paths provided")
+        return False
+    
+    # Resolve absolute paths and validate
+    abs_paths = []
+    for p in image_paths:
+        path = Path(p).resolve()
+        if path.exists():
+            abs_paths.append(str(path))
+    
+    if not abs_paths:
+        print("[ERROR] No valid image paths found")
+        return False
+    
+    # Spanned Wallpaper Approach:
+    # Instead of fighting with finicky COM interfaces that fail when Elevated,
+    # we stitch the images together into one giant "canvas" that spans all monitors.
+    # Windows then treats this as a single "Spanned" wallpaper.
+    try:
+        from PIL import Image
+        import ctypes
+        from ctypes import wintypes
+        import winreg
+        import os
+        
+        # 1. Get monitor geometries
+        monitors = []
+        def _enum_proc(hMonitor, hdcMonitor, lprcMonitor, dwData):
+            rect = lprcMonitor.contents
+            monitors.append({
+                'x': rect.left,
+                'y': rect.top,
+                'w': rect.right - rect.left,
+                'h': rect.bottom - rect.top
+            })
+            return True
+
+        MonitorEnumProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HMONITOR, wintypes.HDC, ctypes.POINTER(wintypes.RECT), wintypes.LPARAM)
+        ctypes.windll.user32.EnumDisplayMonitors(None, None, MonitorEnumProc(_enum_proc), 0)
+        
+        if not monitors:
+            print("[ERROR] No monitors detected via EnumDisplayMonitors")
+            return False
+            
+        print(f"[DEBUG] Stitching wallpapers for {len(monitors)} monitor(s)")
+        
+        # 2. Determine canvas bounding box
+        min_x = min(m['x'] for m in monitors)
+        min_y = min(m['y'] for m in monitors)
+        max_x = max(m['x'] + m['w'] for m in monitors)
+        max_y = max(m['y'] + m['h'] for m in monitors)
+        canvas_w = max_x - min_x
+        canvas_h = max_y - min_y
+        
+        # 3. Create black canvas
+        canvas = Image.new('RGB', (canvas_w, canvas_h), (0, 0, 0))
+        
+        # 4. Paste each wallpaper into its monitor area
+        for i, m in enumerate(monitors):
+            if i >= len(abs_paths):
+                break
+            
+            try:
+                with Image.open(abs_paths[i]) as img:
+                    # Convert to RGB (to handle PNG/RGBA or CMYK)
+                    if img.mode != 'RGB':
+                        img = img.convert('RGB')
+                        
+                    # Calculate "Cover" resize (fill monitor area)
+                    iw, ih = img.size
+                    mw, mh = m['w'], m['h']
+                    
+                    aspect_img = iw / ih
+                    aspect_mon = mw / mh
+                    
+                    if aspect_img > aspect_mon:
+                        # Image is wider than monitor
+                        new_h = mh
+                        new_w = int(aspect_img * new_h)
+                    else:
+                        # Image is taller than monitor
+                        new_w = mw
+                        new_h = int(new_w / aspect_img)
+                        
+                    # Resize
+                    img = img.resize((new_w, new_h), Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS)
+                    
+                    # Center crop to exact monitor size
+                    left = (new_w - mw) // 2
+                    top = (new_h - mh) // 2
+                    img = img.crop((left, top, left + mw, top + mh))
+                    
+                    # Paste at monitor's relative position on canvas
+                    canvas.paste(img, (m['x'] - min_x, m['y'] - min_y))
+            except Exception as e:
+                print(f"[ERROR] Failed to process image {abs_paths[i]}: {e}")
+
+        # 5. Save the spanned image to a temporary file
+        temp_dir = Path(os.environ.get('TEMP', os.environ.get('USERPROFILE', '.')))
+        spanned_path = temp_dir / "clockwork_spanned.jpg"
+        canvas.save(str(spanned_path), "JPEG", quality=90)
+        
+        # 6. Set registry for "Span" style (Style 22)
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Desktop", 0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, "WallpaperStyle", 0, winreg.REG_SZ, "22")
+            winreg.SetValueEx(key, "TileWallpaper", 0, winreg.REG_SZ, "0")
+            winreg.CloseKey(key)
+        except Exception as e:
+            print(f"[ERROR] Failed to set registry for spanning: {e}")
+            
+        # 7. Apply the stitched wallpaper
+        SPI_SETDESKWALLPAPER = 0x0014
+        SPIF_UPDATEINIFILE = 0x01
+        SPIF_SENDWININICHANGE = 0x02
+        
+        print(f"[DEBUG] Applying spanned wallpaper: {spanned_path}")
+        result = ctypes.windll.user32.SystemParametersInfoW(
+            SPI_SETDESKWALLPAPER, 0, str(spanned_path), 
+            SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE
+        )
+        return bool(result)
+        
+    except Exception as e:
+        print(f"[ERROR] Spanned wallpaper stitching failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def _set_wallpaper_windows(image_path: Path) -> bool:
+    """Set wallpaper on Windows (single monitor or all monitors)."""
     print(f"[DEBUG] Setting Windows wallpaper: {image_path}")
     if not image_path.exists():
         print(f"[ERROR] File does not exist: {image_path}")
         return False
-        
+    
+    # Try multi-monitor API first (works for single monitor too)
+    try:
+        return set_wallpaper_multi_monitor([image_path])
+    except Exception as e:
+        print(f"[DEBUG] Multi-monitor API failed, falling back to SystemParametersInfoW: {e}")
+    
+    # Fallback to SystemParametersInfoW
     try:
         import ctypes
         abs_path = str(image_path)

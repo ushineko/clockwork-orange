@@ -115,16 +115,14 @@ class BasicSettingsWidget(QWidget):
 
     def get_config(self):
         """Get config dictionary from UI"""
-        config = {}
-        if self.dual_wallpapers_check.isChecked():
-            config["dual_wallpapers"] = True
-        elif self.desktop_only_check.isChecked():
-            config["desktop"] = True
-        elif self.lockscreen_only_check.isChecked():
-            config["lockscreen"] = True
+        config = {
+            "dual_wallpapers": self.dual_wallpapers_check.isChecked(),
+            "desktop": self.desktop_only_check.isChecked(),
+            "lockscreen": self.lockscreen_only_check.isChecked()
+        }
 
-        if self.wait_spin.value() != 300:
-            config["default_wait"] = self.wait_spin.value()
+        # Always include wait interval to ensure changes reflect immediately
+        config["default_wait"] = self.wait_spin.value()
 
         config["console_font_family"] = self.font_combo.currentFont().family()
         config["console_font_size"] = self.font_size_spin.value()
@@ -220,20 +218,18 @@ class AdvancedSettingsWidget(QWidget):
 
     def get_config(self):
         config = {}
-        if self.extensions_edit.text() != ".jpg,.jpeg,.png,.bmp,.gif,.tiff,.webp,.svg":
-            config["image_extensions"] = self.extensions_edit.text()
-        if self.debug_check.isChecked():
-            config["debug"] = True
-            
-        # Service settings (Linux only)
-        if self.autostart_check and self.autostart_check.isChecked():
-            config["autostart"] = True
-        if self.restart_delay_spin and self.restart_delay_spin.value() != 10:
+        config["image_extensions"] = self.extensions_edit.text()
+        config["debug"] = self.debug_check.isChecked()
+        
+        # Service settings
+        if self.autostart_check:
+            config["autostart"] = self.autostart_check.isChecked()
+        if self.restart_delay_spin:
             config["restart_delay"] = self.restart_delay_spin.value()
-        if self.logs_refresh_spin and self.logs_refresh_spin.value() != 5:
+        if self.logs_refresh_spin:
             config["logs_refresh_interval"] = self.logs_refresh_spin.value()
-        if self.auto_update_logs_check and self.auto_update_logs_check.isChecked():
-            config["auto_update_logs"] = True
+        if self.auto_update_logs_check:
+            config["auto_update_logs"] = self.auto_update_logs_check.isChecked()
 
         return config
 

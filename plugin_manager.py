@@ -11,6 +11,10 @@ import sys
 import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import subprocess
+
+# Windows specific flag to hide console window when spawning processes
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == 'win32' else 0
 
 # Constants for frozen applications
 if getattr(sys, "frozen", False):
@@ -179,7 +183,7 @@ class PluginManager:
             cmd = [sys.executable, str(plugin_path), "--config", config_json]
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, creationflags=CREATE_NO_WINDOW)
             try:
                 output = json.loads(result.stdout)
                 if isinstance(output, dict) and result.stderr:

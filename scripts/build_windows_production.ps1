@@ -4,8 +4,8 @@ Write-Host "Cleaning previous builds..."
 if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
 if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
 
-Write-Host "Building Clockwork Orange for Windows..."
-pyinstaller --noconfirm --clean --onefile --name "clockwork-orange" `
+Write-Host "Building Clockwork Orange for Windows (Production - No Console)..."
+pyinstaller --noconfirm --clean --onefile --noconsole --name "clockwork-orange" `
     --add-data "img;img" `
     --add-data "plugins;plugins" `
     --add-data "gui/icons;gui/icons" `
@@ -25,7 +25,7 @@ pyinstaller --noconfirm --clean --onefile --name "clockwork-orange" `
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build successful! Executable is in dist/clockwork-orange.exe"
-    Write-Host "This is a DEBUG build (with console window for troubleshooting)"
+    Write-Host "This is a PRODUCTION build (no console window)"
 }
 else {
     Write-Host "Build failed!"

@@ -12,19 +12,21 @@ from pathlib import Path
 
 
 class ActivityLogWidget(QWidget):
-    """Widget to display application activity logs on Windows."""
+    """Widget to display real-time activity logs on Windows."""
+    
+    # Maximum number of log lines to keep in memory
+    MAX_LOG_LINES = 1000
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.log_buffer = []
-        self.max_buffer_size = 1000
         self.init_ui()
         self.setup_logging()
         
         # Auto-refresh timer
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.refresh_logs)
-        self.refresh_timer.start(2000)  # Refresh every 2 seconds
+        self.refresh_timer.start(500)  # Refresh every 500ms
         
     def init_ui(self):
         """Initialize the UI components."""
@@ -32,12 +34,13 @@ class ActivityLogWidget(QWidget):
         
         # Header
         header_layout = QHBoxLayout()
-        header_label = QLabel("<b>Application Activity Log</b>")
+        header_label = QLabel("Application Activity")
+        header_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         header_layout.addWidget(header_label)
         header_layout.addStretch()
         
         # Control buttons
-        clear_btn = QPushButton("Clear Log")
+        clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear_log)
         refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self.refresh_logs)
@@ -67,7 +70,7 @@ class ActivityLogWidget(QWidget):
     def setup_logging(self):
         """Set up logging handler to capture application logs."""
         # Create a custom handler that writes to our buffer
-        handler = LogBufferHandler(self.log_buffer, self.max_buffer_size)
+        handler = LogBufferHandler(self.log_buffer, self.MAX_LOG_LINES)
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', 
                                      datefmt='%H:%M:%S')

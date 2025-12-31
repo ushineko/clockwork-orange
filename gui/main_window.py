@@ -79,22 +79,77 @@ class WallpaperWorker(QThread):
             self.log_message.emit(f"Collected {len(sources)} sources")
             
             if sources:
-                all_images = []
-                for source in sources:
-                    if source.is_dir():
-                        all_images.extend(list(source.glob("*.jpg")) + list(source.glob("*.png")))
-                    elif source.is_file():
-                        all_images.append(source)
+                # Check if we have multiple monitors (Windows only)
+                import platform_utils
+                monitor_count = platform_utils.get_monitor_count() if platform_utils.is_windows() else 1
                 
-                if all_images:
-                    image = random.choice(all_images)
-                    result = platform_utils.set_wallpaper(image)
-                    if result:
-                        self.log_message.emit(f"✓ Wallpaper changed: {image.name}")
+                if monitor_count > 1:
+                    self.log_message.emit(f"Multi-monitor setup detected: {monitor_count} monitors")
+                    
+                    # Fair selection: shuffle sources first, then pick from first valid source
+                    # This ensures each plugin has equal chance regardless of image count
+                    import random
+                    random.shuffle(sources)
+                    
+                    # Collect images for each monitor
+                    selected_images = []
+                    for monitor_idx in range(monitor_count):
+                        # Try each source until we find one with images
+                        for source in sources:
+                            all_images = []
+                            if source.is_dir():
+                                all_images.extend(list(source.glob("*.jpg")) + list(source.glob("*.png")))
+                            elif source.is_file():
+                                all_images.append(source)
+                            
+                            if all_images:
+                                # Pick random image from this source
+                                image = random.choice(all_images)
+                                selected_images.append(image)
+                                self.log_message.emit(f"Monitor {monitor_idx + 1}: {image.name} from {source.name}")
+                                break
+                        
+                        # If we couldn't find enough images, reuse sources
+                        if len(selected_images) <= monitor_idx:
+                            self.log_message.emit(f"Warning: Not enough images, reusing sources")
+                            break
+                    
+                    # Set wallpapers for all monitors
+                    if selected_images:
+                        result = platform_utils.set_wallpaper_multi_monitor(selected_images)
+                        if result:
+                            self.log_message.emit(f"✓ Wallpapers set for {len(selected_images)} monitor(s)")
+                        else:
+                            self.log_message.emit("✗ Failed to set multi-monitor wallpapers")
                     else:
-                        self.log_message.emit("✗ Failed to set wallpaper")
+                        self.log_message.emit("✗ No images found for multi-monitor setup")
                 else:
-                    self.log_message.emit("✗ No images found in sources")
+                    # Single monitor: use original logic
+                    # Fair selection: shuffle sources first, then pick from first valid source
+                    import random
+                    random.shuffle(sources)
+                    
+                    selected_image = None
+                    for source in sources:
+                        all_images = []
+                        if source.is_dir():
+                            all_images.extend(list(source.glob("*.jpg")) + list(source.glob("*.png")))
+                        elif source.is_file():
+                            all_images.append(source)
+                        
+                        if all_images:
+                            selected_image = random.choice(all_images)
+                            self.log_message.emit(f"Selected from source: {source.name}")
+                            break
+                    
+                    if selected_image:
+                        result = platform_utils.set_wallpaper(selected_image)
+                        if result:
+                            self.log_message.emit(f"✓ Wallpaper changed: {selected_image.name}")
+                        else:
+                            self.log_message.emit("✗ Failed to set wallpaper")
+                    else:
+                        self.log_message.emit("✗ No images found in any sources")
             else:
                 self.log_message.emit("No wallpaper sources available")
                 
@@ -371,6 +426,18 @@ class ClockworkOrangeGUI(QMainWindow):
         self._init_wallpaper_timer()
 
 
+    def closeEvent(self, event):
+        """Override close event to minimize to tray instead of exiting."""
+        event.ignore()
+        self.hide()
+        if self.tray_icon and self.tray_icon.isVisible():
+            self.tray_icon.showMessage(
+                "Clockwork Orange",
+                "Application minimized to tray. Wallpaper changes continue in background.",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000
+            )
+    
     def _init_wallpaper_timer(self):
         """Initialize timer for automatic wallpaper changes."""
         self.wallpaper_worker = None
@@ -410,6 +477,12 @@ class ClockworkOrangeGUI(QMainWindow):
             from datetime import datetime
             timestamp = datetime.now().strftime("%H:%M:%S")
             self.service_page.log_buffer.append(f"{timestamp} {message}")
+            
+            # Trim buffer if too large (prevent memory bloat)
+            max_lines = getattr(self.service_page, 'MAX_LOG_LINES', 1000)
+            if len(self.service_page.log_buffer) > max_lines:
+                self.service_page.log_buffer.pop(0)
+            
             self.service_page.refresh_logs()
         
     
@@ -806,8 +879,13 @@ class ClockworkOrangeGUI(QMainWindow):
                 )
 
     def _on_config_changed(self):
+        """Handle configuration changes by updating UI and behavior."""
+        # Update wallpaper timer interval
+        self._update_timer_interval()
+        
+        # Other pages might need updates here in the future
         if self.tray_icon:
-            pass  # Silent update or user feedback handled by auto-save trigger
+            pass
 
 
 def main():
