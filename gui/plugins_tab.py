@@ -1040,7 +1040,6 @@ class SinglePluginWidget(QWidget):
         images_and_times.sort(key=lambda x: x[1], reverse=True)
         self.review_images = [x[0] for x in images_and_times]
 
-
         if not self.review_images:
             self.preview_label.setText("No images found for review.")
             self.review_index = 0

@@ -1,12 +1,12 @@
-import win32serviceutil
-import win32service
-import win32event
-import servicemanager
-import socket
 import sys
 import time
-import os
 from pathlib import Path
+
+import servicemanager
+import win32event
+import win32service
+import win32serviceutil
+
 
 class ClockworkOrangeService(win32serviceutil.ServiceFramework):
     _svc_name_ = "ClockworkOrangeTestService"
@@ -35,9 +35,11 @@ class ClockworkOrangeService(win32serviceutil.ServiceFramework):
 
     def SvcDoRun(self):
         self.log("Service Starting...")
-        servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE,
-                              servicemanager.PYS_SERVICE_STARTED,
-                              (self._svc_name_, ''))
+        servicemanager.LogMsg(
+            servicemanager.EVENTLOG_INFORMATION_TYPE,
+            servicemanager.PYS_SERVICE_STARTED,
+            (self._svc_name_, ""),
+        )
         self.main()
 
     def main(self):
@@ -48,12 +50,13 @@ class ClockworkOrangeService(win32serviceutil.ServiceFramework):
             if rc == win32event.WAIT_OBJECT_0:
                 self.log("Stop event triggered loop exit")
                 break
-            
+
             self.log("Service Tick")
-            
+
         self.log("Service Stopped")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     if len(sys.argv) == 1:
         servicemanager.Initialize()
         servicemanager.PrepareToHostSingle(ClockworkOrangeService)

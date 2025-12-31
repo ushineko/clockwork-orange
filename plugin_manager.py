@@ -7,14 +7,14 @@ import contextlib
 import importlib.util
 import io
 import json
+import subprocess
 import sys
 import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import subprocess
 
 # Windows specific flag to hide console window when spawning processes
-CREATE_NO_WINDOW = 0x08000000 if sys.platform == 'win32' else 0
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 # Constants for frozen applications
 if getattr(sys, "frozen", False):
@@ -44,9 +44,8 @@ class PluginManager:
         # In frozen state, we might rely on known imports, but iterating dir works
         # if PyInstaller collected them as data or separate files.
         # Ideally, we include them as a package.
-        
-        # print(f"[DEBUG] Discovering plugins in {self.plugins_dir}")
 
+        # print(f"[DEBUG] Discovering plugins in {self.plugins_dir}")
 
         for item in self.plugins_dir.iterdir():
             if (
@@ -91,7 +90,7 @@ class PluginManager:
     def _get_plugin_instance(self, plugin_name: str):
         """Load module and return the plugin class instance."""
         module = self._load_plugin_module(plugin_name)
-        
+
         # Find the class that inherits from PluginBase
         # We need to import PluginBase to check inheritance
         from plugins.base import PluginBase
@@ -104,7 +103,7 @@ class PluginManager:
                 and attr is not PluginBase
             ):
                 return attr()
-        
+
         raise ValueError(f"No valid PluginBase subclass found in {plugin_name}")
 
     def get_plugin_schema(self, plugin_name: str) -> Dict[str, Any]:
@@ -121,7 +120,7 @@ class PluginManager:
         try:
             instance = self._get_plugin_instance(plugin_name)
             return instance.get_description()
-        except Exception as e:
+        except Exception:
             # print(f"[ERROR] Failed to get description for plugin {plugin_name}: {e}")
             return ""
 
@@ -135,11 +134,13 @@ class PluginManager:
         """
         try:
             instance = self._get_plugin_instance(plugin_name)
-            
+
             # Capture stdout and stderr
             log_capture = io.StringIO()
-            
-            with contextlib.redirect_stderr(log_capture), contextlib.redirect_stdout(log_capture):
+
+            with contextlib.redirect_stderr(log_capture), contextlib.redirect_stdout(
+                log_capture
+            ):
                 try:
                     result = instance.run(config)
                 except Exception as e:
@@ -147,18 +148,18 @@ class PluginManager:
                     result = {"status": "error", "message": str(e)}
 
             logs = log_capture.getvalue()
-            
+
             # Attach logs to result
             if isinstance(result, dict):
                 result["logs"] = logs
-            
+
             return result
 
         except Exception as e:
             return {
-                "status": "error", 
+                "status": "error",
                 "message": f"Plugin execution failed: {e}",
-                "logs": str(e)
+                "logs": str(e),
             }
 
     def execute_plugin(
@@ -169,42 +170,57 @@ class PluginManager:
         Spawns a subprocess to avoid blocking the main thread.
         """
         import subprocess
+
         config_json = json.dumps(config)
-        
+
         # Determine command
         if getattr(sys, "frozen", False):
             # Frozen: Call app exe with --run-plugin
-            cmd = [sys.executable, "--run-plugin", plugin_name, "--plugin-config", config_json]
+            cmd = [
+                sys.executable,
+                "--run-plugin",
+                plugin_name,
+                "--plugin-config",
+                config_json,
+            ]
         else:
             # Dev: Call python with plugin file
             plugin_path = self.get_plugin_path(plugin_name)
             if not plugin_path:
-                 return {"status": "error", "message": f"Plugin not found: {plugin_name}"}
+                return {
+                    "status": "error",
+                    "message": f"Plugin not found: {plugin_name}",
+                }
             cmd = [sys.executable, str(plugin_path), "--config", config_json]
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, creationflags=CREATE_NO_WINDOW)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                creationflags=CREATE_NO_WINDOW,
+            )
             try:
                 output = json.loads(result.stdout)
                 if isinstance(output, dict) and result.stderr:
-                     output["logs"] = result.stderr
+                    output["logs"] = result.stderr
                 return output
             except json.JSONDecodeError:
                 return {
-                    "status": "error", 
-                    "message": f"Invalid output: {result.stdout}", 
+                    "status": "error",
+                    "message": f"Invalid output: {result.stdout}",
                     "logs": result.stderr,
-                    "raw_output": result.stdout
+                    "raw_output": result.stdout,
                 }
         except subprocess.CalledProcessError as e:
             return {
                 "status": "error",
                 "message": f"Execution failed: {e.stderr}",
-                "logs": e.stderr
+                "logs": e.stderr,
             }
         except Exception as e:
-             return {"status": "error", "message": str(e)}
-
+            return {"status": "error", "message": str(e)}
 
     def execute_plugin_stream(self, plugin_name: str, config: Dict[str, Any]):
         """
@@ -212,16 +228,23 @@ class PluginManager:
         Yields strings (log lines) or the final result dict.
         """
         import subprocess
+
         config_json = json.dumps(config)
-        
+
         # Determine command
         if getattr(sys, "frozen", False):
-            cmd = [sys.executable, "--run-plugin", plugin_name, "--plugin-config", config_json]
+            cmd = [
+                sys.executable,
+                "--run-plugin",
+                plugin_name,
+                "--plugin-config",
+                config_json,
+            ]
         else:
             plugin_path = self.get_plugin_path(plugin_name)
             if not plugin_path:
-                 yield {"status": "error", "message": f"Plugin not found: {plugin_name}"}
-                 return
+                yield {"status": "error", "message": f"Plugin not found: {plugin_name}"}
+                return
             cmd = [sys.executable, str(plugin_path), "--config", config_json]
 
         # Use Popen to stream output
@@ -263,7 +286,7 @@ class PluginManager:
                         "logs": "See above logs",
                     }
         except Exception as e:
-             yield {"status": "error", "message": str(e)}
+            yield {"status": "error", "message": str(e)}
 
 
 if __name__ == "__main__":
@@ -272,6 +295,3 @@ if __name__ == "__main__":
     print(f"Available plugins: {manager.get_available_plugins()}")
     if "local" in manager.get_available_plugins():
         print("Schema for local:", manager.get_plugin_schema("local"))
-
-
-

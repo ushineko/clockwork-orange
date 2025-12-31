@@ -118,7 +118,7 @@ class BasicSettingsWidget(QWidget):
         config = {
             "dual_wallpapers": self.dual_wallpapers_check.isChecked(),
             "desktop": self.desktop_only_check.isChecked(),
-            "lockscreen": self.lockscreen_only_check.isChecked()
+            "lockscreen": self.lockscreen_only_check.isChecked(),
         }
 
         # Always include wait interval to ensure changes reflect immediately
@@ -155,6 +155,7 @@ class AdvancedSettingsWidget(QWidget):
 
         # Service-related settings (Linux only)
         import platform_utils
+
         if not platform_utils.is_windows():
             # Auto-start
             self.autostart_check = QCheckBox("Start service automatically on login")
@@ -174,7 +175,7 @@ class AdvancedSettingsWidget(QWidget):
 
             self.auto_update_logs_check = QCheckBox("Auto-update service logs")
             layout.addRow("Auto-update Logs:", self.auto_update_logs_check)
-            
+
             # Connect service-related signals
             self.autostart_check.toggled.connect(self.setting_changed.emit)
             self.restart_delay_spin.valueChanged.connect(self.setting_changed.emit)
@@ -193,14 +194,13 @@ class AdvancedSettingsWidget(QWidget):
 
         self.setLayout(layout)
 
-
     def update_from_config(self):
         extensions = self.config_data.get(
             "image_extensions", ".jpg,.jpeg,.png,.bmp,.gif,.tiff,.webp,.svg"
         )
         self.extensions_edit.setText(extensions)
         self.debug_check.setChecked(self.config_data.get("debug", False))
-        
+
         # Service settings (Linux only)
         if self.autostart_check:
             self.autostart_check.setChecked(self.config_data.get("autostart", False))
@@ -215,12 +215,11 @@ class AdvancedSettingsWidget(QWidget):
                 self.config_data.get("auto_update_logs", False)
             )
 
-
     def get_config(self):
         config = {}
         config["image_extensions"] = self.extensions_edit.text()
         config["debug"] = self.debug_check.isChecked()
-        
+
         # Service settings
         if self.autostart_check:
             config["autostart"] = self.autostart_check.isChecked()

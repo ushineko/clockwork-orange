@@ -1,16 +1,15 @@
 #!/usr/bin/env python
 import argparse
 import configparser
+import ctypes
 import json
 import mimetypes
 import random
 import signal
 import subprocess
 import sys
-import ctypes
 import tempfile
 import time
-import platform_utils
 from pathlib import Path
 from threading import Event
 
@@ -19,6 +18,7 @@ import yaml
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+import platform_utils
 from plugin_manager import PluginManager
 
 # GUI imports (optional)
@@ -136,7 +136,8 @@ def download_and_set_wallpaper(url: str):
         try:
             p.write_bytes(response.content)
             print(
-                f"[DEBUG] Successfully wrote {len(response.content)} bytes to temporary file"
+                f"[DEBUG] Successfully wrote {len(response.content)} "
+                "bytes to temporary file"
             )
         except Exception as e:
             print(f"[ERROR] Failed to write image to temporary file: {e}")
@@ -466,10 +467,9 @@ def load_config_file():
                     return yaml.safe_load(f) or {}
             except Exception as e:
                 print(f"[ERROR] Failed to load config file {config_path}: {e}")
-    
+
     # Defaults handled by caller
     return {}
-
 
 
 def merge_config_with_args(config, args):
@@ -754,36 +754,39 @@ def main():
         sys.argv.append("--gui")
 
     # Set AppUserModelID on Windows for correct taskbar icon
-    if sys.platform == 'win32':
-        myappid = 'ushineko.clockworkorange.gui.1.0' # arbitrary string
+    if sys.platform == "win32":
+        myappid = "ushineko.clockworkorange.gui.1.0"  # arbitrary string
         try:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
         except Exception:
             pass
 
     start_time = time.time()
-    
+
     parser = _create_argument_parser()
     args = parser.parse_args()
-    
+
     # Only print debug messages if not running a plugin (to keep JSON output clean)
-    if not hasattr(args, 'run_plugin') or not args.run_plugin:
+    if not hasattr(args, "run_plugin") or not args.run_plugin:
         print(f"[DEBUG] Startup initiated at {start_time}")
         print(f"[DEBUG] Arguments parsed in {time.time() - start_time:.4f}s")
-
 
     # Handle Plugin Execution (App-as-Interpreter)
     if args.run_plugin:
         try:
             from plugin_manager import PluginManager
-            
+
             plugin_name = args.run_plugin
             config = {}
             if args.plugin_config:
                 try:
                     config = json.loads(args.plugin_config)
                 except json.JSONDecodeError:
-                    print(json.dumps({"status": "error", "message": "Invalid config JSON"}))
+                    print(
+                        json.dumps(
+                            {"status": "error", "message": "Invalid config JSON"}
+                        )
+                    )
                     sys.exit(1)
 
             # We use the internal method that runs in-process
@@ -807,17 +810,16 @@ def main():
             print(json.dumps(error))
             sys.exit(1)
 
-
     # Handle Self-Test
     if args.self_test:
         print("Running Cloudwork Orange Self-Test...")
         results = {}
-        
+
         # Test 1: Python Info
         print(f"Python: {sys.version}")
         print(f"Platform: {sys.platform}")
         print(f"Frozen: {getattr(sys, 'frozen', False)}")
-        
+
         # Test 2: Critical Imports
         modules = ["ctypes", "sqlite3", "ssl", "PIL", "requests", "yaml", "watchdog"]
         for mod in modules:
@@ -828,10 +830,11 @@ def main():
             except ImportError as e:
                 print(f"[FAIL] Import {mod}: {e}")
                 results[mod] = False
-        
+
         # Test 3: SSL/Network
         try:
             import requests
+
             print("Testing Network/SSL...")
             requests.get("https://www.google.com", timeout=5)
             print("[OK] Network/SSL Request")
@@ -843,17 +846,17 @@ def main():
         # Test 4: Plugins
         try:
             from plugin_manager import PluginManager
+
             pm = PluginManager()
             plugins = pm.get_available_plugins()
             print(f"Plugins Found: {plugins}")
             if not plugins:
-                 print("[WARN] No plugins found!")
+                print("[WARN] No plugins found!")
             results["plugins_count"] = len(plugins)
         except Exception as e:
             print(f"[FAIL] Plugin System: {e}")
-        
-        sys.exit(0 if all(results.values()) else 1)
 
+        sys.exit(0 if all(results.values()) else 1)
 
     # Load configuration file and merge with command line arguments
     config = load_config_file()
@@ -1034,7 +1037,6 @@ Configuration File:
     )
 
     return parser
-
 
 
 def _validate_args(parser, args, has_enabled_plugins):
@@ -1299,10 +1301,10 @@ def _handle_gui_mode(args):
         except Exception as e:
             print(f"[FATAL] GUI Crashed: {e}")
             import traceback
+
             traceback.print_exc()
             input("Press Enter to exit...")
             sys.exit(1)
-
 
 
 def _clean_lockscreen_config():
@@ -1523,10 +1525,6 @@ def _wait_for_next_cycle(config, default_wait, change_event=None):
             if shutdown_requested:
                 break
             time.sleep(1)
-
-
-
-
 
 
 if __name__ == "__main__":

@@ -267,22 +267,22 @@ class ServiceManagerWidget(QWidget):
             self.install_button.setToolTip("Install the service")
             self.uninstall_button.setToolTip("Uninstall the service")
         elif status == "activating":
-             self.status_label.setText("🟡 Service is Starting")
-             self.status_label.setStyleSheet("color: #FFC107;") # Amber
-             self.start_button.setEnabled(False)
-             self.stop_button.setEnabled(True)
-             self.restart_button.setEnabled(False)
-             self.install_button.setEnabled(False)
-             self.uninstall_button.setEnabled(False)
+            self.status_label.setText("🟡 Service is Starting")
+            self.status_label.setStyleSheet("color: #FFC107;")  # Amber
+            self.start_button.setEnabled(False)
+            self.stop_button.setEnabled(True)
+            self.restart_button.setEnabled(False)
+            self.install_button.setEnabled(False)
+            self.uninstall_button.setEnabled(False)
         elif status == "deactivating":
-             self.status_label.setText("🟡 Service is Stopping")
-             self.status_label.setStyleSheet("color: #FFC107;")
-             self.start_button.setEnabled(False)
-             self.stop_button.setEnabled(False)
-             self.restart_button.setEnabled(False)
-             # Probably wait until inactive
-             self.install_button.setEnabled(False)
-             self.uninstall_button.setEnabled(False)
+            self.status_label.setText("🟡 Service is Stopping")
+            self.status_label.setStyleSheet("color: #FFC107;")
+            self.start_button.setEnabled(False)
+            self.stop_button.setEnabled(False)
+            self.restart_button.setEnabled(False)
+            # Probably wait until inactive
+            self.install_button.setEnabled(False)
+            self.uninstall_button.setEnabled(False)
         elif status == "failed":
             self.status_label.setText("⚠️ Service Failed")
             self.status_label.setStyleSheet("color: orange;")
@@ -321,7 +321,9 @@ class ServiceManagerWidget(QWidget):
     def restart_service(self):
         """Restart the service"""
         self._sync_config_to_public()
-        self._wrap_service_action(platform_utils.service_restart, "Restarting service...")
+        self._wrap_service_action(
+            platform_utils.service_restart, "Restarting service..."
+        )
 
     def install_service(self):
         """Install the service"""
@@ -341,19 +343,20 @@ class ServiceManagerWidget(QWidget):
         """Copy user config to public location for service access."""
         if not platform_utils.is_windows():
             return
-            
+
         try:
             user_config = Path.home() / ".config" / "clockwork-orange.yml"
             public_config = Path("C:/Users/Public/clockwork_config.yml")
-            
+
             if user_config.exists():
                 import shutil
+
                 shutil.copy2(user_config, public_config)
                 print(f"[DEBUG] Synced config to {public_config}")
         except Exception as e:
             print(f"[ERROR] Failed to sync config: {e}")
             # Don't show popup as this is background op, just log
-            
+
     def uninstall_service(self):
         """Uninstall the service"""
         try:
@@ -380,7 +383,6 @@ class ServiceManagerWidget(QWidget):
             self.progress_bar.setVisible(False)
             self.refresh_status()
 
-
     def toggle_auto_update(self, enabled):
         """Toggle auto-update for logs"""
         self.auto_update_enabled = enabled
@@ -402,29 +404,28 @@ class ServiceManagerWidget(QWidget):
         try:
             # Use Public logs path on Windows
             if platform_utils.is_windows():
-                 log_path = Path("C:/Users/Public/clockwork_service.log")
-                 if log_path.exists():
-                     with open(log_path, "r") as f:
-                         logs = f.read()[-10000:] # Last 10k chars
-                 else:
-                     logs = "Log file not found."
+                log_path = Path("C:/Users/Public/clockwork_service.log")
+                if log_path.exists():
+                    with open(log_path, "r") as f:
+                        logs = f.read()[-10000:]  # Last 10k chars
+                else:
+                    logs = "Log file not found."
             else:
-                 logs = platform_utils.service_get_logs()
+                logs = platform_utils.service_get_logs()
 
             if not logs or not logs.strip():
 
-                 self.logs_text.setText("No logs found.")
+                self.logs_text.setText("No logs found.")
             else:
-                 self.logs_text.setText(logs)
+                self.logs_text.setText(logs)
 
-                 # Store current scroll position
-                 scrollbar = self.logs_text.verticalScrollBar()
-                 was_at_bottom = scrollbar.value() >= scrollbar.maximum() - 10
+                # Store current scroll position
+                scrollbar = self.logs_text.verticalScrollBar()
+                was_at_bottom = scrollbar.value() >= scrollbar.maximum() - 10
 
-                 # Auto-scroll to bottom if auto-update is enabled or if user was already at bottom
-                 if self.auto_update_enabled or was_at_bottom:
-                     scrollbar.setValue(scrollbar.maximum())
+                # Auto-scroll to bottom if auto-update is enabled or if user was already at bottom
+                if self.auto_update_enabled or was_at_bottom:
+                    scrollbar.setValue(scrollbar.maximum())
 
         except Exception as e:
             self.logs_text.setText(f"Error retrieving logs: {e}")
-
