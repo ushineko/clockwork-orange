@@ -7,19 +7,10 @@ from pathlib import Path
 
 from PyQt6.QtCore import QSize
 from PyQt6.QtGui import QIcon, QPixmap
-from PyQt6.QtWidgets import (
-    QAbstractItemView,
-    QHBoxLayout,
-    QHeaderView,
-    QLabel,
-    QLineEdit,
-    QMessageBox,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView,
+                             QLabel, QLineEdit, QMessageBox, QPushButton,
+                             QTableWidget, QTableWidgetItem, QVBoxLayout,
+                             QWidget)
 
 # Adjust path to import plugins
 sys.path.append(str(Path(__file__).parent.parent))

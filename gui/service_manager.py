@@ -8,19 +8,9 @@ from pathlib import Path
 
 from PyQt6.QtCore import QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (
-    QCheckBox,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QMessageBox,
-    QProgressBar,
-    QPushButton,
-    QSpinBox,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import (QCheckBox, QGroupBox, QHBoxLayout, QLabel,
+                             QMessageBox, QProgressBar, QPushButton, QSpinBox,
+                             QTextEdit, QVBoxLayout, QWidget)
 
 import platform_utils
 

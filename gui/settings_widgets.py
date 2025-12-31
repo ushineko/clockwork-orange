@@ -7,19 +7,9 @@ Extracted from legacy config_manager.py.
 import yaml
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (
-    QCheckBox,
-    QFontComboBox,
-    QFormLayout,
-    QHBoxLayout,
-    QLineEdit,
-    QMessageBox,
-    QPushButton,
-    QSpinBox,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import (QCheckBox, QFontComboBox, QFormLayout,
+                             QHBoxLayout, QLineEdit, QMessageBox, QPushButton,
+                             QSpinBox, QTextEdit, QVBoxLayout, QWidget)
 
 
 class BasicSettingsWidget(QWidget):

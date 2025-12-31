@@ -10,21 +10,10 @@ from pathlib import Path
 import yaml
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
-from PyQt6.QtWidgets import (
-    QApplication,
-    QDialog,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QMenu,
-    QPushButton,
-    QSplitter,
-    QStackedWidget,
-    QSystemTrayIcon,
-    QTreeWidget,
-    QTreeWidgetItem,
-    QTreeWidgetItemIterator,
-)
+from PyQt6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel,
+                             QMainWindow, QMenu, QPushButton, QSplitter,
+                             QStackedWidget, QSystemTrayIcon, QTreeWidget,
+                             QTreeWidgetItem, QTreeWidgetItemIterator)
 from PyQt6.QtWidgets import QVBoxLayout as QVBoxLayoutDialog
 
 from plugin_manager import PluginManager
@@ -33,11 +22,8 @@ from .blacklist_tab import BlacklistTab
 from .history_tab import HistoryTab
 from .plugins_tab import SinglePluginWidget
 from .service_manager import ServiceManagerWidget
-from .settings_widgets import (
-    AdvancedSettingsWidget,
-    BasicSettingsWidget,
-    YamlEditorWidget,
-)
+from .settings_widgets import (AdvancedSettingsWidget, BasicSettingsWidget,
+                               YamlEditorWidget)
 
 
 # Worker thread for wallpaper changes

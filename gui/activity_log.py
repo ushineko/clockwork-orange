@@ -7,14 +7,8 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QTextEdit,
+                             QVBoxLayout, QWidget)
 
 
 class ActivityLogWidget(QWidget):

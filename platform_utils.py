@@ -394,56 +394,56 @@ def get_service_name():
 def service_is_active() -> str:
     """Returns 'active', 'inactive', 'failed', or 'unknown'."""
     if IS_WINDOWS:
-        return _service_is_active_windows()
+        return "inactive"
     else:
         return _service_is_active_linux()
 
 
 def service_get_status_details() -> str:
     if IS_WINDOWS:
-        return _service_get_status_details_windows()
+        return "Windows mode uses System Tray app, not a background service."
     else:
         return _service_get_status_details_linux()
 
 
 def service_start():
     if IS_WINDOWS:
-        return _service_start_windows()
+        pass
     else:
         return _service_start_linux()
 
 
 def service_stop():
     if IS_WINDOWS:
-        return _service_stop_windows()
+        pass
     else:
         return _service_stop_linux()
 
 
 def service_restart():
     if IS_WINDOWS:
-        return _service_restart_windows()
+        pass
     else:
         return _service_restart_linux()
 
 
 def service_install(base_path: Path):
     if IS_WINDOWS:
-        return _service_install_windows(base_path)
+        print("Service installation is not used on Windows. Use the Tray App.")
     else:
         return _service_install_linux(base_path)
 
 
 def service_uninstall():
     if IS_WINDOWS:
-        return _service_uninstall_windows()
+        pass
     else:
         return _service_uninstall_linux()
 
 
 def service_get_logs() -> str:
     if IS_WINDOWS:
-        return _service_get_logs_windows()
+        return "Check console output or %TEMP% for logs."
     else:
         return _service_get_logs_linux()
 
@@ -537,146 +537,6 @@ def _service_get_logs_linux() -> str:
         return result.stdout
     except Exception as e:
         return f"Error retrieving logs: {e}"
-
-
-# --- Windows Service Implementation ---
-
-
-def _service_is_active_windows() -> str:
-    try:
-        import win32service
-        import win32serviceutil
-
-        status = win32serviceutil.QueryServiceStatus(SERVICE_NAME_WINDOWS)[1]
-        if status == win32service.SERVICE_RUNNING:
-            return "active"
-        elif status == win32service.SERVICE_STOPPED:
-            return "inactive"
-        elif status == win32service.SERVICE_START_PENDING:
-            return "activating"
-        elif status == win32service.SERVICE_STOP_PENDING:
-            return "deactivating"
-        else:
-            return "unknown"
-    except Exception:
-        # Service likely not installed
-        return "inactive"  # Or "not-installed"?
-
-
-def _service_get_status_details_windows() -> str:
-    try:
-        import win32service
-        import win32serviceutil
-
-        # Check if installed
-        try:
-            win32serviceutil.QueryServiceStatus(SERVICE_NAME_WINDOWS)
-        except:
-            return "Service not installed."
-
-        status = _service_is_active_windows()
-        return f"Service Status: {status}\\nService Name: {SERVICE_NAME_WINDOWS}"
-    except Exception as e:
-        return str(e)
-
-
-def _service_restart_windows():
-    import win32serviceutil
-
-    win32serviceutil.RestartService(SERVICE_NAME_WINDOWS)
-
-
-def _run_as_admin_windows(exe_path: str, params: str = "") -> bool:
-    """
-    Execute a command with UAC elevation using ShellExecuteW.
-    Returns True if the elevated process was started successfully.
-    """
-    import ctypes
-
-    # ShellExecuteW parameters
-    # lpVerb: "runas" triggers UAC elevation
-    # nShow: SW_SHOWNORMAL = 1
-    return ctypes.windll.shell32.ShellExecuteW(
-        None,  # hwnd
-        "runas",  # lpVerb (run as administrator)
-        exe_path,  # lpFile
-        params,  # lpParameters
-        None,  # lpDirectory
-        1,  # nShowCmd (SW_SHOWNORMAL)
-    ) > 32
-
-
-def _service_install_windows(base_path: Path):
-    if getattr(sys, "frozen", False):
-        exe_path = sys.executable
-        if not _run_as_admin_windows(exe_path, "install"):
-            raise RuntimeError(
-                "Failed to elevate for service installation. User may have cancelled UAC prompt."
-            )
-    else:
-        raise RuntimeError(
-            "Service installation only supported in frozen (exe) mode on Windows."
-        )
-
-
-def _service_uninstall_windows():
-    if getattr(sys, "frozen", False):
-        exe_path = sys.executable
-        if not _run_as_admin_windows(exe_path, "remove"):
-            raise RuntimeError(
-                "Failed to elevate for service uninstallation. User may have cancelled UAC prompt."
-            )
-    else:
-        raise RuntimeError(
-            "Service uninstallation only supported in frozen (exe) mode on Windows."
-        )
-
-
-def _service_start_windows():
-    if getattr(sys, "frozen", False):
-        exe_path = sys.executable
-        if not _run_as_admin_windows(exe_path, "start"):
-            raise RuntimeError(
-                "Failed to elevate for service start. User may have cancelled UAC prompt."
-            )
-    else:
-        import win32serviceutil
-
-        win32serviceutil.StartService(SERVICE_NAME_WINDOWS)
-
-
-def _service_stop_windows():
-    if getattr(sys, "frozen", False):
-        exe_path = sys.executable
-        if not _run_as_admin_windows(exe_path, "stop"):
-            raise RuntimeError(
-                "Failed to elevate for service stop. User may have cancelled UAC prompt."
-            )
-    else:
-        import win32serviceutil
-
-        win32serviceutil.StopService(SERVICE_NAME_WINDOWS)
-
-
-def _service_get_logs_windows() -> str:
-    # Windows doesn't have journalctl.
-    # We can read from Event Log or a log file.
-    # Our implementation plan wrote to a log file in home directory.
-    # Let's assume standard log file location.
-
-    log_file = (
-        Path.home() / "clockwork_service_test.log"
-    )  # Make this consistent with service implementation
-    if log_file.exists():
-        try:
-            # Read last 50 lines
-            with open(log_file, "r") as f:
-                lines = f.readlines()
-            return "".join(lines[-50:])
-        except Exception as e:
-            return f"Error reading log file: {e}"
-    else:
-        return "No log file found."
 
 
 # --- Instance Locking ---

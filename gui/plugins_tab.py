@@ -7,31 +7,14 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import QFileSystemWatcher, Qt, QThread, QUrl, pyqtSignal
-from PyQt6.QtGui import QColor, QDesktopServices, QFont, QPainter, QPen, QPixmap
-from PyQt6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QDialog,
-    QDialogButtonBox,
-    QFileDialog,
-    QFormLayout,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
-    QMessageBox,
-    QProgressBar,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QSpinBox,
-    QSplitter,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtGui import (QColor, QDesktopServices, QFont, QPainter, QPen,
+                         QPixmap)
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+                             QFileDialog, QFormLayout, QGroupBox, QHBoxLayout,
+                             QLabel, QLineEdit, QListWidget, QListWidgetItem,
+                             QMessageBox, QProgressBar, QPushButton,
+                             QScrollArea, QSizePolicy, QSpinBox, QSplitter,
+                             QTextEdit, QVBoxLayout, QWidget)
 
 # Ensure we can import the plugin manager
 sys.path.append(str(Path(__file__).parent.parent))
