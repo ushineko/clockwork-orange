@@ -1,0 +1,7 @@
+PyQt6
+Pillow
+requests
+PyYAML
+watchdog
+pywin32
+pyinstaller
