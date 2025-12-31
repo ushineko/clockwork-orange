@@ -50,7 +50,7 @@ function Get-SSHAgent {
 }
 
 function Start-SSHAgent {
-    Write-Host "No active ssh-agent found. Starting a new one..." -ForegroundColor Cyan
+    # Write-Host "No active ssh-agent found. Starting a new one..." -ForegroundColor Cyan
     $output = bash -c "ssh-agent -s"
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to start ssh-agent."
@@ -96,18 +96,7 @@ if ([string]::IsNullOrWhiteSpace($command)) {
 }
 
 # Check if we need keys and if we have them
-if (-not $agent.HasKeys) {
-    # Check if the command is trying to add keys (ssh-add)
-    # Simple check: does the command start with "ssh-add" or contains " ssh-add"
-    $isAddCommand = ($args[0] -eq "ssh-add")
-    
-    if (-not $isAddCommand) {
-        Write-Error "The active ssh-agent ($($agent.Socket)) has no identities."
-        Write-Error "Please run the following command first to add your SSH key:"
-        Write-Error "    .\scripts\bash-ssh.ps1 ssh-add <path-to-key>"
-        exit 1
-    }
-}
+
 
 # Escape double quotes in the command for the bash string
 $escaped_command = $command -replace '"', '\"'
