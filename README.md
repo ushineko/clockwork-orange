@@ -1,8 +1,13 @@
 # clockwork-orange
 
-A Python script for managing wallpapers and lock screen backgrounds on **KDE Plasma 6 only**. The script supports setting wallpapers from URLs, local files, or random selection from directories, with options for both desktop and lock screen backgrounds.
+A Python script for managing wallpapers and lock screen backgrounds, originally designed for **KDE Plasma 6** and now supporting **Windows 10/11**. The script supports setting wallpapers from URLs, local files, or random selection from directories, with options for both desktop and lock screen backgrounds.
 
-> **⚠️ IMPORTANT:** This script is designed specifically for KDE Plasma 6 and requires `qdbus6` and `kwriteconfig6` commands. It will not work with older KDE versions.
+> **⚠️ IMPORTANT:**
+> *   **Linux**: Requires KDE Plasma 6 (`qdbus6`, `kwriteconfig6`).
+> *   **Windows**: Setup requires Python 3.10+ or the frozen executable.
+>
+> **🏗️ Windows Support (Beta):** We now have experimental support for Windows 10/11!
+> Builds are available via **GitHub Actions** (check the "Actions" tab -> "Build Windows" -> "Artifacts"). Detailed instructions are in `WALKTHROUGH.md`. Note that this feature is **experimental** and still under active testing.
 
 *Clockwork Orange: Our Choice Is Your Imperative (tm)*
 
