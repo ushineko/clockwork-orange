@@ -485,12 +485,15 @@ class ClockworkOrangeGUI(QMainWindow):
         if (
             hasattr(self, "service_page")
             and self.service_page
-            and hasattr(self.service_page, "log_buffer")
         ):
-            self.service_page.log_buffer.append(
-                f"Wallpaper timer: every {interval_seconds} seconds"
-            )
-            self.service_page.refresh_logs()
+            message = f"Wallpaper timer: every {interval_seconds} seconds"
+            
+            if hasattr(self.service_page, "add_log_message"):
+                 self.service_page.add_log_message(message)
+            elif hasattr(self.service_page, "log_buffer"):
+                self.service_page.log_buffer.append(message)
+                if hasattr(self.service_page, "refresh_logs"):
+                    self.service_page.refresh_logs()
 
     def _trigger_wallpaper_change(self):
         """Trigger wallpaper change in background thread."""
@@ -508,19 +511,26 @@ class ClockworkOrangeGUI(QMainWindow):
         if (
             hasattr(self, "service_page")
             and self.service_page
-            and hasattr(self.service_page, "log_buffer")
         ):
             from datetime import datetime
 
             timestamp = datetime.now().strftime("%H:%M:%S")
-            self.service_page.log_buffer.append(f"{timestamp} {message}")
+            full_message = f"{timestamp} {message}"
+            
+            # Check for new method (ActivityLogWidget)
+            if hasattr(self.service_page, "add_log_message"):
+                 self.service_page.add_log_message(full_message)
+            # Fallback for ServiceManagerWidget (Linux) or older setup
+            elif hasattr(self.service_page, "log_buffer"):
+                self.service_page.log_buffer.append(full_message)
 
-            # Trim buffer if too large (prevent memory bloat)
-            max_lines = getattr(self.service_page, "MAX_LOG_LINES", 1000)
-            if len(self.service_page.log_buffer) > max_lines:
-                self.service_page.log_buffer.pop(0)
+                # Trim buffer if too large (prevent memory bloat)
+                max_lines = getattr(self.service_page, "MAX_LOG_LINES", 1000)
+                if len(self.service_page.log_buffer) > max_lines:
+                    self.service_page.log_buffer.pop(0)
 
-            self.service_page.refresh_logs()
+                if hasattr(self.service_page, "refresh_logs"):
+                    self.service_page.refresh_logs()
 
     def toggle_sidebar(self):
         """Toggle visibility of the sidebar."""

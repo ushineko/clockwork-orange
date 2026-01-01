@@ -108,6 +108,12 @@ class ActivityLogWidget(QWidget):
                 f"Last updated: {self._get_timestamp()} | {current_count} entries"
             )
 
+
+    def add_log_message(self, message):
+        """Add a log message directly to the queue."""
+        self.log_queue.put(message)
+        self.refresh_logs()
+
     def clear_log(self):
         """Clear the log buffer and display."""
         # Clear the queue first
