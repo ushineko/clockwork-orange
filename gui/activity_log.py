@@ -3,6 +3,7 @@
 Activity Log Widget for Windows - shows wallpaper switching activity and logs.
 """
 import logging
+import queue
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
@@ -19,7 +20,7 @@ class ActivityLogWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.log_buffer = []
+        self.log_queue = queue.Queue()
         self.init_ui()
         self.setup_logging()
 
@@ -42,6 +43,8 @@ class ActivityLogWidget(QWidget):
         # Control buttons
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear_log)
+        # Refresh button is less useful now that it's incremental, but keep for manual trigger if needed
+        # or maybe just remove it? The user UI might expect it. Let's keep it but it just processes queue.
         refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self.refresh_logs)
 
@@ -53,6 +56,9 @@ class ActivityLogWidget(QWidget):
         self.log_display = QTextEdit()
         self.log_display.setReadOnly(True)
         self.log_display.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        
+        # Native limiting prevents flashing from full rewrites
+        self.log_display.document().setMaximumBlockCount(self.MAX_LOG_LINES)
 
         # Use monospace font for logs
         font = QFont("Consolas", 9)
@@ -69,8 +75,8 @@ class ActivityLogWidget(QWidget):
 
     def setup_logging(self):
         """Set up logging handler to capture application logs."""
-        # Create a custom handler that writes to our buffer
-        handler = LogBufferHandler(self.log_buffer, self.MAX_LOG_LINES)
+        # Create a custom handler that writes to our queue
+        handler = LogBufferHandler(self.log_queue)
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
             "%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"
@@ -81,25 +87,36 @@ class ActivityLogWidget(QWidget):
         logging.getLogger().addHandler(handler)
 
     def refresh_logs(self):
-        """Refresh the log display with current buffer contents."""
-        if self.log_buffer:
-            self.log_display.setPlainText("\n".join(self.log_buffer))
-            # Scroll to bottom
+        """Refresh the log display by appending new items from the queue."""
+        has_updates = False
+        while not self.log_queue.empty():
+            try:
+                msg = self.log_queue.get_nowait()
+                self.log_display.append(msg)
+                has_updates = True
+            except queue.Empty:
+                break
+        
+        if has_updates:
+            # Scroll to bottom if we added content
             scrollbar = self.log_display.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
 
+            # Update status
+            current_count = self.log_display.document().blockCount()
             self.status_label.setText(
-                f"Last updated: {self._get_timestamp()} | {len(self.log_buffer)} entries"
+                f"Last updated: {self._get_timestamp()} | {current_count} entries"
             )
-        else:
-            self.log_display.setPlainText(
-                "No activity yet. Waiting for wallpaper changes..."
-            )
-            self.status_label.setText("No activity")
 
     def clear_log(self):
         """Clear the log buffer and display."""
-        self.log_buffer.clear()
+        # Clear the queue first
+        while not self.log_queue.empty():
+            try:
+                self.log_queue.get_nowait()
+            except queue.Empty:
+                break
+        
         self.log_display.clear()
         self.status_label.setText("Log cleared")
         logging.info("Activity log cleared by user")
@@ -112,21 +129,16 @@ class ActivityLogWidget(QWidget):
 
 
 class LogBufferHandler(logging.Handler):
-    """Custom logging handler that writes to a buffer."""
+    """Custom logging handler that writes to a thread-safe queue."""
 
-    def __init__(self, buffer, max_size):
+    def __init__(self, log_queue):
         super().__init__()
-        self.buffer = buffer
-        self.max_size = max_size
+        self.log_queue = log_queue
 
     def emit(self, record):
-        """Emit a log record to the buffer."""
+        """Emit a log record to the queue."""
         try:
             msg = self.format(record)
-            self.buffer.append(msg)
-
-            # Trim buffer if too large
-            if len(self.buffer) > self.max_size:
-                self.buffer.pop(0)
+            self.log_queue.put(msg)
         except Exception:
             self.handleError(record)
