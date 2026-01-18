@@ -352,6 +352,14 @@ To integrate with your system launcher (install `.desktop` file):
 
 After installation, you can launch "Clockwork Orange" from your application menu or pin it to your taskbar.
 
+## AI Wallpapers (Stable Diffusion)
+To use the local AI generation plugin, you must install the required dependencies (approx 4GB).
+Graphics card (GPU) highly recommended.
+
+```bash
+./scripts/setup_stable_diffusion.sh
+```
+
 ## Running as a Background Service
 
 ### Option 1: Systemd User Service (Recommended)

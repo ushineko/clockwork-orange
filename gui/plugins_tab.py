@@ -900,6 +900,12 @@ class SinglePluginWidget(QWidget):
         self.run_btn.setEnabled(is_runnable)
         self.reset_btn.setEnabled(is_runnable)
 
+        # Override texts for Stable Diffusion
+        if plugin_name == "stable_diffusion":
+            self.run_btn.setText("Generate")
+        else:
+            self.run_btn.setText("Download Now")
+
     def get_config(self):
         """Get the configuration for this plugin."""
         config = {}
@@ -983,13 +989,9 @@ class SinglePluginWidget(QWidget):
             finally:
                 self.scan_for_review()
 
-    # display_result, update_progress removed
-
     def display_preview_image(self, path):
         pixmap = QPixmap(path)
-        if not pixmap.isNull():
-            self.preview_label.setPixmap(pixmap)
-
+    
     def scan_for_review(self):
         """Scan download directory for images to review."""
         current_config = self.get_config()
@@ -1099,8 +1101,12 @@ class SinglePluginWidget(QWidget):
 
     def update_review_ui(self):
         count = len(self.blacklisted_indices)
-        self.apply_blacklist_btn.setText(f"Apply Blacklist ({count})")
+        if self.plugin_name == "stable_diffusion":
+            self.apply_blacklist_btn.setText(f"Delete Now ({count})")
+        else:
+            self.apply_blacklist_btn.setText(f"Apply Blacklist ({count})")
         self.apply_blacklist_btn.setEnabled(count > 0)
+
 
     def keyPressEvent(self, event):
         if not self.review_images:
@@ -1129,22 +1135,39 @@ class SinglePluginWidget(QWidget):
         if not self.blacklisted_indices:
             return
 
-        targets = [str(self.review_images[i]) for i in self.blacklisted_indices]
+        try:
+            targets = [str(self.review_images[i]) for i in self.blacklisted_indices]
 
-        # Create a temp config to run the blacklist action
-        current_config = self.get_config()
-        current_config["action"] = "process_blacklist"
-        current_config["targets"] = targets
-        current_config["force"] = True
+            # Create a temp config to run the blacklist action
+            current_config = self.get_config()
+            
+            if self.plugin_name == "stable_diffusion":
+                # For SD, we just want to delete, not blacklist
+                current_config["action"] = "delete_files"
+                title = "Deleting Files"
+            else:
+                current_config["action"] = "process_blacklist"
+                title = "Applying Blacklist"
+                
+            current_config["targets"] = targets
+            current_config["force"] = True
 
-        dialog = PluginExecutionDialog(
-            self.plugin_manager,
-            self.plugin_name,
-            current_config,
-            title="Applying Blacklist",
-            parent=self,
-        )
-        dialog.exec()
+            dialog = PluginExecutionDialog(
+                self.plugin_manager,
+                self.plugin_name,
+                current_config,
+                title=title,
+                parent=self,
+            )
+            dialog.exec()
+
+            # Rescan to refresh list
+            self.scan_for_review()
+        
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to apply blacklist: {e}")
+            import traceback
+            traceback.print_exc()
 
         # Rescan to refresh list
         self.scan_for_review()
