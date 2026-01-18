@@ -353,13 +353,35 @@ To integrate with your system launcher (install `.desktop` file):
 After installation, you can launch "Clockwork Orange" from your application menu or pin it to your taskbar.
 
 ## AI Wallpapers (Stable Diffusion)
-To use the local AI generation plugin, you must install the required dependencies (approx 4GB).
-Graphics card (GPU) highly recommended.
+The built-in Stable Diffusion plugin allows you to generate unique, high-quality wallpapers locally on your machine.
+
+### Setup
+To use the local AI generation plugin, you must install the required dependencies (approx 4GB). A dedicated virtual environment will be created to avoid conflicts with your system Python.
+Graphics card (GPU) highly recommended (NVIDIA/CUDA).
 
 ```bash
 ./scripts/setup_stable_diffusion.sh
 ```
 
+### Configuration
+The plugin offers extensive customization options via the GUI:
+
+- **Prompts**: 
+    - Supports **Multi-Prompt** lists. Add multiple prompts (e.g., "cyberpunk city", "serene lake", "deep space nebula").
+    - The plugin will randomly select one prompt from your enabled list for each generation cycle.
+- **Resolution & Upscaling**:
+    - **Base Resolution**: Set generation size (e.g., 768x512). Dimensions are automatically snapped to multiples of 8.
+    - **Upscale**: Automatically resizes the output to QHD (2560x1440) using high-quality resampling, ensuring crisp wallpapers without the artifacting of direct high-res generation.
+- **Safety Checker**:
+    - Toggle the built-in NSFW safety filter on/off. Images flagged by the filter are automatically discarded to prevent black placeholder files.
+- **Model Selection**:
+    - Choose from popular HuggingFace models (default: `runwayml/stable-diffusion-v1-5`).
+    - Supports both public and authenticated models (requires token).
+
+### Usage
+- **Generate**: Click the "Generate" button in the Stable Diffusion tab to run a manual batch.
+- **Delete Now**: Instantly delete unwanted generations from the review panel (bypasses the standard blacklist).
+- **Interval**: Set the generation frequency (e.g., "Hourly") to keep your desktop fresh with new AI art automatically.
 ## Running as a Background Service
 
 ### Option 1: Systemd User Service (Recommended)
