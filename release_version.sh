@@ -1,33 +1,35 @@
 #!/bin/bash
 set -e
 
-# Read current version
-current_version=$(cat .tag 2>/dev/null || echo "v0.0.0")
+# Read version from .tag file
+target_version=$(cat .tag 2>/dev/null | tr -d '[:space:]')
 
-echo "Current version: $current_version"
-read -p "Enter new version (e.g. v2.3.0): " new_version
-
-if [[ -z "$new_version" ]]; then
-    echo "Version cannot be empty."
+if [[ -z "$target_version" ]]; then
+    echo "Error: .tag file is missing or empty."
     exit 1
 fi
 
-# Update .tag file
-echo "$new_version" > .tag
+echo "Target version from .tag: $target_version"
 
-# Commit change
-git add .tag
-git commit -m "Bump version to $new_version"
+# Check if .tag needs to be committed
+if git status --porcelain | grep -q ".tag"; then
+    echo "Committing .tag update..."
+    git add .tag
+    git commit -m "Bump version to $target_version"
+else
+    echo ".tag is clean."
+fi
 
-# Create git tag
-git tag -a "$new_version" -m "Release $new_version"
+# Check if tag already exists
+if git rev-parse "$target_version" >/dev/null 2>&1; then
+    echo "Tag $target_version already exists."
+else
+    echo "Creating git tag $target_version..."
+    git tag -a "$target_version" -m "Release $target_version"
+fi
 
-echo "Version bumped to $new_version"
-echo "Ready to push. Press Enter to push changes (or Ctrl+C to cancel)..."
-read
-
-# Push changes and tags
+echo "Pushing changes and tags to remote..."
 git push origin main
-git push origin "$new_version"
+git push origin "$target_version"
 
-echo "Successfully released $new_version!"
+echo "Release $target_version complete."
