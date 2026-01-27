@@ -14,5 +14,7 @@ post_upgrade() {
 }
 
 post_remove() {
+	echo "NOTE: User services were not disabled automatically."
+	echo "Run 'systemctl --user daemon-reload' to update systemd configuration."
 	post_install
 }

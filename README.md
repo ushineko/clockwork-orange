@@ -44,6 +44,7 @@ A Python script for managing wallpapers and lock screen backgrounds on **KDE Pla
 
 ## Features
 
+- **Multi-Monitor Support**: Automatically detects connected monitors and sets a unique random wallpaper for each one
 - **Dynamic Multi-Plugin Mode**: Concurrently pull wallpapers from multiple enabled plugins (e.g., Google Images + Local Folder)
 - **Fair Source Selection**: Intelligent randomization ensures equal representation from all enabled sources, preventing large local libraries from dominating
 - **Shared Blacklist**: Centralized, hash-based blacklist system shared across all plugins
@@ -229,14 +230,20 @@ If you enable multiple plugins (e.g., Google Images and Local File Source) and r
 
 ## How It Works
 
-### Desktop Wallpapers
-The script uses `qdbus6` to communicate with KDE Plasma's D-Bus interface:
+### Desktop Wallpapers (Multi-Monitor)
+The script uses `qdbus6` to communicate with KDE Plasma's D-Bus interface. It detects the number of available desktops and assigns a specific wallpaper to each one:
 ```javascript
-desktops().forEach(d => {
+var allDesktops = desktops();
+// Script generates an array of images equal to the number of desktops
+var images = ["file:///path/to/img1.jpg", "file:///path/to/img2.jpg"];
+
+for (var i = 0; i < allDesktops.length; i++) {
+    var d = allDesktops[i];
     d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");
-    d.writeConfig("Image", "file://FILEPATH");
+    var img = images[i % images.length];
+    d.writeConfig("Image", img);
     d.reloadConfig();
-});
+}
 ```
 
 ### Lock Screen Wallpapers

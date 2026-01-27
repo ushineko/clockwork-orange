@@ -8,6 +8,7 @@ description: Iteratively run, capture logs, and debug a program until a success 
         *   Does the program output logs to stdout/stderr?
         *   Does it support a `--debug` flag? Use it.
         *   **CRITICAL**: If the program is NOT amenable to log capturing (silent, no debug mode), you **MUST** modify the code first to add print/logging statements. Do not skip this.
+    *   **System Python**: Always use the system python (`/usr/bin/python3`) for running scripts and tests, to avoid environment mismatches.
     *   **Artifact Restriction**: Do **NOT** generate artifacts (especially images, e.g., "computer monitor with text") unless explicitly requested by the user. Focus on code and logs.
 
 2.  **Clean Slate**:

@@ -90,31 +90,59 @@ def get_random_image_from_directory(directory: Path) -> Path:
     return selected_file
 
 
-def set_wallpaper(p: Path):
-    print(f"[DEBUG] Setting wallpaper from path: {p}")
-    p = p.resolve()
-    print(f"[DEBUG] Resolved absolute path: {p}")
+def get_monitor_count() -> int:
+    """Get the number of monitors (desktops) using qdbus6."""
+    cmd = [
+        "qdbus6",
+        "org.kde.plasmashell",
+        "/PlasmaShell",
+        "org.kde.PlasmaShell.evaluateScript",
+        "print(desktops().length)",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        count = int(result.stdout.strip())
+        print(f"[DEBUG] Detected {count} monitors")
+        return count
+    except (subprocess.CalledProcessError, ValueError) as e:
+        print(f"[ERROR] Failed to detect monitor count: {e}")
+        return 1
 
-    if not p.exists():
-        print(f"[ERROR] File does not exist: {p}")
+
+def set_wallpapers(image_paths: list):
+    """Set wallpapers for all monitors."""
+    if not image_paths:
         return False
 
-    file_size = p.stat().st_size
-    print(f"[DEBUG] File size: {file_size} bytes")
+    # Resolve all paths
+    resolved_paths = []
+    for p in image_paths:
+        p = Path(p).resolve()
+        if not p.exists():
+            print(f"[ERROR] File does not exist: {p}")
+            continue
+        resolved_paths.append(str(p))
 
-    script = """
-    desktops().forEach(d => {
-        d.currentConfigGroup = Array("Wallpaper",
-                                     "org.kde.image",
-                                     "General");
-        d.writeConfig("Image", "file://FILEPATH");
+    if not resolved_paths:
+        return False
+
+    print(f"[DEBUG] Setting wallpapers: {resolved_paths}")
+
+    # Create JS array string: '["file://...", "file://..."]'
+    js_images = ", ".join([f'"file://{p}"' for p in resolved_paths])
+
+    script = f"""
+    var allDesktops = desktops();
+    var images = [{js_images}];
+    
+    for (var i = 0; i < allDesktops.length; i++) {{
+        var d = allDesktops[i];
+        d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");
+        var img = images[i % images.length];
+        d.writeConfig("Image", img);
         d.reloadConfig();
-    });
-    """.replace(
-        "FILEPATH", str(p)
-    )
-
-    print(f"[DEBUG] Generated KDE script with file path: {p}")
+    }}
+    """
 
     cmd = [
         "qdbus6",
@@ -124,24 +152,17 @@ def set_wallpaper(p: Path):
         script,
     ]
 
-    print(f"[DEBUG] Executing qdbus6 command: {' '.join(cmd[:4])} [script content]")
-
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        print(f"[DEBUG] qdbus6 command executed successfully")
-        if result.stdout:
-            print(f"[DEBUG] qdbus6 stdout: {result.stdout}")
-        if result.stderr:
-            print(f"[DEBUG] qdbus6 stderr: {result.stderr}")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"[ERROR] qdbus6 command failed with return code {e.returncode}")
-        print(f"[ERROR] stdout: {e.stdout}")
-        print(f"[ERROR] stderr: {e.stderr}")
+        print(f"[ERROR] qdbus6 command failed: {e}")
         return False
-    except FileNotFoundError:
-        print(f"[ERROR] qdbus6 command not found. Is qdbus6 installed?")
-        return False
+
+
+def set_wallpaper(p: Path):
+    """Legacy wrapper for single wallpaper support."""
+    return set_wallpapers([p])
 
 
 def download_and_set_wallpaper(url: str):
@@ -249,10 +270,28 @@ def _select_candidate_from_source(source: Path):
 
 
 def set_random_wallpaper_from_sources(sources: list):
-    """Set wallpaper from a random image in the specified sources."""
+    """Set wallpaper from random images in the specified sources."""
     try:
-        image_file = get_random_image_from_sources(sources)
-        return set_wallpaper(image_file)
+        monitor_count = get_monitor_count()
+        images = []
+        
+        # Try to get unique images if possible
+        for _ in range(monitor_count):
+            try:
+                img = get_random_image_from_sources(sources)
+                # Simple check to avoid duplicates if we have enough images
+                attempts = 0
+                while img in images and attempts < 5:
+                    img = get_random_image_from_sources(sources)
+                    attempts += 1
+                images.append(img)
+            except ValueError:
+                break
+                
+        if not images:
+            return False
+            
+        return set_wallpapers(images)
     except ValueError as e:
         print(f"[ERROR] {e}")
         return False
@@ -744,20 +783,34 @@ def collect_plugin_sources(config, plugin_manager):
 
 
 def set_dual_wallpaper_from_sources(sources: list):
-    """Set both desktop and lock screen wallpapers from different random images in sources."""
+    """Set desktop wallpapers (multi-monitor) and lock screen wallpaper."""
     try:
-        image1 = get_random_image_from_sources(sources)
-        image2 = get_random_image_from_sources(sources)
+        monitor_count = get_monitor_count()
+        desktop_images = []
+        
+        # Get independent images for monitors
+        for _ in range(monitor_count):
+            img = get_random_image_from_sources(sources)
+            # Avoid dupes within desktop set
+            attempts = 0
+            while img in desktop_images and attempts < 5:
+                img = get_random_image_from_sources(sources)
+                attempts += 1
+            desktop_images.append(img)
+            
+        # Get one for lockscreen
+        lockscreen_image = get_random_image_from_sources(sources)
+        # Avoid reuse of desktop images for lockscreen if possible
+        attempts = 0
+        while lockscreen_image in desktop_images and attempts < 5:
+             lockscreen_image = get_random_image_from_sources(sources)
+             attempts += 1
 
-        # Simple retry if same image picked
-        if image1 == image2:
-            image2 = get_random_image_from_sources(sources)
+        print(f"[DEBUG] Setting desktop wallpapers: {desktop_images}")
+        desktop_success = set_wallpapers(desktop_images)
 
-        print(f"[DEBUG] Setting desktop wallpaper: {image1}")
-        desktop_success = set_wallpaper(image1)
-
-        print(f"[DEBUG] Setting lock screen wallpaper: {image2}")
-        lockscreen_success = set_lockscreen_wallpaper(image2)
+        print(f"[DEBUG] Setting lock screen wallpaper: {lockscreen_image}")
+        lockscreen_success = set_lockscreen_wallpaper(lockscreen_image)
 
         return desktop_success and lockscreen_success
     except ValueError as e:
