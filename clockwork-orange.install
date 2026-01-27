@@ -1,3 +1,9 @@
+pre_remove() {
+	echo "Stopping clockwork-orange processes..."
+	# Kill any running instances of the service/app
+	pkill -f 'clockwork-orange' || true
+}
+
 post_install() {
 	gtk-update-icon-cache -q -t -f usr/share/icons/hicolor
 	update-desktop-database -q
