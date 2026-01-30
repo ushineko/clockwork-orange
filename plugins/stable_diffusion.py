@@ -11,23 +11,9 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# VENV SHIM: Check for dependencies and switch interpreter if needed
-try:
-    import torch
-    from diffusers import DPMSolverMultistepScheduler, StableDiffusionPipeline
-except ImportError:
-    # Dependencies missing. Check if we have a dedicated venv.
-    VENV_PYTHON = Path.home() / ".local/share/clockwork-orange/venv-sd/bin/python"
-
-    # Avoid infinite loop if venv python also fails/is broken
-    if VENV_PYTHON.exists() and sys.executable != str(VENV_PYTHON):
-        # Re-execute this script using the venv python
-        # We replace the current process image
-        os.execv(str(VENV_PYTHON), [str(VENV_PYTHON)] + sys.argv)
-
-    # If we are here, we are either in the venv (and imports failed) or no venv exists.
-    # We will let the class definition proceed, but run() will handle the error reporting.
-    pass
+# Note: torch/diffusers imports are deferred to run() method to avoid import-time
+# dependencies that would break the main application. The run() method handles
+# missing dependencies gracefully with a user-friendly error message.
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent))

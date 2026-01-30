@@ -45,22 +45,43 @@ def set_lockscreen_wallpaper(image_path: Path) -> bool:
 
 
 def get_monitor_count() -> int:
-    """Get the number of connected monitors on Windows using screeninfo."""
-    if not IS_WINDOWS:
-        return 1
-    try:
-        import screeninfo
+    """Get the number of connected monitors."""
+    if IS_WINDOWS:
+        try:
+            import screeninfo
 
-        return len(screeninfo.get_monitors())
-    except Exception as e:
-        print(f"[DEBUG] Failed to get monitor count via screeninfo, assuming 1: {e}")
-        return 1
+            return len(screeninfo.get_monitors())
+        except Exception as e:
+            print(
+                f"[DEBUG] Failed to get monitor count via screeninfo, assuming 1: {e}"
+            )
+            return 1
+    else:
+        # Linux: Use qdbus6 to query Plasma Shell for desktop count
+        cmd = [
+            "qdbus6",
+            "org.kde.plasmashell",
+            "/PlasmaShell",
+            "org.kde.PlasmaShell.evaluateScript",
+            "print(desktops().length)",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            count = int(result.stdout.strip())
+            print(f"[DEBUG] Detected {count} monitors")
+            return count
+        except (subprocess.CalledProcessError, ValueError) as e:
+            print(f"[DEBUG] Failed to detect monitor count: {e}")
+            return 1
+        except FileNotFoundError:
+            print(f"[DEBUG] qdbus6 not found, assuming 1 monitor")
+            return 1
 
 
 def set_wallpaper_multi_monitor(image_paths: list) -> bool:
-    """Set different wallpaper for each monitor on Windows."""
+    """Set different wallpaper for each monitor."""
     if not IS_WINDOWS:
-        return False
+        return _set_wallpaper_multi_monitor_linux(image_paths)
 
     if not image_paths:
         print(f"[ERROR] No image paths provided")
@@ -275,6 +296,60 @@ def _set_wallpaper_linux(p: Path) -> bool:
         return False
     except FileNotFoundError:
         print(f"[ERROR] qdbus6 not found.")
+        return False
+
+
+def _set_wallpaper_multi_monitor_linux(image_paths: list) -> bool:
+    """Set different wallpapers for each monitor on Linux (KDE Plasma 6)."""
+    if not image_paths:
+        return False
+
+    # Resolve all paths and validate
+    resolved_paths = []
+    for p in image_paths:
+        path = Path(p).resolve()
+        if not path.exists():
+            print(f"[ERROR] File does not exist: {path}")
+            continue
+        resolved_paths.append(str(path))
+
+    if not resolved_paths:
+        return False
+
+    print(f"[DEBUG] Setting wallpapers for multiple monitors: {resolved_paths}")
+
+    # Create JS array string: '["file://...", "file://..."]'
+    js_images = ", ".join([f'"file://{p}"' for p in resolved_paths])
+
+    script = f"""
+    var allDesktops = desktops();
+    var images = [{js_images}];
+
+    for (var i = 0; i < allDesktops.length; i++) {{
+        var d = allDesktops[i];
+        d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");
+        var img = images[i % images.length];
+        d.writeConfig("Image", img);
+        d.reloadConfig();
+    }}
+    """
+
+    cmd = [
+        "qdbus6",
+        "org.kde.plasmashell",
+        "/PlasmaShell",
+        "org.kde.PlasmaShell.evaluateScript",
+        script,
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] qdbus6 command failed: {e.stderr}")
+        return False
+    except FileNotFoundError:
+        print("[ERROR] qdbus6 not found")
         return False
 
 

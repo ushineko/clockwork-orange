@@ -213,10 +213,33 @@ def _select_candidate_from_source(source: Path):
 
 
 def set_random_wallpaper_from_sources(sources: list):
-    """Set wallpaper from a random image in the specified sources."""
+    """Set wallpaper from random images in the specified sources (one per monitor)."""
     try:
-        image_file = get_random_image_from_sources(sources)
-        return set_wallpaper(image_file)
+        monitor_count = platform_utils.get_monitor_count()
+        images = []
+
+        # Try to get unique images for each monitor
+        for _ in range(monitor_count):
+            try:
+                img = get_random_image_from_sources(sources)
+                # Simple check to avoid duplicates if we have enough images
+                attempts = 0
+                while img in images and attempts < 5:
+                    img = get_random_image_from_sources(sources)
+                    attempts += 1
+                images.append(img)
+            except ValueError:
+                break
+
+        if not images:
+            print("[ERROR] No images found in sources")
+            return False
+
+        # Use multi-monitor function if we have multiple images
+        if len(images) > 1:
+            return platform_utils.set_wallpaper_multi_monitor(images)
+        else:
+            return set_wallpaper(images[0])
     except ValueError as e:
         print(f"[ERROR] {e}")
         return False
@@ -379,12 +402,34 @@ def get_two_different_images_from_directory(directory: Path):
 def set_dual_wallpapers_from_directory(directory_path: Path):
     """Set both desktop and lock screen wallpapers from different random images in directory."""
     try:
-        desktop_image, lockscreen_image = get_two_different_images_from_directory(
-            directory_path
-        )
+        monitor_count = platform_utils.get_monitor_count()
+        desktop_images = []
 
-        print(f"[DEBUG] Setting desktop wallpaper: {desktop_image}")
-        desktop_success = set_wallpaper(desktop_image)
+        # Get one image per monitor for desktop
+        for _ in range(monitor_count):
+            img = get_random_image_from_sources([directory_path])
+            attempts = 0
+            while img in desktop_images and attempts < 5:
+                img = get_random_image_from_sources([directory_path])
+                attempts += 1
+            desktop_images.append(img)
+
+        # Get lockscreen image (different from desktop)
+        lockscreen_image = get_random_image_from_sources([directory_path])
+        attempts = 0
+        while lockscreen_image in desktop_images and attempts < 5:
+            lockscreen_image = get_random_image_from_sources([directory_path])
+            attempts += 1
+
+        # Set desktop wallpaper(s)
+        if len(desktop_images) > 1:
+            print(
+                f"[DEBUG] Setting desktop wallpapers (multi-monitor): {desktop_images}"
+            )
+            desktop_success = platform_utils.set_wallpaper_multi_monitor(desktop_images)
+        else:
+            print(f"[DEBUG] Setting desktop wallpaper: {desktop_images[0]}")
+            desktop_success = set_wallpaper(desktop_images[0])
 
         print(f"[DEBUG] Setting lock screen wallpaper: {lockscreen_image}")
         lockscreen_success = set_lockscreen_wallpaper(lockscreen_image)
@@ -647,18 +692,38 @@ def collect_plugin_sources(config, plugin_manager):
 def set_dual_wallpaper_from_sources(sources: list):
     """Set both desktop and lock screen wallpapers from different random images in sources."""
     try:
-        image1 = get_random_image_from_sources(sources)
-        image2 = get_random_image_from_sources(sources)
+        monitor_count = platform_utils.get_monitor_count()
+        desktop_images = []
 
-        # Simple retry if same image picked
-        if image1 == image2:
-            image2 = get_random_image_from_sources(sources)
+        # Get one image per monitor for desktop
+        for _ in range(monitor_count):
+            img = get_random_image_from_sources(sources)
+            # Try to avoid duplicates
+            attempts = 0
+            while img in desktop_images and attempts < 5:
+                img = get_random_image_from_sources(sources)
+                attempts += 1
+            desktop_images.append(img)
 
-        print(f"[DEBUG] Setting desktop wallpaper: {image1}")
-        desktop_success = set_wallpaper(image1)
+        # Get one image for lockscreen (different from desktop images)
+        lockscreen_image = get_random_image_from_sources(sources)
+        attempts = 0
+        while lockscreen_image in desktop_images and attempts < 5:
+            lockscreen_image = get_random_image_from_sources(sources)
+            attempts += 1
 
-        print(f"[DEBUG] Setting lock screen wallpaper: {image2}")
-        lockscreen_success = set_lockscreen_wallpaper(image2)
+        # Set desktop wallpaper(s)
+        if len(desktop_images) > 1:
+            print(
+                f"[DEBUG] Setting desktop wallpapers (multi-monitor): {desktop_images}"
+            )
+            desktop_success = platform_utils.set_wallpaper_multi_monitor(desktop_images)
+        else:
+            print(f"[DEBUG] Setting desktop wallpaper: {desktop_images[0]}")
+            desktop_success = set_wallpaper(desktop_images[0])
+
+        print(f"[DEBUG] Setting lock screen wallpaper: {lockscreen_image}")
+        lockscreen_success = set_lockscreen_wallpaper(lockscreen_image)
 
         return desktop_success and lockscreen_success
     except ValueError as e:
