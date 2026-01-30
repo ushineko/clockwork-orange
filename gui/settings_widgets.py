@@ -7,19 +7,9 @@ Extracted from legacy config_manager.py.
 import yaml
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (
-    QCheckBox,
-    QFontComboBox,
-    QFormLayout,
-    QHBoxLayout,
-    QLineEdit,
-    QMessageBox,
-    QPushButton,
-    QSpinBox,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import (QCheckBox, QFontComboBox, QFormLayout,
+                             QHBoxLayout, QLineEdit, QMessageBox, QPushButton,
+                             QSpinBox, QTextEdit, QVBoxLayout, QWidget)
 
 
 class BasicSettingsWidget(QWidget):
@@ -115,16 +105,14 @@ class BasicSettingsWidget(QWidget):
 
     def get_config(self):
         """Get config dictionary from UI"""
-        config = {}
-        if self.dual_wallpapers_check.isChecked():
-            config["dual_wallpapers"] = True
-        elif self.desktop_only_check.isChecked():
-            config["desktop"] = True
-        elif self.lockscreen_only_check.isChecked():
-            config["lockscreen"] = True
+        config = {
+            "dual_wallpapers": self.dual_wallpapers_check.isChecked(),
+            "desktop": self.desktop_only_check.isChecked(),
+            "lockscreen": self.lockscreen_only_check.isChecked(),
+        }
 
-        if self.wait_spin.value() != 300:
-            config["default_wait"] = self.wait_spin.value()
+        # Always include wait interval to ensure changes reflect immediately
+        config["default_wait"] = self.wait_spin.value()
 
         config["console_font_family"] = self.font_combo.currentFont().family()
         config["console_font_size"] = self.font_size_spin.value()
@@ -155,32 +143,44 @@ class AdvancedSettingsWidget(QWidget):
         self.debug_check = QCheckBox("Enable debug logging")
         layout.addRow("Debug Mode:", self.debug_check)
 
-        # Auto-start
-        self.autostart_check = QCheckBox("Start service automatically on login")
-        layout.addRow("Auto-start:", self.autostart_check)
+        # Service-related settings (Linux only)
+        import platform_utils
 
-        # Service restart delay
-        self.restart_delay_spin = QSpinBox()
-        self.restart_delay_spin.setRange(1, 300)
-        self.restart_delay_spin.setSuffix(" seconds")
-        layout.addRow("Restart Delay:", self.restart_delay_spin)
+        if not platform_utils.is_windows():
+            # Auto-start
+            self.autostart_check = QCheckBox("Start service automatically on login")
+            layout.addRow("Auto-start:", self.autostart_check)
 
-        # Logs refresh interval
-        self.logs_refresh_spin = QSpinBox()
-        self.logs_refresh_spin.setRange(1, 300)
-        self.logs_refresh_spin.setSuffix(" seconds")
-        layout.addRow("Logs Refresh Interval:", self.logs_refresh_spin)
+            # Service restart delay
+            self.restart_delay_spin = QSpinBox()
+            self.restart_delay_spin.setRange(1, 300)
+            self.restart_delay_spin.setSuffix(" seconds")
+            layout.addRow("Restart Delay:", self.restart_delay_spin)
 
-        self.auto_update_logs_check = QCheckBox("Auto-update service logs")
-        layout.addRow("Auto-update Logs:", self.auto_update_logs_check)
+            # Logs refresh interval
+            self.logs_refresh_spin = QSpinBox()
+            self.logs_refresh_spin.setRange(1, 300)
+            self.logs_refresh_spin.setSuffix(" seconds")
+            layout.addRow("Logs Refresh Interval:", self.logs_refresh_spin)
 
-        # Connect signals
+            self.auto_update_logs_check = QCheckBox("Auto-update service logs")
+            layout.addRow("Auto-update Logs:", self.auto_update_logs_check)
+
+            # Connect service-related signals
+            self.autostart_check.toggled.connect(self.setting_changed.emit)
+            self.restart_delay_spin.valueChanged.connect(self.setting_changed.emit)
+            self.logs_refresh_spin.valueChanged.connect(self.setting_changed.emit)
+            self.auto_update_logs_check.toggled.connect(self.setting_changed.emit)
+        else:
+            # Set to None on Windows so update_from_config doesn't crash
+            self.autostart_check = None
+            self.restart_delay_spin = None
+            self.logs_refresh_spin = None
+            self.auto_update_logs_check = None
+
+        # Connect common signals
         self.extensions_edit.textChanged.connect(self.setting_changed.emit)
         self.debug_check.toggled.connect(self.setting_changed.emit)
-        self.autostart_check.toggled.connect(self.setting_changed.emit)
-        self.restart_delay_spin.valueChanged.connect(self.setting_changed.emit)
-        self.logs_refresh_spin.valueChanged.connect(self.setting_changed.emit)
-        self.auto_update_logs_check.toggled.connect(self.setting_changed.emit)
 
         self.setLayout(layout)
 
@@ -190,29 +190,35 @@ class AdvancedSettingsWidget(QWidget):
         )
         self.extensions_edit.setText(extensions)
         self.debug_check.setChecked(self.config_data.get("debug", False))
-        self.autostart_check.setChecked(self.config_data.get("autostart", False))
-        self.restart_delay_spin.setValue(self.config_data.get("restart_delay", 10))
-        self.logs_refresh_spin.setValue(
-            self.config_data.get("logs_refresh_interval", 5)
-        )
-        self.auto_update_logs_check.setChecked(
-            self.config_data.get("auto_update_logs", False)
-        )
+
+        # Service settings (Linux only)
+        if self.autostart_check:
+            self.autostart_check.setChecked(self.config_data.get("autostart", False))
+        if self.restart_delay_spin:
+            self.restart_delay_spin.setValue(self.config_data.get("restart_delay", 10))
+        if self.logs_refresh_spin:
+            self.logs_refresh_spin.setValue(
+                self.config_data.get("logs_refresh_interval", 5)
+            )
+        if self.auto_update_logs_check:
+            self.auto_update_logs_check.setChecked(
+                self.config_data.get("auto_update_logs", False)
+            )
 
     def get_config(self):
         config = {}
-        if self.extensions_edit.text() != ".jpg,.jpeg,.png,.bmp,.gif,.tiff,.webp,.svg":
-            config["image_extensions"] = self.extensions_edit.text()
-        if self.debug_check.isChecked():
-            config["debug"] = True
-        if self.autostart_check.isChecked():
-            config["autostart"] = True
-        if self.restart_delay_spin.value() != 10:
+        config["image_extensions"] = self.extensions_edit.text()
+        config["debug"] = self.debug_check.isChecked()
+
+        # Service settings
+        if self.autostart_check:
+            config["autostart"] = self.autostart_check.isChecked()
+        if self.restart_delay_spin:
             config["restart_delay"] = self.restart_delay_spin.value()
-        if self.logs_refresh_spin.value() != 5:
+        if self.logs_refresh_spin:
             config["logs_refresh_interval"] = self.logs_refresh_spin.value()
-        if self.auto_update_logs_check.isChecked():
-            config["auto_update_logs"] = True
+        if self.auto_update_logs_check:
+            config["auto_update_logs"] = self.auto_update_logs_check.isChecked()
 
         return config
 

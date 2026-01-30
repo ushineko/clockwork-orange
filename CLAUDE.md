@@ -1,6 +1,14 @@
 # Project: Clockwork Orange
 
-A Python-based wallpaper manager for KDE Plasma 6.
+A multiplatform, Python-based wallpaper manager.
+
+Supports:
+*   **Linux**: KDE Plasma 6
+*   **Windows**: Windows 10/11
+
+Linux Distros:
+*   **Arch Linux**: `clockwork-orange-git` (AUR)
+*   **Debian**: `clockwork-orange` (Debian)
 
 ## Commands
 *   **Run**: `./clockwork-orange.py` (CLI) or `./clockwork-orange.py --gui` (GUI)
@@ -43,3 +51,24 @@ A Python-based wallpaper manager for KDE Plasma 6.
 *   **Paths**: Use `pathlib.Path` over `os.path`.
 *   **PyQt**: Use `PyQt6`.
 *   **KDE**: Target Plasma 6 APIs (`qdbus6`). Do not support Plasma 5.
+*   **Windows**: Target Windows 10/11. Use `pywin32` for API access.
+
+## Windows Implementation (Divergence)
+The Windows version fundamentally diverge from Linux in several key areas due to OS architecture:
+
+*   **Service Model**: 
+    *   **Linux**: Uses systemd user service (`clockwork-orange.service`).
+    *   **Windows**: Uses the GUI/Tray app for background execution.
+    *   *Reason*: Windows Services run in Session 0 (isolation) and cannot interact with the interactive user desktop or change wallpapers via standard APIs (`SystemParametersInfo`). While a service wrapper exists (`win32service`), it is functionally limited to logging/downloading and is **not recommended** for desktop use.
+*   **Wallpaper Engine**:
+    *   **Linux**: DBus calls to Plasma Shell (`org.kde.PlasmaShell`).
+    *   **Windows (Single)**: `SystemParametersInfoW` (Standard API).
+    *   **Windows (Multi-Monitor)**: Custom engine using `Pillow`.
+        *   Stitches individual monitor wallpapers into a single "Spanned" canvas based on exact monitor geometry (`EnumDisplayMonitors`).
+        *   Sets registry `WallpaperStyle` to "Span" (22).
+*   **Locking**:
+    *   **Linux**: `fcntl` file locking (`/tmp/clockwork-orange.lock`).
+    *   **Windows**: Named Mutex (`CreateMutexW` via `kernel32`).
+*   **Building**:
+    *   **Linux**: `makepkg` / `dpkg-deb`.
+    *   **Windows**: `PyInstaller` (OneFile). Requires careful DLL handling for `_ctypes`, `libssl`, etc. (see `scripts/build_windows_production.ps1` dynamic discovery logic).

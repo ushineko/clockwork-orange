@@ -8,23 +8,12 @@ import sys
 from pathlib import Path
 
 import yaml
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
-from PyQt6.QtWidgets import (
-    QApplication,
-    QDialog,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QMenu,
-    QPushButton,
-    QSplitter,
-    QStackedWidget,
-    QSystemTrayIcon,
-    QTreeWidget,
-    QTreeWidgetItem,
-    QTreeWidgetItemIterator,
-)
+from PyQt6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel,
+                             QMainWindow, QMenu, QPushButton, QSplitter,
+                             QStackedWidget, QSystemTrayIcon, QTreeWidget,
+                             QTreeWidgetItem, QTreeWidgetItemIterator)
 from PyQt6.QtWidgets import QVBoxLayout as QVBoxLayoutDialog
 
 from plugin_manager import PluginManager
@@ -33,11 +22,161 @@ from .blacklist_tab import BlacklistTab
 from .history_tab import HistoryTab
 from .plugins_tab import SinglePluginWidget
 from .service_manager import ServiceManagerWidget
-from .settings_widgets import (
-    AdvancedSettingsWidget,
-    BasicSettingsWidget,
-    YamlEditorWidget,
-)
+from .settings_widgets import (AdvancedSettingsWidget, BasicSettingsWidget,
+                               YamlEditorWidget)
+
+
+# Worker thread for wallpaper changes
+class WallpaperWorker(QThread):
+    """Background worker for changing wallpapers without blocking GUI."""
+
+    log_message = pyqtSignal(str)
+
+    def __init__(self, config_data, plugin_manager):
+        super().__init__()
+        self.config_data = config_data
+        self.plugin_manager = plugin_manager
+
+    def run(self):
+        try:
+            self.log_message.emit("=== Wallpaper Change Cycle ===")
+
+            import random
+            from pathlib import Path
+
+            import platform_utils
+
+            # Collect sources
+            sources = []
+            plugins_config = self.config_data.get("plugins", {})
+            for name, plugin_cfg in plugins_config.items():
+                if plugin_cfg.get("enabled", False):
+                    self.log_message.emit(f"Executing plugin: {name}")
+                    try:
+                        result = self.plugin_manager.execute_plugin(name, plugin_cfg)
+                        if result.get("status") == "success":
+                            path = result.get("path")
+                            if path:
+                                sources.append(Path(path))
+                                self.log_message.emit(
+                                    f"✓ Plugin {name} returned: {path}"
+                                )
+                        else:
+                            self.log_message.emit(
+                                f"✗ Plugin {name} failed: {result.get('error', 'Unknown')}"
+                            )
+                    except Exception as e:
+                        self.log_message.emit(f"✗ Plugin {name} error: {e}")
+
+            self.log_message.emit(f"Collected {len(sources)} sources")
+
+            if sources:
+                # Check if we have multiple monitors (Windows only)
+                import platform_utils
+
+                monitor_count = (
+                    platform_utils.get_monitor_count()
+                    if platform_utils.is_windows()
+                    else 1
+                )
+
+                if monitor_count > 1:
+                    self.log_message.emit(
+                        f"Multi-monitor setup detected: {monitor_count} monitors"
+                    )
+
+                    # Fair selection: shuffle sources first, then pick from first valid source
+                    # This ensures each plugin has equal chance regardless of image count
+                    import random
+
+                    random.shuffle(sources)
+
+                    # Collect images for each monitor
+                    selected_images = []
+                    for monitor_idx in range(monitor_count):
+                        # Try each source until we find one with images
+                        for source in sources:
+                            all_images = []
+                            if source.is_dir():
+                                all_images.extend(
+                                    list(source.glob("*.jpg"))
+                                    + list(source.glob("*.png"))
+                                )
+                            elif source.is_file():
+                                all_images.append(source)
+
+                            if all_images:
+                                # Pick random image from this source
+                                image = random.choice(all_images)
+                                selected_images.append(image)
+                                self.log_message.emit(
+                                    f"Monitor {monitor_idx + 1}: {image.name} from {source.name}"
+                                )
+                                break
+
+                        # If we couldn't find enough images, reuse sources
+                        if len(selected_images) <= monitor_idx:
+                            self.log_message.emit(
+                                f"Warning: Not enough images, reusing sources"
+                            )
+                            break
+
+                    # Set wallpapers for all monitors
+                    if selected_images:
+                        result = platform_utils.set_wallpaper_multi_monitor(
+                            selected_images
+                        )
+                        if result:
+                            self.log_message.emit(
+                                f"✓ Wallpapers set for {len(selected_images)} monitor(s)"
+                            )
+                        else:
+                            self.log_message.emit(
+                                "✗ Failed to set multi-monitor wallpapers"
+                            )
+                    else:
+                        self.log_message.emit(
+                            "✗ No images found for multi-monitor setup"
+                        )
+                else:
+                    # Single monitor: use original logic
+                    # Fair selection: shuffle sources first, then pick from first valid source
+                    import random
+
+                    random.shuffle(sources)
+
+                    selected_image = None
+                    for source in sources:
+                        all_images = []
+                        if source.is_dir():
+                            all_images.extend(
+                                list(source.glob("*.jpg")) + list(source.glob("*.png"))
+                            )
+                        elif source.is_file():
+                            all_images.append(source)
+
+                        if all_images:
+                            selected_image = random.choice(all_images)
+                            self.log_message.emit(
+                                f"Selected from source: {source.name}"
+                            )
+                            break
+
+                    if selected_image:
+                        result = platform_utils.set_wallpaper(selected_image)
+                        if result:
+                            self.log_message.emit(
+                                f"✓ Wallpaper changed: {selected_image.name}"
+                            )
+                        else:
+                            self.log_message.emit("✗ Failed to set wallpaper")
+                    else:
+                        self.log_message.emit("✗ No images found in any sources")
+            else:
+                self.log_message.emit("No wallpaper sources available")
+
+        except Exception as e:
+            self.log_message.emit(f"Error: {e}")
 
 
 class AboutDialog(QDialog):
@@ -100,11 +239,16 @@ class AboutDialog(QDialog):
 
     def get_version_string(self):
         """Get the application version string"""
-        # 1. Check for packaged version.txt (PKGBUILD/Debian)
+        base_path = Path(__file__).parent.parent
+        if getattr(sys, "frozen", False):
+            # In frozen mode, PyInstaller unpacks to sys._MEIPASS
+            base_path = Path(sys._MEIPASS)
+
+        # 1. Check for packaged version.txt (PKGBUILD/Debian/Windows Frozen)
         try:
-            version_file = Path(__file__).parent.parent / "version.txt"
+            version_file = base_path / "version.txt"
             if version_file.exists():
-                return f"v{version_file.read_text().strip()}"
+                return version_file.read_text().strip()
         except Exception:
             pass
 
@@ -305,6 +449,89 @@ class ClockworkOrangeGUI(QMainWindow):
 
         self.splitter.setSizes([int(max_width), 600])
 
+        # Initialize automatic wallpaper changing
+        self._init_wallpaper_timer()
+
+    def closeEvent(self, event):
+        """Override close event to minimize to tray instead of exiting."""
+        event.ignore()
+        self.hide()
+        if self.tray_icon and self.tray_icon.isVisible():
+            self.tray_icon.showMessage(
+                "Clockwork Orange",
+                "Application minimized to tray. Wallpaper changes continue in background.",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000,
+            )
+
+    def _init_wallpaper_timer(self):
+        """Initialize timer for automatic wallpaper changes."""
+        self.wallpaper_worker = None
+        self.wallpaper_timer = QTimer()
+        self.wallpaper_timer.timeout.connect(self._trigger_wallpaper_change)
+
+        # Get interval from config
+        self._update_timer_interval()
+
+        # Do first change after 2 seconds
+        QTimer.singleShot(2000, self._trigger_wallpaper_change)
+
+    def _update_timer_interval(self):
+        """Update timer interval from config."""
+        interval_seconds = self.config_data.get("default_wait", 300)
+        self.wallpaper_timer.start(interval_seconds * 1000)
+
+        # Log to Activity Log if it exists
+        if (
+            hasattr(self, "service_page")
+            and self.service_page
+        ):
+            message = f"Wallpaper timer: every {interval_seconds} seconds"
+            
+            if hasattr(self.service_page, "add_log_message"):
+                 self.service_page.add_log_message(message)
+            elif hasattr(self.service_page, "log_buffer"):
+                self.service_page.log_buffer.append(message)
+                if hasattr(self.service_page, "refresh_logs"):
+                    self.service_page.refresh_logs()
+
+    def _trigger_wallpaper_change(self):
+        """Trigger wallpaper change in background thread."""
+        # Don't start new worker if one is already running
+        if self.wallpaper_worker and self.wallpaper_worker.isRunning():
+            return
+
+        self.wallpaper_worker = WallpaperWorker(self.config_data, self.plugin_manager)
+        self.wallpaper_worker.log_message.connect(self._on_wallpaper_log)
+        self.wallpaper_worker.start()
+
+    def _on_wallpaper_log(self, message):
+        """Handle log messages from wallpaper worker."""
+        # Add to Activity Log widget
+        if (
+            hasattr(self, "service_page")
+            and self.service_page
+        ):
+            from datetime import datetime
+
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            full_message = f"{timestamp} {message}"
+            
+            # Check for new method (ActivityLogWidget)
+            if hasattr(self.service_page, "add_log_message"):
+                 self.service_page.add_log_message(full_message)
+            # Fallback for ServiceManagerWidget (Linux) or older setup
+            elif hasattr(self.service_page, "log_buffer"):
+                self.service_page.log_buffer.append(full_message)
+
+                # Trim buffer if too large (prevent memory bloat)
+                max_lines = getattr(self.service_page, "MAX_LOG_LINES", 1000)
+                if len(self.service_page.log_buffer) > max_lines:
+                    self.service_page.log_buffer.pop(0)
+
+                if hasattr(self.service_page, "refresh_logs"):
+                    self.service_page.refresh_logs()
+
     def toggle_sidebar(self):
         """Toggle visibility of the sidebar."""
         if self.tree.isVisible():
@@ -353,17 +580,35 @@ class ClockworkOrangeGUI(QMainWindow):
             try:
                 with open(self.config_path, "r") as f:
                     self.config_data = yaml.safe_load(f) or {}
+
+                # Update wallpaper timer interval if it exists
+                if hasattr(self, "wallpaper_timer") and self.wallpaper_timer:
+                    self._update_timer_interval()
             except Exception as e:
                 print(f"Error loading config: {e}")
                 self.config_data = {}
 
     def init_pages(self):
         """Initialize all pages and populate the tree."""
-        # 1. Service Manager
-        self.service_page = ServiceManagerWidget()
-        self.add_page(
-            "Service Control", self.service_page, icon_name="utilities-system-monitor"
-        )
+        # 1. Service Manager (Linux) / Activity Log (Windows)
+        import platform_utils
+
+        if not platform_utils.is_windows():
+            # Linux: Show Service Control
+            self.service_page = ServiceManagerWidget()
+            self.add_page(
+                "Service Control",
+                self.service_page,
+                icon_name="utilities-system-monitor",
+            )
+        else:
+            # Windows: Show Activity Log instead
+            from gui.activity_log import ActivityLogWidget
+
+            self.service_page = ActivityLogWidget()
+            self.add_page(
+                "Activity Log", self.service_page, icon_name="utilities-system-monitor"
+            )
 
         # 2. Plugins (Group)
         plugins_root = QTreeWidgetItem(self.tree, ["Plugins"])
@@ -571,17 +816,28 @@ class ClockworkOrangeGUI(QMainWindow):
                 self.show_window()
 
     def _get_icon(self):
-        # Implementation from previous file
+        """Get the application icon, handling frozen state."""
+        if getattr(sys, "frozen", False):
+            # In frozen PyInstaller bundle
+            # We added data 'gui/icons;gui/icons' so it should be in sys._MEIPASS/gui/icons
+            base_path = Path(sys._MEIPASS) / "gui"
+        else:
+            # In development: gui/main_window.py -> gui/
+            base_path = Path(__file__).parent
+
         logo_paths = [
-            Path(__file__).parent / "icons" / "clockwork-orange-128x128.png",
-            Path(__file__).parent / "icons" / "clockwork-orange.png",
-            Path(__file__).parent / "icons" / "clockwork-orange-64x64.png",
-            Path(__file__).parent.parent / "icon.png",
+            base_path / "icons" / "clockwork-orange-128x128.png",
+            base_path / "icons" / "clockwork-orange.png",
+            base_path / "icons" / "clockwork-orange-64x64.png",
+            # Fallback to root (less likely in frozen but good for dev)
+            base_path.parent / "icon.png",
         ]
 
         for logo_path in logo_paths:
             if logo_path.exists():
                 return QIcon(str(logo_path))
+
+        print(f"[WARNING] No icon found. Searched: {[str(p) for p in logo_paths]}")
         return QIcon()
 
     def _init_window_state(self):
@@ -597,6 +853,7 @@ class ClockworkOrangeGUI(QMainWindow):
         height = self.config_data.get("window_height", 600)
         self.resize(width, height)
         self.center_window()
+        print(f"[DEBUG] Window restored to {width}x{height} at {self.pos()}")
 
     def save_window_geometry(self):
         self.config_data["window_width"] = self.width()
@@ -670,8 +927,13 @@ class ClockworkOrangeGUI(QMainWindow):
                 )
 
     def _on_config_changed(self):
+        """Handle configuration changes by updating UI and behavior."""
+        # Update wallpaper timer interval
+        self._update_timer_interval()
+
+        # Other pages might need updates here in the future
         if self.tray_icon:
-            pass  # Silent update or user feedback handled by auto-save trigger
+            pass
 
 
 def main():
@@ -682,24 +944,24 @@ def main():
     app.setApplicationVersion("Rolling")
 
     # Process check
+    # Process check (Singleton)
     try:
-        import os
+        import time
 
-        import psutil
+        import platform_utils
 
-        current_pid = os.getpid()
-        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-            if (
-                proc.info["name"] == "python3"
-                and proc.info["cmdline"]
-                and "clockwork-orange.py" in " ".join(proc.info["cmdline"])
-                and "--gui" in " ".join(proc.info["cmdline"])
-                and proc.info["pid"] != current_pid
-            ):
-                print("[DEBUG] Another instance is already running")
-                return 0
-    except Exception:
-        pass
+        start_time = time.time()
+        print(f"[DEBUG] Checking for existing instances...")
+
+        # Use fast Named Mutex (Windows) or File Lock (Linux)
+        # This is instant compared to iterating processes
+        if not platform_utils.acquire_instance_lock("clockwork_orange_gui_lock"):
+            print("[DEBUG] Another instance is already running (Lock held)")
+            return 0
+
+        print(f"[DEBUG] Instance check took {time.time() - start_time:.4f}s")
+    except Exception as e:
+        print(f"[WARNING] Failed to check for existing instances: {e}")
 
     window = ClockworkOrangeGUI()
     if window.tray_icon:
@@ -712,6 +974,12 @@ def main():
         )
 
     window.show()
+    print(f"[DEBUG] Window shown. Geometry: {window.geometry()}")
+
+    # Force window to front
+    window.raise_()
+    window.activateWindow()
+
     return app.exec()
 
 

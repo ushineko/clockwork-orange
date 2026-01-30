@@ -6,15 +6,8 @@ import sys
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import (
-    QFormLayout,
-    QGroupBox,
-    QLabel,
-    QMessageBox,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import (QFormLayout, QGroupBox, QLabel, QMessageBox,
+                             QPushButton, QVBoxLayout, QWidget)
 
 # Ensure we can import the plugin manager and history manager
 sys.path.append(str(Path(__file__).parent.parent))

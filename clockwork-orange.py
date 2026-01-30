@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import configparser
+import ctypes
 import json
 import mimetypes
 import random
@@ -17,6 +18,7 @@ import yaml
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+import platform_utils
 from plugin_manager import PluginManager
 
 # GUI imports (optional)
@@ -90,79 +92,19 @@ def get_random_image_from_directory(directory: Path) -> Path:
     return selected_file
 
 
-def get_monitor_count() -> int:
-    """Get the number of monitors (desktops) using qdbus6."""
-    cmd = [
-        "qdbus6",
-        "org.kde.plasmashell",
-        "/PlasmaShell",
-        "org.kde.PlasmaShell.evaluateScript",
-        "print(desktops().length)",
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        count = int(result.stdout.strip())
-        print(f"[DEBUG] Detected {count} monitors")
-        return count
-    except (subprocess.CalledProcessError, ValueError) as e:
-        print(f"[ERROR] Failed to detect monitor count: {e}")
-        return 1
-
-
-def set_wallpapers(image_paths: list):
-    """Set wallpapers for all monitors."""
-    if not image_paths:
-        return False
-
-    # Resolve all paths
-    resolved_paths = []
-    for p in image_paths:
-        p = Path(p).resolve()
-        if not p.exists():
-            print(f"[ERROR] File does not exist: {p}")
-            continue
-        resolved_paths.append(str(p))
-
-    if not resolved_paths:
-        return False
-
-    print(f"[DEBUG] Setting wallpapers: {resolved_paths}")
-
-    # Create JS array string: '["file://...", "file://..."]'
-    js_images = ", ".join([f'"file://{p}"' for p in resolved_paths])
-
-    script = f"""
-    var allDesktops = desktops();
-    var images = [{js_images}];
-    
-    for (var i = 0; i < allDesktops.length; i++) {{
-        var d = allDesktops[i];
-        d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");
-        var img = images[i % images.length];
-        d.writeConfig("Image", img);
-        d.reloadConfig();
-    }}
-    """
-
-    cmd = [
-        "qdbus6",
-        "org.kde.plasmashell",
-        "/PlasmaShell",
-        "org.kde.PlasmaShell.evaluateScript",
-        script,
-    ]
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"[ERROR] qdbus6 command failed: {e}")
-        return False
-
-
 def set_wallpaper(p: Path):
-    """Legacy wrapper for single wallpaper support."""
-    return set_wallpapers([p])
+    print(f"[DEBUG] Setting wallpaper from path: {p}")
+    p = p.resolve()
+    print(f"[DEBUG] Resolved absolute path: {p}")
+
+    if not p.exists():
+        print(f"[ERROR] File does not exist: {p}")
+        return False
+
+    file_size = p.stat().st_size
+    print(f"[DEBUG] File size: {file_size} bytes")
+
+    return platform_utils.set_wallpaper(p)
 
 
 def download_and_set_wallpaper(url: str):
@@ -194,7 +136,8 @@ def download_and_set_wallpaper(url: str):
         try:
             p.write_bytes(response.content)
             print(
-                f"[DEBUG] Successfully wrote {len(response.content)} bytes to temporary file"
+                f"[DEBUG] Successfully wrote {len(response.content)} "
+                "bytes to temporary file"
             )
         except Exception as e:
             print(f"[ERROR] Failed to write image to temporary file: {e}")
@@ -270,28 +213,10 @@ def _select_candidate_from_source(source: Path):
 
 
 def set_random_wallpaper_from_sources(sources: list):
-    """Set wallpaper from random images in the specified sources."""
+    """Set wallpaper from a random image in the specified sources."""
     try:
-        monitor_count = get_monitor_count()
-        images = []
-        
-        # Try to get unique images if possible
-        for _ in range(monitor_count):
-            try:
-                img = get_random_image_from_sources(sources)
-                # Simple check to avoid duplicates if we have enough images
-                attempts = 0
-                while img in images and attempts < 5:
-                    img = get_random_image_from_sources(sources)
-                    attempts += 1
-                images.append(img)
-            except ValueError:
-                break
-                
-        if not images:
-            return False
-            
-        return set_wallpapers(images)
+        image_file = get_random_image_from_sources(sources)
+        return set_wallpaper(image_file)
     except ValueError as e:
         print(f"[ERROR] {e}")
         return False
@@ -352,13 +277,11 @@ def cycle_wallpapers_from_directory(directory_path: Path, wait_seconds: int):
 
 
 def set_lockscreen_wallpaper(image_path: Path):
-    """Set lock screen wallpaper using kwriteconfig6 (KDE 6)."""
+    """Set lock screen wallpaper."""
     print(f"[DEBUG] set_lockscreen_wallpaper called with: {image_path}")
 
     image_path = image_path.resolve()
     print(f"[DEBUG] Resolved path: {image_path}")
-    print(f"[DEBUG] Path exists: {image_path.exists()}")
-    print(f"[DEBUG] Is file: {image_path.is_file()}")
 
     if not image_path.exists():
         print(f"[ERROR] Image file does not exist: {image_path}")
@@ -368,65 +291,7 @@ def set_lockscreen_wallpaper(image_path: Path):
         print(f"[ERROR] File is not a supported image format: {image_path}")
         return False
 
-    # Use kwriteconfig6 to set the lock screen wallpaper (recommended approach for KDE 6)
-    wallpaper_path = f"file://{image_path}"
-    print(
-        f"[DEBUG] Setting lock screen wallpaper using kwriteconfig6: {wallpaper_path}"
-    )
-
-    try:
-        # Use kwriteconfig6 with the correct syntax for KDE 6
-        result = subprocess.run(
-            [
-                "kwriteconfig6",
-                "--file",
-                "kscreenlockerrc",
-                "--group",
-                "Greeter",
-                "--group",
-                "Wallpaper",
-                "--group",
-                "org.kde.image",
-                "--group",
-                "General",
-                "--key",
-                "Image",  # Use uppercase Image as per documentation
-                wallpaper_path,
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        print(f"[DEBUG] kwriteconfig6 executed successfully")
-        if result.stdout:
-            print(f"[DEBUG] kwriteconfig6 stdout: {result.stdout}")
-        if result.stderr:
-            print(f"[DEBUG] kwriteconfig6 stderr: {result.stderr}")
-
-        # Clean up redundant entries
-        _clean_lockscreen_config()
-
-        # Try to reload the screen saver configuration
-        _reload_screensaver_config()
-
-        # Show debug information about the current configuration
-        print(f"[DEBUG] Current lock screen configuration after change:")
-        debug_lockscreen_config()
-
-        return True
-
-    except subprocess.CalledProcessError as e:
-        print(f"[ERROR] kwriteconfig6 failed with return code {e.returncode}")
-        print(f"[ERROR] stdout: {e.stdout}")
-        print(f"[ERROR] stderr: {e.stderr}")
-        return False
-    except FileNotFoundError:
-        print(f"[ERROR] kwriteconfig6 command not found. Is KDE 6 installed?")
-        return False
-    except Exception as e:
-        print(f"[ERROR] Unexpected error: {e}")
-        return False
+    return platform_utils.set_lockscreen_wallpaper(image_path)
 
 
 def set_lockscreen_random_from_directory(directory_path: Path):
@@ -588,26 +453,23 @@ def cycle_dual_wallpapers_from_directory(directory_path: Path, wait_seconds: int
 
 
 def load_config_file():
-    """Load configuration from YAML file."""
-    config_path = Path.home() / ".config" / "clockwork-orange.yml"
-    print(f"[DEBUG] Looking for configuration file: {config_path}")
+    """Load configuration from file."""
+    config_paths = [
+        Path.home() / ".config" / "clockwork-orange.yml",
+        Path("C:/Users/Public/clockwork_config.yml"),  # Shared config for service
+    ]
 
-    if not config_path.exists():
-        print(f"[DEBUG] Configuration file not found, using defaults")
-        return {}
+    for config_path in config_paths:
+        if config_path.exists():
+            try:
+                print(f"[DEBUG] Loading configuration from {config_path}")
+                with open(config_path, "r") as f:
+                    return yaml.safe_load(f) or {}
+            except Exception as e:
+                print(f"[ERROR] Failed to load config file {config_path}: {e}")
 
-    try:
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-        print(f"[DEBUG] Loaded configuration from {config_path}")
-        print(f"[DEBUG] Configuration: {config}")
-        return config or {}
-    except yaml.YAMLError as e:
-        print(f"[ERROR] Failed to parse YAML configuration file: {e}")
-        return {}
-    except Exception as e:
-        print(f"[ERROR] Failed to read configuration file: {e}")
-        return {}
+    # Defaults handled by caller
+    return {}
 
 
 def merge_config_with_args(config, args):
@@ -783,34 +645,20 @@ def collect_plugin_sources(config, plugin_manager):
 
 
 def set_dual_wallpaper_from_sources(sources: list):
-    """Set desktop wallpapers (multi-monitor) and lock screen wallpaper."""
+    """Set both desktop and lock screen wallpapers from different random images in sources."""
     try:
-        monitor_count = get_monitor_count()
-        desktop_images = []
-        
-        # Get independent images for monitors
-        for _ in range(monitor_count):
-            img = get_random_image_from_sources(sources)
-            # Avoid dupes within desktop set
-            attempts = 0
-            while img in desktop_images and attempts < 5:
-                img = get_random_image_from_sources(sources)
-                attempts += 1
-            desktop_images.append(img)
-            
-        # Get one for lockscreen
-        lockscreen_image = get_random_image_from_sources(sources)
-        # Avoid reuse of desktop images for lockscreen if possible
-        attempts = 0
-        while lockscreen_image in desktop_images and attempts < 5:
-             lockscreen_image = get_random_image_from_sources(sources)
-             attempts += 1
+        image1 = get_random_image_from_sources(sources)
+        image2 = get_random_image_from_sources(sources)
 
-        print(f"[DEBUG] Setting desktop wallpapers: {desktop_images}")
-        desktop_success = set_wallpapers(desktop_images)
+        # Simple retry if same image picked
+        if image1 == image2:
+            image2 = get_random_image_from_sources(sources)
 
-        print(f"[DEBUG] Setting lock screen wallpaper: {lockscreen_image}")
-        lockscreen_success = set_lockscreen_wallpaper(lockscreen_image)
+        print(f"[DEBUG] Setting desktop wallpaper: {image1}")
+        desktop_success = set_wallpaper(image1)
+
+        print(f"[DEBUG] Setting lock screen wallpaper: {image2}")
+        lockscreen_success = set_lockscreen_wallpaper(image2)
 
         return desktop_success and lockscreen_success
     except ValueError as e:
@@ -901,8 +749,114 @@ def clean_config(config):
 
 
 def main():
+    # Helper: specific check to default to GUI on double-click (Windows mostly)
+    if len(sys.argv) == 1:
+        sys.argv.append("--gui")
+
+    # Set AppUserModelID on Windows for correct taskbar icon
+    if sys.platform == "win32":
+        myappid = "ushineko.clockworkorange.gui.1.0"  # arbitrary string
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        except Exception:
+            pass
+
+    start_time = time.time()
+
     parser = _create_argument_parser()
     args = parser.parse_args()
+
+    # Only print debug messages if not running a plugin (to keep JSON output clean)
+    if not hasattr(args, "run_plugin") or not args.run_plugin:
+        print(f"[DEBUG] Startup initiated at {start_time}")
+        print(f"[DEBUG] Arguments parsed in {time.time() - start_time:.4f}s")
+
+    # Handle Plugin Execution (App-as-Interpreter)
+    if args.run_plugin:
+        try:
+            from plugin_manager import PluginManager
+
+            plugin_name = args.run_plugin
+            config = {}
+            if args.plugin_config:
+                try:
+                    config = json.loads(args.plugin_config)
+                except json.JSONDecodeError:
+                    print(
+                        json.dumps(
+                            {"status": "error", "message": "Invalid config JSON"}
+                        )
+                    )
+                    sys.exit(1)
+
+            # We use the internal method that runs in-process
+            # Redirect stdout to stderr so logs are streamed
+            # Final result is printed to original stdout
+            sys.stdout = sys.stderr
+            try:
+                pm = PluginManager()
+                # Access private method directly to avoid capture overhead of other methods
+                instance = pm._get_plugin_instance(plugin_name)
+                result = instance.run(config)
+            finally:
+                sys.stdout = sys.__stdout__
+
+            print(json.dumps(result))
+            sys.exit(0)
+        except Exception as e:
+            # Restore stdout just in case
+            sys.stdout = sys.__stdout__
+            error = {"status": "error", "message": str(e), "logs": str(e)}
+            print(json.dumps(error))
+            sys.exit(1)
+
+    # Handle Self-Test
+    if args.self_test:
+        print("Running Cloudwork Orange Self-Test...")
+        results = {}
+
+        # Test 1: Python Info
+        print(f"Python: {sys.version}")
+        print(f"Platform: {sys.platform}")
+        print(f"Frozen: {getattr(sys, 'frozen', False)}")
+
+        # Test 2: Critical Imports
+        modules = ["ctypes", "sqlite3", "ssl", "PIL", "requests", "yaml", "watchdog"]
+        for mod in modules:
+            try:
+                __import__(mod)
+                print(f"[OK] Import {mod}")
+                results[mod] = True
+            except ImportError as e:
+                print(f"[FAIL] Import {mod}: {e}")
+                results[mod] = False
+
+        # Test 3: SSL/Network
+        try:
+            import requests
+
+            print("Testing Network/SSL...")
+            requests.get("https://www.google.com", timeout=5)
+            print("[OK] Network/SSL Request")
+            results["network"] = True
+        except Exception as e:
+            print(f"[FAIL] Network/SSL Request: {e}")
+            results["network"] = False
+
+        # Test 4: Plugins
+        try:
+            from plugin_manager import PluginManager
+
+            pm = PluginManager()
+            plugins = pm.get_available_plugins()
+            print(f"Plugins Found: {plugins}")
+            if not plugins:
+                print("[WARN] No plugins found!")
+            results["plugins_count"] = len(plugins)
+        except Exception as e:
+            print(f"[FAIL] Plugin System: {e}")
+
+        sys.exit(0 if all(results.values()) else 1)
 
     # Load configuration file and merge with command line arguments
     config = load_config_file()
@@ -1069,6 +1023,17 @@ Configuration File:
         "--service",
         action="store_true",
         help="Run in background service mode (sets default wait to 900s if unspecified)",
+    )
+
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Run self-diagnostic to verify environment and dependencies",
+    )
+
+    parser.add_argument(
+        "--run-plugin",
+        help="Run a specific plugin (internal use for frozen builds)",
     )
 
     return parser
@@ -1328,9 +1293,18 @@ def _handle_gui_mode(args):
     if args.gui:
         if not GUI_AVAILABLE:
             print("[ERROR] GUI not available. Please install PyQt6: pip install PyQt6")
+            input("Press Enter to exit...")
             sys.exit(1)
-        print("[DEBUG] Starting GUI...")
-        sys.exit(gui_main())
+        print(f"[DEBUG] Starting GUI... SysArgv: {sys.argv}")
+        try:
+            sys.exit(gui_main())
+        except Exception as e:
+            print(f"[FATAL] GUI Crashed: {e}")
+            import traceback
+
+            traceback.print_exc()
+            input("Press Enter to exit...")
+            sys.exit(1)
 
 
 def _clean_lockscreen_config():
@@ -1554,4 +1528,6 @@ def _wait_for_next_cycle(config, default_wait, change_event=None):
 
 
 if __name__ == "__main__":
+    # Windows: No service support (services can't change wallpapers due to Session 0 isolation)
+    # Linux: Service support handled by systemd
     main()
