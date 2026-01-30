@@ -15,6 +15,7 @@ Linux Distros:
 *   **Lint/Format**: `black .` and `isort .` (Project adheres to Black code style)
 *   **Build Arch**: `./build_local.sh` (wraps `makepkg`)
 *   **Build Debian**: `./build_deb.sh` (wraps `dpkg-buildpackage`)
+*   **Update AUR**: `./scripts/update_aur.sh "Update to vX.Y.Z"` (Pushes PKGBUILD to AUR)
 *   **Gen Docs**: `python3 docs/generate_screenshots.py` (Requires GUI env)
 *   **Service**:
     *   Install: `cp clockwork-orange.service ~/.config/systemd/user/`
@@ -34,11 +35,13 @@ Linux Distros:
 *   **Versioning**: Dynamic. Format `0.r<count>.<short_sha>` (e.g., `0.r30.abc1234`).
     *   Calculated via `git rev-list --count HEAD` and `git rev-parse --short HEAD`.
     *   **Injection**: Packages generate a `version.txt` file in the install directory (e.g., `/usr/lib/clockwork-orange/`). The GUI checks this file first to report the version, falling back to git if missing (dev mode).
-*   **Arch Linux**: `PKGBUILD` located in root (symlinked or moved). Deps: `pacman` packages.
+*   **Arch Linux**: `PKGBUILD` located in root. Deps: `pacman` packages.
+    *   **AUR**: Package `clockwork-orange-git` on AUR. Update via `./scripts/update_aur.sh "message"`.
+    *   Script clones AUR repo to `.aur-repo/`, copies PKGBUILD, generates `.SRCINFO`, commits and pushes.
 *   **Debian**: `debian/` directory. Deps: `dpkg-dev`, `debhelper`. `build_deb.sh` handles dynamic `changelog` injection.
 *   **CI/CD**: `.github/workflows/build_package.yml`
-    *   Builds both Arch (container) and Debian (ubuntu-latest).
-    *   Tags (`v*`) trigger a Release with both artifacts.
+    *   Builds Arch (container), Debian (ubuntu-latest), and Windows (windows-latest).
+    *   Tags (`v*`) trigger a Release with all three artifacts.
 
 ## Documentation
 *   `README.md`: Main entry point.
