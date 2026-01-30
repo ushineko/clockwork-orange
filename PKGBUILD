@@ -29,9 +29,10 @@ pkgver() {
 package() {
 	cd "${pkgname%-git}"
 
-	# Install main script
+	# Install main script and modules
 	install -Dm755 clockwork-orange.py "${pkgdir}/usr/lib/${pkgname%-git}/clockwork-orange.py"
     install -Dm644 plugin_manager.py "${pkgdir}/usr/lib/${pkgname%-git}/plugin_manager.py"
+    install -Dm644 platform_utils.py "${pkgdir}/usr/lib/${pkgname%-git}/platform_utils.py"
     install -Dm644 clockwork-orange.service "${pkgdir}/usr/lib/${pkgname%-git}/clockwork-orange.service"
     install -Dm644 .tag "${pkgdir}/usr/lib/${pkgname%-git}/.tag"
     sed -i 's|ExecStart=.*|ExecStart=/usr/bin/clockwork-orange --service|' "${pkgdir}/usr/lib/${pkgname%-git}/clockwork-orange.service"
