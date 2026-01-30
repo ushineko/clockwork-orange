@@ -43,6 +43,11 @@ description: Iteratively run, capture logs, and debug a program until a success 
         *   Identify all scripts in the repo.
         *   Update the root `README.md` with a table/list of all scripts and their descriptions.
     *   **Update AUR** (If applicable):
-        *   If this project has an AUR package, run `./scripts/update_aur.sh "Update to vX.Y.Z"`.
+        *   If this project has an AUR package:
+            1.  **Update pkgver**: First, update the `pkgver` line in PKGBUILD to the current version:
+                ```bash
+                echo "$(cat .tag | tr -d 'v').r$(git rev-list --count HEAD).g$(git rev-parse --short HEAD)"
+                ```
+            2.  **Run update script**: `./scripts/update_aur.sh "Update to vX.Y.Z"`.
         *   This copies PKGBUILD, generates `.SRCINFO`, and pushes to AUR.
     *   **Notify User**: Confirm success and documentation updates.

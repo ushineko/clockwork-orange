@@ -37,6 +37,12 @@ Linux Distros:
     *   **Injection**: Packages generate a `version.txt` file in the install directory (e.g., `/usr/lib/clockwork-orange/`). The GUI checks this file first to report the version, falling back to git if missing (dev mode).
 *   **Arch Linux**: `PKGBUILD` located in root. Deps: `pacman` packages.
     *   **AUR**: Package `clockwork-orange-git` on AUR. Update via `./scripts/update_aur.sh "message"`.
+    *   **IMPORTANT**: Before running the AUR script, update `pkgver` in PKGBUILD to the current version:
+        ```bash
+        # Generate current version string:
+        echo "$(cat .tag | tr -d 'v').r$(git rev-list --count HEAD).g$(git rev-parse --short HEAD)"
+        # Then update the pkgver= line in PKGBUILD with this value
+        ```
     *   Script clones AUR repo to `.aur-repo/`, copies PKGBUILD, generates `.SRCINFO`, commits and pushes.
 *   **Debian**: `debian/` directory. Deps: `dpkg-dev`, `debhelper`. `build_deb.sh` handles dynamic `changelog` injection.
 *   **CI/CD**: `.github/workflows/build_package.yml`
