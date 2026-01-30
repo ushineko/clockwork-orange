@@ -216,3 +216,6 @@ dist_test_service/
 
 # AUR repository clone (used by scripts/update_aur.sh)
 .aur-repo/
+
+# Claude Code user settings
+.claude/
