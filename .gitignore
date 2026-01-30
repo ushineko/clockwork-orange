@@ -213,3 +213,6 @@ dist_test/
 
 build_test_service/
 dist_test_service/
+
+# AUR repository clone (used by scripts/update_aur.sh)
+.aur-repo/
