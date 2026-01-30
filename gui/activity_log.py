@@ -56,7 +56,7 @@ class ActivityLogWidget(QWidget):
         self.log_display = QTextEdit()
         self.log_display.setReadOnly(True)
         self.log_display.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
-        
+
         # Native limiting prevents flashing from full rewrites
         self.log_display.document().setMaximumBlockCount(self.MAX_LOG_LINES)
 
@@ -96,7 +96,7 @@ class ActivityLogWidget(QWidget):
                 has_updates = True
             except queue.Empty:
                 break
-        
+
         if has_updates:
             # Scroll to bottom if we added content
             scrollbar = self.log_display.verticalScrollBar()
@@ -107,7 +107,6 @@ class ActivityLogWidget(QWidget):
             self.status_label.setText(
                 f"Last updated: {self._get_timestamp()} | {current_count} entries"
             )
-
 
     def add_log_message(self, message):
         """Add a log message directly to the queue."""
@@ -122,7 +121,7 @@ class ActivityLogWidget(QWidget):
                 self.log_queue.get_nowait()
             except queue.Empty:
                 break
-        
+
         self.log_display.clear()
         self.status_label.setText("Log cleared")
         logging.info("Activity log cleared by user")

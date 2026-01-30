@@ -774,8 +774,6 @@ def main():
     # Handle Plugin Execution (App-as-Interpreter)
     if args.run_plugin:
         try:
-            from plugin_manager import PluginManager
-
             plugin_name = args.run_plugin
             config = {}
             if args.plugin_config:
@@ -845,8 +843,6 @@ def main():
 
         # Test 4: Plugins
         try:
-            from plugin_manager import PluginManager
-
             pm = PluginManager()
             plugins = pm.get_available_plugins()
             print(f"Plugins Found: {plugins}")

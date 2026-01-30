@@ -4,27 +4,27 @@ Stable Diffusion Plugin for Clockwork Orange.
 Generates wallpapers using local Stable Diffusion (requires diffusers/torch).
 """
 
-import sys
-import time
 import os
 import random
+import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
 # VENV SHIM: Check for dependencies and switch interpreter if needed
 try:
     import torch
-    from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+    from diffusers import DPMSolverMultistepScheduler, StableDiffusionPipeline
 except ImportError:
     # Dependencies missing. Check if we have a dedicated venv.
     VENV_PYTHON = Path.home() / ".local/share/clockwork-orange/venv-sd/bin/python"
-    
+
     # Avoid infinite loop if venv python also fails/is broken
     if VENV_PYTHON.exists() and sys.executable != str(VENV_PYTHON):
         # Re-execute this script using the venv python
         # We replace the current process image
         os.execv(str(VENV_PYTHON), [str(VENV_PYTHON)] + sys.argv)
-    
+
     # If we are here, we are either in the venv (and imports failed) or no venv exists.
     # We will let the class definition proceed, but run() will handle the error reporting.
     pass
@@ -46,15 +46,18 @@ class StableDiffusionPlugin(PluginBase):
             "prompt": {
                 "type": "string_list",
                 "default": [
-                    {"term": "breathtaking landscape, mountains, lake, sunset, 4k, photorealistic, serene", "enabled": True}
+                    {
+                        "term": "breathtaking landscape, mountains, lake, sunset, 4k, photorealistic, serene",
+                        "enabled": True,
+                    }
                 ],
                 "description": "Text Prompts (Randomly Selected)",
                 "suggestions": [
                     "breathtaking landscape, mountains, lake, sunset, 4k, photorealistic, serene",
                     "abstract 3d geometric shapes, vibrant colors, 4k, raytracing",
                     "cyberpunk city street, rain, neon lights, 4k, detailed",
-                    "deep space nebula, stars, galaxy, 8k, hubble style"
-                ]
+                    "deep space nebula, stars, galaxy, 8k, hubble style",
+                ],
             },
             "negative_prompt": {
                 "type": "string",
@@ -133,7 +136,8 @@ class StableDiffusionPlugin(PluginBase):
         # Check Dependencies at Runtime
         try:
             import torch
-            from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+            from diffusers import (DPMSolverMultistepScheduler,
+                                   StableDiffusionPipeline)
         except ImportError:
             return {
                 "status": "error",
@@ -167,22 +171,29 @@ class StableDiffusionPlugin(PluginBase):
                 f"[StableDiffusion] Processing blacklist for {len(targets)} files...",
                 file=sys.stderr,
             )
-            self.blacklist_manager.process_files(targets, plugin_name="stable_diffusion")
+            self.blacklist_manager.process_files(
+                targets, plugin_name="stable_diffusion"
+            )
             return {"status": "success", "message": "Blacklist processed"}
-            
+
         # Handle Delete Action (No Blacklist)
         if config.get("action") == "delete_files":
             targets = config.get("targets", [])
-            print(f"[StableDiffusion] Deleting {len(targets)} files...", file=sys.stderr)
+            print(
+                f"[StableDiffusion] Deleting {len(targets)} files...", file=sys.stderr
+            )
             import os
+
             for t in targets:
                 try:
                     os.remove(t)
                     print(f"[StableDiffusion] Deleted {Path(t).name}", file=sys.stderr)
                 except Exception as e:
-                    print(f"[StableDiffusion] Failed to delete {t}: {e}", file=sys.stderr)
+                    print(
+                        f"[StableDiffusion] Failed to delete {t}: {e}", file=sys.stderr
+                    )
             return {"status": "success", "message": "Files deleted"}
-            
+
         # Handle Reset
         if config.get("reset", False):
             self._perform_reset(download_dir)
@@ -195,7 +206,7 @@ class StableDiffusionPlugin(PluginBase):
         # Parse Prompts
         raw_prompt = config.get("prompt", "landscape")
         prompts_list = []
-        
+
         if isinstance(raw_prompt, str):
             prompts_list = [raw_prompt]
         elif isinstance(raw_prompt, list):
@@ -205,12 +216,15 @@ class StableDiffusionPlugin(PluginBase):
                         prompts_list.append(item.get("term", ""))
                 elif isinstance(item, str):
                     prompts_list.append(item)
-        
+
         # Fallback
         if not prompts_list:
             prompts_list = ["landscape"]
 
-        print(f"[StableDiffusion] Loaded {len(prompts_list)} active prompts.", file=sys.stderr)
+        print(
+            f"[StableDiffusion] Loaded {len(prompts_list)} active prompts.",
+            file=sys.stderr,
+        )
 
         negative_prompt = config.get("negative_prompt", "")
         model_id = config.get("model_id", "stabilityai/stable-diffusion-2-1-base")
@@ -218,7 +232,10 @@ class StableDiffusionPlugin(PluginBase):
         guidance_scale = float(config.get("guidance_scale", 7.5))
 
         print(f"[StableDiffusion] Loading model: {model_id}...", file=sys.stderr)
-        print(f"::PROGRESS:: 10 :: Loading Model (this may take a while)...", file=sys.stderr)
+        print(
+            f"::PROGRESS:: 10 :: Loading Model (this may take a while)...",
+            file=sys.stderr,
+        )
 
         # Load Pipeline
         try:
@@ -238,17 +255,19 @@ class StableDiffusionPlugin(PluginBase):
             pipe = StableDiffusionPipeline.from_pretrained(
                 model_id, torch_dtype=torch_dtype
             )
-            
+
             # Use DPM Scheduler for faster results
-            pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-            
+            pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+                pipe.scheduler.config
+            )
+
             if not config.get("safety_checker", True):
                 print("[StableDiffusion] Disabling Safety Checker...", file=sys.stderr)
                 pipe.safety_checker = None
                 pipe.requires_safety_checker = False
-            
+
             pipe = pipe.to(device)
-            
+
             # Enable attention slicing for lower memory usage
             pipe.enable_attention_slicing()
 
@@ -278,11 +297,11 @@ class StableDiffusionPlugin(PluginBase):
                 # We use 768x512 (landscape) as a safe baseline for wallpapers.
                 gen_width = int(config.get("width", 768))
                 gen_height = int(config.get("height", 512))
-                
+
                 # Ensure multiple of 8 (requirement for VAE)
                 gen_width = (gen_width // 8) * 8
                 gen_height = (gen_height // 8) * 8
-                
+
                 output = pipe(
                     prompt,
                     negative_prompt=negative_prompt,
@@ -291,23 +310,34 @@ class StableDiffusionPlugin(PluginBase):
                     width=gen_width,
                     height=gen_height,
                 )
-                
+
                 image = output.images[0]
-                
+
                 # Check for NSFW
                 # If safety_checker is active, it returns nsfw_content_detected list
-                if hasattr(output, "nsfw_content_detected") and output.nsfw_content_detected:
+                if (
+                    hasattr(output, "nsfw_content_detected")
+                    and output.nsfw_content_detected
+                ):
                     if output.nsfw_content_detected[0]:
-                        print(f"[StableDiffusion] Safety checker blocked image. Skipping save.", file=sys.stderr)
+                        print(
+                            f"[StableDiffusion] Safety checker blocked image. Skipping save.",
+                            file=sys.stderr,
+                        )
                         continue
 
                 # Upscale if requested (Simple Lanczos)
                 if config.get("upscale", True):
-                    target_w, target_h = 2560, 1440 # QHD Target
-                    print(f"[StableDiffusion] Upscaling to {target_w}x{target_h}...", file=sys.stderr)
+                    target_w, target_h = 2560, 1440  # QHD Target
+                    print(
+                        f"[StableDiffusion] Upscaling to {target_w}x{target_h}...",
+                        file=sys.stderr,
+                    )
                     # Simple resize using LANCZOS (high quality down/upscale)
                     # For a true AI upscale we'd need another model, but this is good for basic use.
-                    image = image.resize((target_w, target_h), 1) # PIL.Image.LANCZOS = 1
+                    image = image.resize(
+                        (target_w, target_h), 1
+                    )  # PIL.Image.LANCZOS = 1
 
                 # Create Filename
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -344,7 +374,7 @@ class StableDiffusionPlugin(PluginBase):
 
         if generated_count > 0:
             return {"status": "success", "path": str(download_dir)}
-        
+
         return {"status": "error", "message": "Failed to generate any images"}
 
     def _cleanup_old_files(self, download_dir: Path, max_files: int):
@@ -381,7 +411,7 @@ class StableDiffusionPlugin(PluginBase):
             now = datetime.now()
 
             delta = now - last_run_dt
-            
+
             target_delta = None
             if interval == "hourly":
                 target_delta = timedelta(hours=1)
@@ -389,20 +419,29 @@ class StableDiffusionPlugin(PluginBase):
                 target_delta = timedelta(days=1)
             elif interval == "weekly":
                 target_delta = timedelta(weeks=1)
-            
+
             if target_delta:
                 if delta > target_delta:
-                    print(f"[StableDiffusion] Interval reached (Last run: {delta} ago)", file=sys.stderr)
+                    print(
+                        f"[StableDiffusion] Interval reached (Last run: {delta} ago)",
+                        file=sys.stderr,
+                    )
                     return True
                 else:
                     remaining = target_delta - delta
                     # Format remaining time friendly
-                    rem_str = str(remaining).split('.')[0]
-                    print(f"[StableDiffusion] Skipping run. Time remaining: {rem_str} (Interval: {interval})", file=sys.stderr)
+                    rem_str = str(remaining).split(".")[0]
+                    print(
+                        f"[StableDiffusion] Skipping run. Time remaining: {rem_str} (Interval: {interval})",
+                        file=sys.stderr,
+                    )
                     return False
 
         except Exception as e:
-            print(f"[StableDiffusion] Interval check failed ({e}). Defaulting to RUN.", file=sys.stderr)
+            print(
+                f"[StableDiffusion] Interval check failed ({e}). Defaulting to RUN.",
+                file=sys.stderr,
+            )
             return True
 
         return False
@@ -412,9 +451,12 @@ class StableDiffusionPlugin(PluginBase):
         timestamp_file.write_text(str(time.time()))
 
     def _perform_reset(self, download_dir):
-        print(f"[StableDiffusion] Resetting directory {download_dir}...", file=sys.stderr)
+        print(
+            f"[StableDiffusion] Resetting directory {download_dir}...", file=sys.stderr
+        )
         try:
             import shutil
+
             for item in download_dir.iterdir():
                 if item.is_file():
                     item.unlink()

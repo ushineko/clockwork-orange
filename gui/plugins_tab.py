@@ -974,7 +974,7 @@ class SinglePluginWidget(QWidget):
 
     def display_preview_image(self, path):
         pixmap = QPixmap(path)
-    
+
     def scan_for_review(self):
         """Scan download directory for images to review."""
         current_config = self.get_config()
@@ -1098,7 +1098,6 @@ class SinglePluginWidget(QWidget):
             self.apply_blacklist_btn.setText(f"Apply Blacklist ({count})")
         self.apply_blacklist_btn.setEnabled(count > 0)
 
-
     def keyPressEvent(self, event):
         if not self.review_images:
             super().keyPressEvent(event)
@@ -1131,7 +1130,7 @@ class SinglePluginWidget(QWidget):
 
             # Create a temp config to run the blacklist action
             current_config = self.get_config()
-            
+
             if self.plugin_name == "stable_diffusion":
                 # For SD, we just want to delete, not blacklist
                 current_config["action"] = "delete_files"
@@ -1139,7 +1138,7 @@ class SinglePluginWidget(QWidget):
             else:
                 current_config["action"] = "process_blacklist"
                 title = "Applying Blacklist"
-                
+
             current_config["targets"] = targets
             current_config["force"] = True
 
@@ -1154,10 +1153,11 @@ class SinglePluginWidget(QWidget):
 
             # Rescan to refresh list
             self.scan_for_review()
-        
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to apply blacklist: {e}")
             import traceback
+
             traceback.print_exc()
 
         # Rescan to refresh list

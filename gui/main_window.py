@@ -482,14 +482,11 @@ class ClockworkOrangeGUI(QMainWindow):
         self.wallpaper_timer.start(interval_seconds * 1000)
 
         # Log to Activity Log if it exists
-        if (
-            hasattr(self, "service_page")
-            and self.service_page
-        ):
+        if hasattr(self, "service_page") and self.service_page:
             message = f"Wallpaper timer: every {interval_seconds} seconds"
-            
+
             if hasattr(self.service_page, "add_log_message"):
-                 self.service_page.add_log_message(message)
+                self.service_page.add_log_message(message)
             elif hasattr(self.service_page, "log_buffer"):
                 self.service_page.log_buffer.append(message)
                 if hasattr(self.service_page, "refresh_logs"):
@@ -508,18 +505,15 @@ class ClockworkOrangeGUI(QMainWindow):
     def _on_wallpaper_log(self, message):
         """Handle log messages from wallpaper worker."""
         # Add to Activity Log widget
-        if (
-            hasattr(self, "service_page")
-            and self.service_page
-        ):
+        if hasattr(self, "service_page") and self.service_page:
             from datetime import datetime
 
             timestamp = datetime.now().strftime("%H:%M:%S")
             full_message = f"{timestamp} {message}"
-            
+
             # Check for new method (ActivityLogWidget)
             if hasattr(self.service_page, "add_log_message"):
-                 self.service_page.add_log_message(full_message)
+                self.service_page.add_log_message(full_message)
             # Fallback for ServiceManagerWidget (Linux) or older setup
             elif hasattr(self.service_page, "log_buffer"):
                 self.service_page.log_buffer.append(full_message)
