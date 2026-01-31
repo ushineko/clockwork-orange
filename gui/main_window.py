@@ -12,9 +12,8 @@ from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel,
                              QMainWindow, QMenu, QPushButton, QSplitter,
-                             QStackedWidget, QSystemTrayIcon, QTabWidget,
-                             QTextBrowser, QTreeWidget, QTreeWidgetItem,
-                             QTreeWidgetItemIterator)
+                             QStackedWidget, QSystemTrayIcon, QTextBrowser,
+                             QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator)
 from PyQt6.QtWidgets import QVBoxLayout as QVBoxLayoutDialog
 
 from plugin_manager import PluginManager
@@ -192,56 +191,51 @@ class AboutDialog(QDialog):
 
         layout = QVBoxLayoutDialog()
 
-        # Tab widget for About and README
-        tab_widget = QTabWidget()
+        # === Compact Header: Logo on left, info on right ===
+        header_layout = QHBoxLayout()
 
-        # === About Tab ===
-        about_widget = QLabel()
-        about_layout = QVBoxLayoutDialog(about_widget)
-
-        # Logo
+        # Logo (smaller)
         logo_label = QLabel()
         logo_pixmap = self.get_logo()
-        logo_label.setPixmap(logo_pixmap)
-        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        about_layout.addWidget(logo_label)
+        scaled_logo = logo_pixmap.scaled(
+            64, 64,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        logo_label.setPixmap(scaled_logo)
+        logo_label.setFixedSize(70, 70)
+        header_layout.addWidget(logo_label)
 
-        # Title
+        # Info column
+        info_layout = QVBoxLayoutDialog()
+        info_layout.setSpacing(2)
+
         title_label = QLabel("Clockwork Orange")
-        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        about_layout.addWidget(title_label)
+        title_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        info_layout.addWidget(title_label)
 
-        # Tagline
         tagline_label = QLabel('"My choice is your imperative"')
-        tagline_label.setFont(QFont("Arial", 10, QFont.Weight.Normal))
-        tagline_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        about_layout.addWidget(tagline_label)
+        tagline_label.setFont(QFont("Arial", 9, QFont.Weight.Normal))
+        tagline_label.setStyleSheet("color: gray;")
+        info_layout.addWidget(tagline_label)
 
-        # Copyright
-        copyright_label = QLabel("© 2025 github.com/ushineko")
-        copyright_label.setFont(QFont("Arial", 9))
-        copyright_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        about_layout.addWidget(copyright_label)
-
-        # Version
         version_text = self.get_version_string()
-        version_label = QLabel(version_text)
-        version_label.setFont(QFont("Arial", 9))
-        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        about_layout.addWidget(version_label)
+        meta_label = QLabel(f"{version_text}  •  © 2025 github.com/ushineko")
+        meta_label.setFont(QFont("Arial", 8))
+        meta_label.setStyleSheet("color: gray;")
+        info_layout.addWidget(meta_label)
 
-        about_layout.addStretch()
-        tab_widget.addTab(about_widget, "About")
+        header_layout.addLayout(info_layout)
+        header_layout.addStretch()
 
-        # === README Tab ===
+        layout.addLayout(header_layout)
+
+        # === Scrollable README ===
         readme_browser = QTextBrowser()
         readme_browser.setOpenExternalLinks(True)
         readme_content = self.load_readme()
         readme_browser.setMarkdown(readme_content)
-        tab_widget.addTab(readme_browser, "README")
-
-        layout.addWidget(tab_widget)
+        layout.addWidget(readme_browser, 1)  # stretch factor 1
 
         # Close button
         button_layout = QHBoxLayout()
