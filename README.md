@@ -4,10 +4,13 @@ A Python script for managing wallpapers and lock screen backgrounds, originally 
 
 > **⚠️ IMPORTANT:**
 > *   **Linux**: Requires KDE Plasma 6 (`qdbus6`, `kwriteconfig6`).
-> *   **Windows**: Setup requires Python 3.10+ or the frozen executable.
+> *   **Windows**: Requires Windows 10/11. Use the standalone executable or Python 3.10+.
 >
-> **🏗️ Windows Support (Beta):** We now have experimental support for Windows 10/11!
-> Builds are available via **GitHub Actions** (check the "Actions" tab -> "Build Windows" -> "Artifacts"). Detailed instructions are in `WALKTHROUGH.md`. Note that this feature is **experimental** and still under active testing.
+> **🪟 Windows Support (Beta):** Windows 10/11 is now supported!
+> *   **Download**: Get `clockwork-orange.exe` from [GitHub Releases](https://github.com/ushineko/clockwork-orange/releases)
+> *   **Status**: Beta — tested on multiple Windows installations, feedback welcome!
+> *   **Note**: The executable is **not code-signed**, so Windows SmartScreen may show a warning. This is expected — click "More info" → "Run anyway" to proceed.
+> *   **Details**: See `WALKTHROUGH.md` for setup instructions and known limitations.
 
 *Clockwork Orange: Our Choice Is Your Imperative (tm)*
 

@@ -2,7 +2,29 @@
 
 This document outlines how to build, run, and manage **Clockwork Orange** on Windows.
 
-## 1. Building the Executable
+> **Status**: Beta — tested on multiple Windows 10/11 installations. Feedback welcome!
+
+## Quick Start (Recommended)
+
+1. **Download** `clockwork-orange.exe` from [GitHub Releases](https://github.com/ushineko/clockwork-orange/releases)
+2. **Run** the executable — double-click to launch the GUI
+3. **Configure** your plugins and settings, then minimize to tray
+
+### Windows SmartScreen Warning
+
+The executable is **not code-signed**, so Windows SmartScreen will show a warning on first run:
+
+> "Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting."
+
+This is expected. To proceed:
+1. Click **"More info"**
+2. Click **"Run anyway"**
+
+This only happens once per download.
+
+---
+
+## 1. Building the Executable (For Developers)
 
 We use **PyInstaller** to package the application into a single executable `clockwork-orange.exe`.
 
@@ -19,9 +41,8 @@ This will create `dist\clockwork-orange.exe`.
 
 ### GitHub Actions (Cloud Build)
 We also support automated cloud builds via GitHub Actions.
-1.  **Trigger**: Pushing to `master` (or manual trigger via **Actions** tab -> **Build Windows**).
-2.  **Artifacts**: After a successful run, check the **Artifacts** section at the bottom of the run summary.
-3.  **Download**: Click `clockwork-orange-windows` to get the ready-to-use executable.
+1.  **Releases**: Tagged versions (e.g., `v2.7.0`) automatically build and publish to [GitHub Releases](https://github.com/ushineko/clockwork-orange/releases) — this is the easiest way to get the latest stable build.
+2.  **Manual/Dev Builds**: Check the **Actions** tab for build artifacts from specific commits.
 
 ## 2. CLI Usage
 
