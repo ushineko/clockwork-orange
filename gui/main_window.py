@@ -13,7 +13,8 @@ from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel,
                              QMainWindow, QMenu, QPushButton, QSplitter,
                              QStackedWidget, QSystemTrayIcon, QTextBrowser,
-                             QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator)
+                             QTreeWidget, QTreeWidgetItem,
+                             QTreeWidgetItemIterator)
 from PyQt6.QtWidgets import QVBoxLayout as QVBoxLayoutDialog
 
 from plugin_manager import PluginManager
@@ -198,7 +199,8 @@ class AboutDialog(QDialog):
         logo_label = QLabel()
         logo_pixmap = self.get_logo()
         scaled_logo = logo_pixmap.scaled(
-            64, 64,
+            64,
+            64,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
