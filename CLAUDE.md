@@ -50,7 +50,7 @@ Linux Distros:
     *   Tags (`v*`) trigger a Release with all three artifacts.
 
 ## Documentation
-*   `README.md`: Main entry point.
+*   `README.md`: Main entry point. **Note**: The GUI's About/Help dialog displays the README, so keep them in sync.
 *   `GUI.md`: Generated tour. **Do not edit manually.** Run `docs/generate_screenshots.py`.
 *   **Automation**: The generator script uses PyQt introspection to find text fields (`QLineEdit`, `QTextEdit`) and applies a Gaussian Blur to redact sensitive info.
 

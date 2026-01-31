@@ -12,8 +12,9 @@ from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel,
                              QMainWindow, QMenu, QPushButton, QSplitter,
-                             QStackedWidget, QSystemTrayIcon, QTreeWidget,
-                             QTreeWidgetItem, QTreeWidgetItemIterator)
+                             QStackedWidget, QSystemTrayIcon, QTabWidget,
+                             QTextBrowser, QTreeWidget, QTreeWidgetItem,
+                             QTreeWidgetItemIterator)
 from PyQt6.QtWidgets import QVBoxLayout as QVBoxLayoutDialog
 
 from plugin_manager import PluginManager
@@ -186,44 +187,61 @@ class AboutDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("About Clockwork Orange")
         self.setModal(True)
-        self.setFixedSize(400, 300)
+        self.setMinimumSize(600, 500)
+        self.resize(700, 550)
 
         layout = QVBoxLayoutDialog()
+
+        # Tab widget for About and README
+        tab_widget = QTabWidget()
+
+        # === About Tab ===
+        about_widget = QLabel()
+        about_layout = QVBoxLayoutDialog(about_widget)
 
         # Logo
         logo_label = QLabel()
         logo_pixmap = self.get_logo()
         logo_label.setPixmap(logo_pixmap)
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(logo_label)
+        about_layout.addWidget(logo_label)
 
         # Title
         title_label = QLabel("Clockwork Orange")
         title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title_label)
+        about_layout.addWidget(title_label)
 
         # Tagline
         tagline_label = QLabel('"My choice is your imperative"')
         tagline_label.setFont(QFont("Arial", 10, QFont.Weight.Normal))
         tagline_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(tagline_label)
+        about_layout.addWidget(tagline_label)
 
         # Copyright
         copyright_label = QLabel("© 2025 github.com/ushineko")
         copyright_label.setFont(QFont("Arial", 9))
         copyright_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(copyright_label)
+        about_layout.addWidget(copyright_label)
 
         # Version
         version_text = self.get_version_string()
         version_label = QLabel(version_text)
         version_label.setFont(QFont("Arial", 9))
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(version_label)
+        about_layout.addWidget(version_label)
 
-        # Spacer
-        layout.addStretch()
+        about_layout.addStretch()
+        tab_widget.addTab(about_widget, "About")
+
+        # === README Tab ===
+        readme_browser = QTextBrowser()
+        readme_browser.setOpenExternalLinks(True)
+        readme_content = self.load_readme()
+        readme_browser.setMarkdown(readme_content)
+        tab_widget.addTab(readme_browser, "README")
+
+        layout.addWidget(tab_widget)
 
         # Close button
         button_layout = QHBoxLayout()
@@ -236,6 +254,27 @@ class AboutDialog(QDialog):
         layout.addLayout(button_layout)
 
         self.setLayout(layout)
+
+    def load_readme(self):
+        """Load README.md content"""
+        readme_paths = [
+            Path(__file__).parent.parent / "README.md",  # Development
+            Path("/usr/share/doc/clockwork-orange-git/README.md"),  # Arch package
+            Path("/usr/share/doc/clockwork-orange/README.md"),  # Debian package
+        ]
+
+        # For frozen apps (PyInstaller)
+        if getattr(sys, "frozen", False):
+            readme_paths.insert(0, Path(sys._MEIPASS) / "README.md")
+
+        for readme_path in readme_paths:
+            try:
+                if readme_path.exists():
+                    return readme_path.read_text(encoding="utf-8")
+            except Exception:
+                pass
+
+        return "# README\n\nREADME file not found."
 
     def get_version_string(self):
         """Get the application version string"""

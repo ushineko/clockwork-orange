@@ -42,6 +42,7 @@ description: Iteratively run, capture logs, and debug a program until a success 
     *   **Update Global Documentation** (Reference: `/update_documentation`):
         *   Identify all scripts in the repo.
         *   Update the root `README.md` with a table/list of all scripts and their descriptions.
+        *   **About/Help Dialog**: If the app has an About/Help dialog that displays the README, ensure it stays in sync with documentation changes.
     *   **Update AUR** (If applicable):
         *   If this project has an AUR package:
             1.  **Update pkgver**: First, update the `pkgver` line in PKGBUILD to the current version:
