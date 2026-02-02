@@ -38,7 +38,8 @@ $PyArgs = @(
     "--hidden-import", "win32event",
     "--hidden-import", "servicemanager",
     "--collect-all", "gui",
-    "--collect-all", "plugins"
+    "--collect-all", "plugins",
+    "--collect-all", "watchdog"
 )
 
 # Helper to find and add DLLs
@@ -98,7 +99,7 @@ $PyArgs = Add-PythonDlls $PyArgs
 $PyArgs += "clockwork-orange.py"
 
 # Run PyInstaller
-pyinstaller $PyArgs
+python -m PyInstaller $PyArgs
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build successful! Executable is in dist/clockwork-orange.exe"
