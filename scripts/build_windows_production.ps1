@@ -40,7 +40,14 @@ $PyArgs = @(
     "--hidden-import", "servicemanager",
     "--collect-all", "gui",
     "--collect-all", "plugins",
-    "--collect-all", "watchdog"
+    # Watchdog requires explicit hidden imports for platform-specific observers
+    "--hidden-import", "watchdog",
+    "--hidden-import", "watchdog.events",
+    "--hidden-import", "watchdog.observers",
+    "--hidden-import", "watchdog.observers.api",
+    "--hidden-import", "watchdog.observers.read_directory_changes",
+    "--hidden-import", "watchdog.utils",
+    "--hidden-import", "watchdog.utils.dirsnapshot"
 )
 
 # Helper to find and add DLLs
