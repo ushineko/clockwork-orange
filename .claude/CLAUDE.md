@@ -46,6 +46,78 @@ Before releasing Windows builds:
 
 ---
 
+## Release Workflow
+
+When the user says **"release"** or **"releasing"**, follow this workflow:
+
+### Step 1: Determine Version Bump
+
+Use semantic versioning (semver) to determine the new version:
+
+| Change Type | Version Component | Example |
+|-------------|-------------------|---------|
+| Bugfix / minor patch | Patch (x.y.**Z**) | v2.7.2 → v2.7.3 |
+| New feature | Minor (x.**Y**.0) | v2.7.2 → v2.8.0 |
+| Major/breaking change | Major (**X**.0.0) | v2.7.2 → v3.0.0 |
+
+### Step 2: Confirm Version with User
+
+**Before updating `.tag`**, use `AskUserQuestion` to confirm:
+
+```
+Current version: v2.7.2
+Suggested new version: v2.7.3 (patch bump for bugfix)
+
+Options:
+1. Accept v2.7.3
+2. Use minor bump (v2.8.0)
+3. Use major bump (v3.0.0)
+4. Other (specify custom version)
+```
+
+### Step 3: Update .tag File
+
+Update the `.tag` file with the confirmed version:
+```
+v2.7.3
+```
+
+### Step 4: Run Release Script
+
+**On Linux/macOS:**
+```bash
+./release_version.sh
+```
+
+**On Windows (via Git Bash or MSYS2):**
+```bash
+bash release_version.sh
+```
+
+The script will:
+1. Commit `.tag` if modified
+2. Create annotated git tag
+3. Push to remote (main branch + tag)
+
+### Step 5: Verify Release
+
+After the script completes:
+1. Confirm tag appears on GitHub
+2. GitHub Actions will build Windows executable automatically
+3. Check Actions workflow for build success
+
+### Release Checklist
+
+- [ ] All tests passing
+- [ ] Self-test passes on frozen executable (if Windows changes)
+- [ ] Version confirmed with user
+- [ ] `.tag` updated
+- [ ] `release_version.sh` executed successfully
+- [ ] Tag visible on GitHub
+- [ ] GitHub Actions build successful
+
+---
+
 ## Environment
 
 - **Python**: 3.10+ (3.12 for development)
