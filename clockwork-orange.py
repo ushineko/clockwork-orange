@@ -922,9 +922,13 @@ def main():
         all_passed = all(results.values())
         print(f"Results: {results}")
         print(f"All passed: {all_passed}")
+        exit_code = 0 if all_passed else 1
+        print(f"Exiting with code: {exit_code}")
         sys.stdout.flush()
         sys.stderr.flush()
-        sys.exit(0 if all_passed else 1)
+        # Use os._exit to avoid any atexit handlers or cleanup that might change exit code
+        import os
+        os._exit(exit_code)
 
     # Load configuration file and merge with command line arguments
     config = load_config_file()
