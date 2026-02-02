@@ -1,8 +1,8 @@
 # Spec 005: Shared Blacklist and Image Review System
 
 **Status**: COMPLETE
-**Implementation Date**: 2024-07
-**Commit**: (baseline feature)
+**Implementation Date**: 2025-12
+**Commit**: Multiple commits, part of plugin system
 
 ## Overview
 Implement a centralized blacklist system shared across all plugins with GUI-based image review functionality to allow users to ban unwanted wallpapers.

@@ -1,8 +1,8 @@
 # Spec 006: Background Service and Daemon Mode
 
 **Status**: COMPLETE
-**Implementation Date**: 2024-09
-**Commit**: (baseline feature)
+**Implementation Date**: 2025-12
+**Commit**: Multiple commits, service fixes 2025-12-24
 
 ## Overview
 Enable Clockwork Orange to run as a background service/daemon with automatic wallpaper cycling at configured intervals.

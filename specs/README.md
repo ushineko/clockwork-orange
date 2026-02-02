@@ -41,12 +41,6 @@ These specs document features that have been implemented:
 - **005**: Blacklist System - Shared blacklist and image review functionality
 - **006**: Service/Daemon Mode - Background service with systemd/Task Scheduler
 
-## Pending Specs
-
-These specs are planned but not yet implemented:
-
-- **007**: Configuration Profiles - Multiple configuration presets for different use cases
-
 ## Using Specs with Ralph Loop Mode
 
 When using `/ralph` or Ralph Loop Mode:
@@ -71,7 +65,7 @@ When adding new features:
 
 ## Retroactive Specs
 
-Specs 001-006 were created retroactively to document existing features. This provides:
+All current specs (001-006) were created retroactively to document existing features implemented in late 2025 and early 2026. This provides:
 - Documentation of design decisions
 - Reference for maintenance and enhancements
 - Foundation for Ralph Loop workflow

@@ -1,8 +1,8 @@
 # Spec 002: Plugin Architecture for Wallpaper Sources
 
 **Status**: COMPLETE
-**Implementation Date**: 2024-06
-**Commit**: (baseline feature)
+**Implementation Date**: 2025-12
+**Commit**: Multiple commits, Stable Diffusion added 2026-01-17
 
 ## Overview
 Design and implement an extensible plugin system to support multiple wallpaper sources (local files, web APIs, AI generation) with a unified interface.

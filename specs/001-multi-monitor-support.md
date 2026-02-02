@@ -1,8 +1,8 @@
 # Spec 001: Multi-Monitor Wallpaper Support
 
 **Status**: COMPLETE
-**Implementation Date**: 2024-01
-**Commit**: (baseline feature)
+**Implementation Date**: 2025-12 to 2026-01
+**Commit**: Multiple commits, restored in 2026-01-29
 
 ## Overview
 Implement multi-monitor support for KDE Plasma 6 to set unique wallpapers on each connected display.

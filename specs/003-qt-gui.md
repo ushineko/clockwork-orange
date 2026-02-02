@@ -1,8 +1,8 @@
 # Spec 003: Qt-based Graphical User Interface
 
 **Status**: COMPLETE
-**Implementation Date**: 2024-08
-**Commit**: (baseline feature)
+**Implementation Date**: 2025-12
+**Commit**: Multiple commits, review UX improvements 2025-12-25
 
 ## Overview
 Build a comprehensive Qt6-based GUI for managing wallpaper configuration, plugins, and background service without requiring command-line knowledge.
