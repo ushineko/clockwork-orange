@@ -23,7 +23,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.13'
+        python-version: '3.12'
         cache: 'pip'
 
     - name: Install Dependencies
@@ -35,6 +35,17 @@ jobs:
       shell: pwsh
       run: |
         .\scripts\build_windows_production.ps1
+
+    - name: Verify Build (Self-Test)
+      shell: pwsh
+      run: |
+        Write-Host "Running self-test on built executable..."
+        .\dist\clockwork-orange.exe --self-test
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "Self-test FAILED!"
+          exit 1
+        }
+        Write-Host "Self-test PASSED!"
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
