@@ -30,6 +30,7 @@ $PyArgs = @(
     "--name", "clockwork-orange",
     "--icon", "gui/icons/icon.ico",
     "--add-data", "version.txt;.",
+    "--add-data", "README.md;.",
     "--add-data", "img;img",
     "--add-data", "plugins;plugins",
     "--add-data", "gui/icons;gui/icons",
