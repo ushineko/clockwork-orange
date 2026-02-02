@@ -40,9 +40,10 @@ jobs:
       shell: pwsh
       run: |
         Write-Host "Running self-test on built executable..."
-        .\dist\clockwork-orange.exe --self-test
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "Self-test FAILED!"
+        $proc = Start-Process -FilePath ".\dist\clockwork-orange.exe" -ArgumentList "--self-test" -Wait -PassThru -NoNewWindow
+        Write-Host "Process exit code: $($proc.ExitCode)"
+        if ($proc.ExitCode -ne 0) {
+          Write-Host "Self-test FAILED with exit code $($proc.ExitCode)!"
           exit 1
         }
         Write-Host "Self-test PASSED!"
