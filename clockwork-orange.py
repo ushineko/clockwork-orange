@@ -913,11 +913,18 @@ def main():
             print(f"Plugins Found: {plugins}")
             if not plugins:
                 print("[WARN] No plugins found!")
-            results["plugins_count"] = len(plugins)
+            results["plugins"] = True
         except Exception as e:
             print(f"[FAIL] Plugin System: {e}")
+            results["plugins"] = False
 
-        sys.exit(0 if all(results.values()) else 1)
+        # Determine result and exit
+        all_passed = all(results.values())
+        print(f"Results: {results}")
+        print(f"All passed: {all_passed}")
+        sys.stdout.flush()
+        sys.stderr.flush()
+        sys.exit(0 if all_passed else 1)
 
     # Load configuration file and merge with command line arguments
     config = load_config_file()
