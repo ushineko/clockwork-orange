@@ -41,13 +41,21 @@ $PyArgs = @(
     "--collect-all", "gui",
     "--collect-all", "plugins",
     # Watchdog requires explicit hidden imports for platform-specific observers
+    # Note: read_directory_changes imports from winapi - both must be included!
     "--hidden-import", "watchdog",
     "--hidden-import", "watchdog.events",
     "--hidden-import", "watchdog.observers",
     "--hidden-import", "watchdog.observers.api",
+    "--hidden-import", "watchdog.observers.winapi",
     "--hidden-import", "watchdog.observers.read_directory_changes",
+    "--hidden-import", "watchdog.observers.polling",
     "--hidden-import", "watchdog.utils",
-    "--hidden-import", "watchdog.utils.dirsnapshot"
+    "--hidden-import", "watchdog.utils.bricks",
+    "--hidden-import", "watchdog.utils.delayed_queue",
+    "--hidden-import", "watchdog.utils.dirsnapshot",
+    "--hidden-import", "watchdog.utils.event_debouncer",
+    "--hidden-import", "watchdog.utils.patterns",
+    "--hidden-import", "watchdog.utils.platform"
 )
 
 # Helper to find and add DLLs

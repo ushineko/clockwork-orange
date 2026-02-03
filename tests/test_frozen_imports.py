@@ -65,6 +65,20 @@ class TestFrozenImports(unittest.TestCase):
             self.assertIn('Windows', class_name)
         print(f"Observer class: {class_name}")
 
+    def test_watchdog_winapi(self):
+        """Test Windows API watchdog module (only on Windows).
+
+        This is the critical module that read_directory_changes depends on.
+        If this import fails, file watching will break on bare Windows installs.
+        """
+        if sys.platform != 'win32':
+            self.skipTest("Windows-specific test")
+
+        # This is the underlying module that read_directory_changes imports from
+        # PyInstaller won't auto-detect this dependency
+        from watchdog.observers import winapi
+        self.assertTrue(winapi)
+
     def test_watchdog_read_directory_changes(self):
         """Test Windows-specific watchdog module (only on Windows)."""
         if sys.platform != 'win32':
