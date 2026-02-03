@@ -877,11 +877,15 @@ def main():
     if args.self_test:
         print("Running Cloudwork Orange Self-Test...")
         results = {}
+        is_frozen = getattr(sys, 'frozen', False)
+        meipass = getattr(sys, '_MEIPASS', None)
 
         # Test 1: Python Info
         print(f"Python: {sys.version}")
         print(f"Platform: {sys.platform}")
-        print(f"Frozen: {getattr(sys, 'frozen', False)}")
+        print(f"Frozen: {is_frozen}")
+        if meipass:
+            print(f"Bundle path: {meipass}")
 
         # Test 2: Critical Imports
         modules = ["ctypes", "sqlite3", "ssl", "PIL", "requests", "yaml", "watchdog"]
@@ -893,6 +897,31 @@ def main():
             except ImportError as e:
                 print(f"[FAIL] Import {mod}: {e}")
                 results[mod] = False
+
+        # Test 2b: Verify watchdog loaded from bundle (when frozen)
+        if is_frozen:
+            print("Verifying watchdog bundle paths...")
+            watchdog_modules = [
+                'watchdog', 'watchdog.events', 'watchdog.observers',
+                'watchdog.observers.read_directory_changes'
+            ]
+            bundle_ok = True
+            for wmod in watchdog_modules:
+                try:
+                    m = sys.modules.get(wmod) or __import__(wmod, fromlist=[''])
+                    mpath = getattr(m, '__file__', None) or ''
+                    if meipass and mpath.startswith(meipass):
+                        print(f"  [OK] {wmod} (from bundle)")
+                    elif 'site-packages' in mpath.lower():
+                        print(f"  [FAIL] {wmod} loaded from site-packages!")
+                        print(f"         Path: {mpath}")
+                        bundle_ok = False
+                    else:
+                        print(f"  [WARN] {wmod} path: {mpath}")
+                except Exception as e:
+                    print(f"  [FAIL] {wmod}: {e}")
+                    bundle_ok = False
+            results["watchdog_bundle"] = bundle_ok
 
         # Test 3: SSL/Network
         try:
