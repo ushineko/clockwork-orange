@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QAction, QColor, QCursor, QFont, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel,
                              QMainWindow, QMenu, QPushButton, QSplitter,
                              QStackedWidget, QSystemTrayIcon, QTextBrowser,
@@ -890,11 +890,22 @@ class ClockworkOrangeGUI(QMainWindow):
         self.schedule_auto_save()
 
     def center_window(self):
-        screen = QApplication.primaryScreen().geometry()
-        window = self.geometry()
-        x = (screen.width() - window.width()) // 2
-        y = (screen.height() - window.height()) // 2
+        # Use screen at cursor position for multi-monitor setups
+        cursor_pos = QCursor.pos()
+        screen = QApplication.screenAt(cursor_pos)
+        if screen is None:
+            screen = QApplication.primaryScreen()
+        screen_geom = screen.geometry()
+
+        # Account for screen position on multi-monitor setups
+        x = screen_geom.x() + (screen_geom.width() - self.width()) // 2
+        y = screen_geom.y() + (screen_geom.height() - self.height()) // 2
+
+        # Qt quirk: need initial move for subsequent move to take effect
+        self.move(screen_geom.x(), screen_geom.y())
+        QApplication.processEvents()
         self.move(x, y)
+        QApplication.processEvents()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
