@@ -19,12 +19,14 @@ A Python script for managing wallpapers and lock screen backgrounds, originally 
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Arch Linux Installation](#arch-linux-installation)
 - [Quick Start](#quick-start)
   - [Basic Usage](#basic-usage)
   - [Configuration File](#configuration-file)
 - [Command Line Options](#command-line-options)
 - [Configuration File](#configuration-file-1)
   - [Configuration Options](#configuration-options)
+- [Dynamic Multi-Plugin & Dual Mode](#dynamic-multi-plugin--dual-mode)
 - [How It Works](#how-it-works)
   - [Desktop Wallpapers](#desktop-wallpapers)
   - [Lock Screen Wallpapers](#lock-screen-wallpapers)
@@ -33,11 +35,14 @@ A Python script for managing wallpapers and lock screen backgrounds, originally 
   - [Local Plugin](#local-plugin)
   - [Wallhaven Plugin](#wallhaven-plugin)
   - [Google Images Plugin](#google-images-plugin)
+  - [Stable Diffusion Plugin](#ai-wallpapers-stable-diffusion)
   - [Review & Blacklist System](#review--blacklist-system)
+- [AI Wallpapers (Stable Diffusion)](#ai-wallpapers-stable-diffusion)
+  - [Requirements](#requirements-1)
+  - [Setup](#setup)
+  - [Configuration](#configuration)
 - [Graphical User Interface](#graphical-user-interface)
   - [Starting the GUI](#starting-the-gui)
-  - [GUI Features](#gui-features)
-  - [GUI Requirements](#gui-requirements)
   - [Desktop Entry Installation](#desktop-entry-installation)
 - [Running as a Background Service](#running-as-a-background-service)
   - [Option 1: Systemd User Service (Recommended)](#option-1-systemd-user-service-recommended)
@@ -62,6 +67,7 @@ A Python script for managing wallpapers and lock screen backgrounds, originally 
 - **Configuration File**: YAML-based configuration for persistent settings
 - **Service Mode**: Run as a background service with systemd
 - **Plugin System**: Extensible plugin architecture (includes Google Images downloader)
+- **AI Wallpaper Generation**: Generate unique wallpapers locally using Stable Diffusion (optional)
 - **Image Review**: Built-in GUI tool to review, mark, and ban unwanted wallpapers
 - **Detailed Debugging**: Detailed logging for troubleshooting
 
