@@ -897,15 +897,10 @@ class ClockworkOrangeGUI(QMainWindow):
             screen = QApplication.primaryScreen()
         screen_geom = screen.geometry()
 
-        # Account for screen position on multi-monitor setups
+        # Center on the detected screen
         x = screen_geom.x() + (screen_geom.width() - self.width()) // 2
         y = screen_geom.y() + (screen_geom.height() - self.height()) // 2
-
-        # Qt quirk: need initial move for subsequent move to take effect
-        self.move(screen_geom.x(), screen_geom.y())
-        QApplication.processEvents()
         self.move(x, y)
-        QApplication.processEvents()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
