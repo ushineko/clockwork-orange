@@ -23,6 +23,21 @@ if getattr(sys, "frozen", False):
 else:
     BASE_DIR = Path(__file__).parent
 
+# Stable Diffusion venv location
+SD_VENV_DIR = Path.home() / ".local" / "share" / "clockwork-orange" / "venv-sd"
+
+
+def get_python_for_plugin(plugin_name: str) -> str:
+    """
+    Get the appropriate Python executable for a plugin.
+    For stable_diffusion, use the dedicated venv if it exists.
+    """
+    if plugin_name == "stable_diffusion":
+        venv_python = SD_VENV_DIR / "bin" / "python"
+        if venv_python.exists():
+            return str(venv_python)
+    return sys.executable
+
 
 class PluginManager:
     def __init__(self, plugins_dir: Optional[Path] = None):
@@ -191,7 +206,8 @@ class PluginManager:
                     "status": "error",
                     "message": f"Plugin not found: {plugin_name}",
                 }
-            cmd = [sys.executable, str(plugin_path), "--config", config_json]
+            python_exe = get_python_for_plugin(plugin_name)
+            cmd = [python_exe, str(plugin_path), "--config", config_json]
 
         try:
             result = subprocess.run(
@@ -245,7 +261,8 @@ class PluginManager:
             if not plugin_path:
                 yield {"status": "error", "message": f"Plugin not found: {plugin_name}"}
                 return
-            cmd = [sys.executable, str(plugin_path), "--config", config_json]
+            python_exe = get_python_for_plugin(plugin_name)
+            cmd = [python_exe, str(plugin_path), "--config", config_json]
 
         # Use Popen to stream output
         try:
