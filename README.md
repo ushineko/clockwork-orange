@@ -112,6 +112,13 @@ To build the package from your local repository (useful for testing changes befo
 sudo pacman -U clockwork-orange-git-*.pkg.tar.zst
 ```
 
+### Optional: Stable Diffusion Setup
+For AI-generated wallpapers, run the setup script after installation:
+```bash
+clockwork-orange-setup-sd
+```
+See [AI Wallpapers (Stable Diffusion)](#ai-wallpapers-stable-diffusion) for details.
+
 ## Quick Start
 
 ### Basic Usage
@@ -370,13 +377,35 @@ After installation, you can launch "Clockwork Orange" from your application menu
 ## AI Wallpapers (Stable Diffusion)
 The built-in Stable Diffusion plugin allows you to generate unique, high-quality wallpapers locally on your machine.
 
-### Setup
-To use the local AI generation plugin, you must install the required dependencies (approx 4GB). A dedicated virtual environment will be created to avoid conflicts with your system Python.
-Graphics card (GPU) highly recommended (NVIDIA/CUDA).
+### Requirements
+- **GPU highly recommended**: NVIDIA with CUDA support provides the best performance
+- **Disk space**: ~2-4GB for the virtual environment and model weights
+- **RAM**: 8GB minimum, 16GB recommended
 
+### Setup
+
+The setup script creates an isolated virtual environment with PyTorch and the HuggingFace diffusers library. This avoids conflicts with your system Python packages.
+
+**For Arch Linux package users (`clockwork-orange-git`):**
+```bash
+# Option 1: Use the convenience command
+clockwork-orange-setup-sd
+
+# Option 2: Run the script directly
+/usr/lib/clockwork-orange/scripts/setup_stable_diffusion.sh
+```
+
+**For git checkout / manual installations:**
 ```bash
 ./scripts/setup_stable_diffusion.sh
 ```
+
+The script will:
+1. Create a virtual environment at `~/.local/share/clockwork-orange/venv-sd`
+2. Install PyTorch (with CUDA support if an NVIDIA GPU is detected)
+3. Install diffusers, transformers, and accelerate
+
+After setup completes, the Stable Diffusion plugin will automatically use this environment.
 
 ### Configuration
 The plugin offers extensive customization options via the GUI:

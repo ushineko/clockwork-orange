@@ -128,8 +128,11 @@ class StableDiffusionPlugin(PluginBase):
             return {
                 "status": "error",
                 "message": (
-                    "Missing dependencies. Please run 'scripts/setup_stable_diffusion.sh' "
-                    "to create the necessary virtual environment."
+                    "Missing dependencies for Stable Diffusion.\n\n"
+                    "Setup options:\n"
+                    "• Arch package: Run 'clockwork-orange-setup-sd' (or /usr/lib/clockwork-orange/scripts/setup_stable_diffusion.sh)\n"
+                    "• Git checkout: Run './scripts/setup_stable_diffusion.sh'\n\n"
+                    "This creates an isolated venv with PyTorch and diffusers (~2-4GB)."
                 ),
             }
 
