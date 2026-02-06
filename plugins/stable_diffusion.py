@@ -216,7 +216,7 @@ class StableDiffusionPlugin(PluginBase):
         )
 
         negative_prompt = config.get("negative_prompt", "")
-        model_id = config.get("model_id", "stabilityai/stable-diffusion-2-1-base")
+        model_id = config.get("model_id", "runwayml/stable-diffusion-v1-5")
         steps = int(config.get("steps", 30))
         guidance_scale = float(config.get("guidance_scale", 7.5))
 
