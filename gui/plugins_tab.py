@@ -503,6 +503,8 @@ class SinglePluginWidget(QWidget):
 
         self.watcher = QFileSystemWatcher()
         self.watcher.directoryChanged.connect(self.on_directory_changed)
+        self._scan_debounce_timer = None
+        self._scanning = False
 
         self.init_ui()
         self.load_plugin_ui()
@@ -655,13 +657,25 @@ class SinglePluginWidget(QWidget):
         self.log_viewer.setFont(QFont(font_family, font_size))
 
     def on_directory_changed(self, path):
-        """Handle directory changes for auto-refresh."""
+        """Handle directory changes for auto-refresh (debounced)."""
         if not self.isVisible():
             return
+        if self._scanning:
+            return
 
-        # Refresh review if we are in review mode (or effectively so)
-        # We can just call scan_for_review as it updates the internal list
-        print(f"[DEBUG] Directory changed: {path} - Refreshing review...")
+        # Debounce: coalesce rapid FSEvents into a single scan
+        if self._scan_debounce_timer is not None:
+            self._scan_debounce_timer.stop()
+
+        from PyQt6.QtCore import QTimer
+        self._scan_debounce_timer = QTimer()
+        self._scan_debounce_timer.setSingleShot(True)
+        self._scan_debounce_timer.timeout.connect(self._debounced_scan)
+        self._scan_debounce_timer.start(500)
+
+    def _debounced_scan(self):
+        """Run scan_for_review after debounce delay."""
+        self._scan_debounce_timer = None
         self.scan_for_review()
 
     def load_plugin_config_ui(self, plugin_name, schema):
@@ -996,6 +1010,13 @@ class SinglePluginWidget(QWidget):
 
     def scan_for_review(self):
         """Scan download directory for images to review."""
+        self._scanning = True
+        try:
+            self._scan_for_review_inner()
+        finally:
+            self._scanning = False
+
+    def _scan_for_review_inner(self):
         current_config = self.get_config()
 
         # Determine directory
@@ -1019,12 +1040,13 @@ class SinglePluginWidget(QWidget):
             QMessageBox.warning(self, "Error", f"Directory not found:\n{download_dir}")
             return
 
-        # Find images
-
-        # Update Watcher
-        if self.watcher.directories():
-            self.watcher.removePaths(self.watcher.directories())
-        self.watcher.addPath(str(download_dir))
+        # Update watcher only if the directory changed (avoids FSEvents re-fire loop)
+        watched = self.watcher.directories()
+        dir_str = str(download_dir)
+        if watched != [dir_str]:
+            if watched:
+                self.watcher.removePaths(watched)
+            self.watcher.addPath(dir_str)
 
         # Collect, filter, and sort with race condition handling
         images_and_times = []
