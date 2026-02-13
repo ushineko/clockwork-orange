@@ -1,16 +1,16 @@
 # clockwork-orange
 
-A Python script for managing wallpapers and lock screen backgrounds, originally designed for **KDE Plasma 6** and now supporting **Windows 10/11**. The script supports setting wallpapers from URLs, local files, or random selection from directories, with options for both desktop and lock screen backgrounds.
+A Python application for managing wallpapers and lock screen backgrounds, supporting **Linux (KDE Plasma 6)**, **Windows 10/11**, and **macOS 13+**. Supports setting wallpapers from URLs, local files, or random selection from directories, with per-monitor wallpaper support on all platforms.
 
-> **⚠️ IMPORTANT:**
+> **Platform Notes:**
 > *   **Linux**: Requires KDE Plasma 6 (`qdbus6`, `kwriteconfig6`).
-> *   **Windows**: Requires Windows 10/11. Use the standalone executable or Python 3.10+.
+> *   **Windows**: Requires Windows 10/11. Use the standalone `.exe` or Python 3.10+.
+> *   **macOS**: Requires macOS 13 (Ventura) or later. Use the `.app` bundle or Python 3.10+.
 >
-> **🪟 Windows Support (Beta):** Windows 10/11 is now supported!
-> *   **Download**: Get `clockwork-orange.exe` from [GitHub Releases](https://github.com/ushineko/clockwork-orange/releases)
-> *   **Status**: Beta — tested on multiple Windows installations, feedback welcome!
-> *   **Note**: The executable is **not code-signed**, so Windows SmartScreen may show a warning. This is expected — click "More info" → "Run anyway" to proceed.
-> *   **Details**: See `WALKTHROUGH.md` for setup instructions and known limitations.
+> **Downloads** — Get platform builds from [GitHub Releases](https://github.com/ushineko/clockwork-orange/releases):
+> *   **Windows**: `clockwork-orange.exe` — Not code-signed; Windows SmartScreen may warn. Click "More info" → "Run anyway".
+> *   **macOS**: `Clockwork-Orange-macOS.zip` — Not code-signed or notarized. Right-click → "Open" on first launch to bypass Gatekeeper.
+> *   **Linux**: `.pkg.tar.zst` (Arch) or `.deb` (Debian/Ubuntu).
 
 *Clockwork Orange: Our Choice Is Your Imperative (tm)*
 
@@ -57,15 +57,16 @@ A Python script for managing wallpapers and lock screen backgrounds, originally 
 
 ## Features
 
-- **Multi-Monitor Support**: Automatically detects connected monitors and sets a unique random wallpaper for each one
+- **Cross-Platform**: Linux (KDE Plasma 6), Windows 10/11, and macOS 13+
+- **Multi-Monitor Support**: Automatically detects connected monitors and sets a unique random wallpaper for each one (all platforms)
 - **Dynamic Multi-Plugin Mode**: Concurrently pull wallpapers from multiple enabled plugins (e.g., Google Images + Local Folder)
 - **Fair Source Selection**: Intelligent randomization ensures equal representation from all enabled sources, preventing large local libraries from dominating
 - **Shared Blacklist**: Centralized, hash-based blacklist system shared across all plugins
-- **Dual Wallpaper Support**: Set different wallpapers for desktop and lock screen simultaneously (dynamically pulled from different plugins)
+- **Dual Wallpaper Support**: Set different wallpapers for desktop and lock screen simultaneously (Linux only; dynamically pulled from different plugins)
 - **Continuous Cycling**: Automatically cycle through wallpapers at specified intervals
-- **Lock Screen Support**: Configure KDE Plasma 6 lock screen backgrounds
+- **Lock Screen Support**: Configure KDE Plasma 6 lock screen backgrounds (Linux only)
 - **Configuration File**: YAML-based configuration for persistent settings
-- **Service Mode**: Run as a background service with systemd
+- **Service Mode**: Run as a background service with systemd (Linux) or GUI tray app (Windows/macOS)
 - **Plugin System**: Extensible plugin architecture (includes Google Images downloader)
 - **AI Wallpaper Generation**: Generate unique wallpapers locally using Stable Diffusion (optional)
 - **Image Review**: Built-in GUI tool to review, mark, and ban unwanted wallpapers
@@ -73,17 +74,28 @@ A Python script for managing wallpapers and lock screen backgrounds, originally 
 
 ## Requirements
 
-- **KDE Plasma 6** (REQUIRED - script will not work with older KDE versions)
-- **Python 3.6+**
+### All Platforms
+- **Python 3.10+**
 - **PyYAML** (`pip install PyYAML`)
-- **qdbus6** (usually included with KDE Plasma 6)
-- **kwriteconfig6** (usually included with KDE Plasma 6)
-- **PyQt6** (optional, for GUI: `pip install PyQt6`)
-- **Pillow** (optional, for image processing: `pip install Pillow`)
+- **PyQt6** (for GUI: `pip install PyQt6`)
+- **Pillow** (for image processing: `pip install Pillow`)
+
+### Linux
+- **KDE Plasma 6** (required — `qdbus6`, `kwriteconfig6`)
+
+### Windows
+- **Windows 10/11**
+- **pywin32** (installed automatically via `requirements.txt`)
+
+### macOS
+- **macOS 13 (Ventura) or later**
+- **pyobjc** (installed automatically via `requirements.txt`)
 
 ## Installation
 
-1. **Clone or download the script:**
+### From Source (All Platforms)
+
+1. **Clone the repository:**
    ```bash
    git clone https://github.com/ushineko/clockwork-orange
    cd clockwork-orange
@@ -91,17 +103,31 @@ A Python script for managing wallpapers and lock screen backgrounds, originally 
 
 2. **Install dependencies:**
    ```bash
-   pip install PyYAML
-   
-   # Optional: Install GUI & Plugin dependencies
-   pip install PyQt6 Pillow
+   pip install -r requirements.txt
    ```
 
-
-3. **Make the script executable:**
+3. **Run:**
    ```bash
-   chmod +x clockwork-orange.py
+   python clockwork-orange.py --gui
    ```
+
+### macOS
+
+**Option A: Download the `.app` bundle** from [GitHub Releases](https://github.com/ushineko/clockwork-orange/releases). Unzip and drag to Applications.
+
+**Option B: Build from source** using Homebrew Python (required for `.app` bundles):
+```bash
+/opt/homebrew/bin/python3.13 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install PyInstaller
+bash scripts/build_macos.sh
+# Result: dist/Clockwork Orange.app
+```
+
+### Windows
+
+Download `clockwork-orange.exe` from [GitHub Releases](https://github.com/ushineko/clockwork-orange/releases), or build from source using the PowerShell build scripts in `scripts/`.
 
 ## Arch Linux Installation
 
@@ -252,31 +278,15 @@ If you enable multiple plugins (e.g., Google Images and Local File Source) and r
 ## How It Works
 
 ### Desktop Wallpapers (Multi-Monitor)
-The script uses `qdbus6` to communicate with KDE Plasma's D-Bus interface. It detects the number of available desktops and assigns a specific wallpaper to each one:
-```javascript
-var allDesktops = desktops();
-// Script generates an array of images equal to the number of desktops
-var images = ["file:///path/to/img1.jpg", "file:///path/to/img2.jpg"];
 
-for (var i = 0; i < allDesktops.length; i++) {
-    var d = allDesktops[i];
-    d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");
-    var img = images[i % images.length];
-    d.writeConfig("Image", img);
-    d.reloadConfig();
-}
-```
+Wallpaper setting is handled natively on each platform:
 
-### Lock Screen Wallpapers
-The script modifies the `~/.config/kscreenlockerrc` configuration file using `kwriteconfig6`:
-```bash
-kwriteconfig6 --file kscreenlockerrc \
-  --group Greeter \
-  --group Wallpaper \
-  --group org.kde.image \
-  --group General \
-  --key Image "file:///path/to/image.jpg"
-```
+- **Linux**: Uses `qdbus6` to communicate with KDE Plasma's D-Bus interface, setting per-desktop wallpapers.
+- **Windows**: Uses `SystemParametersInfoW` with spanned wallpaper stitching via `screeninfo` and Pillow.
+- **macOS**: Uses `NSWorkspace.setDesktopImageURL_forScreen_options_error_()` via pyobjc for per-screen wallpaper control, with `osascript` as a fallback.
+
+### Lock Screen Wallpapers (Linux Only)
+The script modifies the `~/.config/kscreenlockerrc` configuration file using `kwriteconfig6`. Lock screen wallpaper is not supported on Windows or macOS.
 
 ### Image Detection
 The script automatically detects image files by:
@@ -434,7 +444,11 @@ The plugin offers extensive customization options via the GUI:
 - **Interval**: Set the generation frequency (e.g., "Hourly") to keep your desktop fresh with new AI art automatically.
 ## Running as a Background Service
 
-### Option 1: Systemd User Service (Recommended)
+On **Windows** and **macOS**, the GUI must be running for wallpaper cycling. The app minimizes to the system tray (menu bar on macOS) and cycles wallpapers via an internal timer. No separate background service is needed.
+
+On **Linux**, you can use the GUI tray mode or run a standalone background service:
+
+### Option 1: Systemd User Service (Linux, Recommended)
 
 1. **Setup the service:**
    ```bash

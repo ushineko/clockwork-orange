@@ -866,8 +866,8 @@ class SinglePluginWidget(QWidget):
         blocking the main thread and spinning CPU. Using Qt's built-in dialog
         avoids this.
         """
-        import sys
-        if sys.platform == "darwin":
+        import platform_utils
+        if platform_utils.is_macos():
             return QFileDialog.Option.DontUseNativeDialog
         return QFileDialog.Option(0)
 
