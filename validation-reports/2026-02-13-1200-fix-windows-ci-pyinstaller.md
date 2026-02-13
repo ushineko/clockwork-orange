@@ -1,7 +1,7 @@
 ## Validation Report: Fix Windows CI PyInstaller Missing
 
 **Date**: 2026-02-13
-**Commit**: pending
+**Commit**: b305d11
 **Status**: PASSED
 
 ### Summary
