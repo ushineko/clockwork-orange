@@ -857,13 +857,31 @@ class SinglePluginWidget(QWidget):
         self.current_plugin_widgets[field] = widget
         return widget
 
+    def _file_dialog_options(self):
+        """Return dialog options appropriate for the current platform.
+
+        On macOS, the native NSOpenPanel can fail to acquire foreground focus
+        when the process isn't a fully registered GUI app (e.g. running from
+        source). This causes the dialog to open behind the main window,
+        blocking the main thread and spinning CPU. Using Qt's built-in dialog
+        avoids this.
+        """
+        import sys
+        if sys.platform == "darwin":
+            return QFileDialog.Option.DontUseNativeDialog
+        return QFileDialog.Option(0)
+
     def browse_file(self, widget):
-        path, _ = QFileDialog.getOpenFileName(self, "Select File", widget.text())
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select File", widget.text(), options=self._file_dialog_options()
+        )
         if path:
             widget.setText(path)
 
     def browse_directory(self, widget):
-        path = QFileDialog.getExistingDirectory(self, "Select Directory", widget.text())
+        path = QFileDialog.getExistingDirectory(
+            self, "Select Directory", widget.text(), options=self._file_dialog_options()
+        )
         if path:
             widget.setText(path)
 
