@@ -72,14 +72,10 @@ class WallpaperWorker(QThread):
             self.log_message.emit(f"Collected {len(sources)} sources")
 
             if sources:
-                # Check if we have multiple monitors (Windows only)
+                # Check if we have multiple monitors
                 import platform_utils
 
-                monitor_count = (
-                    platform_utils.get_monitor_count()
-                    if platform_utils.is_windows()
-                    else 1
-                )
+                monitor_count = platform_utils.get_monitor_count()
 
                 if monitor_count > 1:
                     self.log_message.emit(
@@ -622,8 +618,8 @@ class ClockworkOrangeGUI(QMainWindow):
         # 1. Service Manager (Linux) / Activity Log (Windows)
         import platform_utils
 
-        if not platform_utils.is_windows():
-            # Linux: Show Service Control
+        if platform_utils.is_linux():
+            # Linux: Show Service Control (systemd)
             self.service_page = ServiceManagerWidget()
             self.add_page(
                 "Service Control",
@@ -631,7 +627,7 @@ class ClockworkOrangeGUI(QMainWindow):
                 icon_name="utilities-system-monitor",
             )
         else:
-            # Windows: Show Activity Log instead
+            # Windows and macOS: Show Activity Log (GUI-based wallpaper cycling)
             from gui.activity_log import ActivityLogWidget
 
             self.service_page = ActivityLogWidget()

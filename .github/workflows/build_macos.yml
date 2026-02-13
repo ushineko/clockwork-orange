@@ -1,0 +1,82 @@
+name: Build macOS
+
+on:
+  push:
+    branches: [ "master", "main" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "master", "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build macOS App
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for git describe versioning
+
+    # NOTE: We do NOT use actions/setup-python here.
+    # setup-python does not provide a framework build on macOS,
+    # which PyInstaller requires for .app bundles.
+    # See: https://github.com/actions/setup-python/issues/58
+    - name: Install Python via Homebrew
+      run: |
+        brew install python@3.13
+
+    - name: Create venv
+      run: |
+        /opt/homebrew/bin/python3.13 -m venv .venv
+        source .venv/bin/activate
+        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+
+    - name: Verify Framework Build
+      run: |
+        source .venv/bin/activate
+        FRAMEWORK=$(python3 -c "import sysconfig; print(sysconfig.get_config_var('PYTHONFRAMEWORK'))")
+        echo "PYTHONFRAMEWORK=$FRAMEWORK"
+        if [ -z "$FRAMEWORK" ]; then
+          echo "::error::Python is not a framework build. Cannot produce .app bundles."
+          exit 1
+        fi
+        python3 --version
+
+    - name: Install Dependencies
+      run: |
+        source .venv/bin/activate
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install PyInstaller
+
+    - name: Build macOS App
+      run: |
+        source .venv/bin/activate
+        bash scripts/build_macos.sh
+
+    - name: Verify Build (Self-Test)
+      run: |
+        echo "Running self-test on built .app..."
+        EXIT_CODE=0
+        "dist/Clockwork Orange.app/Contents/MacOS/Clockwork Orange" --self-test || EXIT_CODE=$?
+        echo "Self-test exit code: $EXIT_CODE"
+        if [ "$EXIT_CODE" -ne 0 ]; then
+          echo "::error::Self-test FAILED!"
+          exit 1
+        fi
+        echo "Self-test PASSED!"
+
+    - name: Package App as ZIP
+      run: |
+        cd dist
+        zip -r "Clockwork-Orange-macOS.zip" "Clockwork Orange.app"
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: clockwork-orange-macos
+        path: dist/Clockwork-Orange-macOS.zip
+        if-no-files-found: error

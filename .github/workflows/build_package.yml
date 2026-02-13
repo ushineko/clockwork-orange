@@ -127,9 +127,74 @@ jobs:
         name: windows-executable
         path: dist/clockwork-orange.exe
 
+  build-macos:
+    name: Build macOS App
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # NOTE: We do NOT use actions/setup-python here.
+    # setup-python does not provide a framework build on macOS,
+    # which PyInstaller requires for .app bundles.
+    # See: https://github.com/actions/setup-python/issues/58
+    - name: Install Python via Homebrew
+      run: |
+        brew install python@3.13
+
+    - name: Create venv
+      run: |
+        /opt/homebrew/bin/python3.13 -m venv .venv
+        source .venv/bin/activate
+        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+
+    - name: Verify Framework Build
+      run: |
+        source .venv/bin/activate
+        FRAMEWORK=$(python3 -c "import sysconfig; print(sysconfig.get_config_var('PYTHONFRAMEWORK'))")
+        echo "PYTHONFRAMEWORK=$FRAMEWORK"
+        if [ -z "$FRAMEWORK" ]; then
+          echo "::error::Python is not a framework build. Cannot produce .app bundles."
+          exit 1
+        fi
+        python3 --version
+
+    - name: Install Dependencies
+      run: |
+        source .venv/bin/activate
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install PyInstaller
+
+    - name: Build macOS App
+      run: |
+        source .venv/bin/activate
+        bash scripts/build_macos.sh
+
+    - name: Verify Build (Self-Test)
+      run: |
+        echo "Running self-test on built .app..."
+        "dist/Clockwork Orange.app/Contents/MacOS/Clockwork Orange" --self-test
+
+    - name: Package App as ZIP
+      run: |
+        cd dist
+        zip -r "Clockwork-Orange-macOS.zip" "Clockwork Orange.app"
+
+    - name: Upload macOS Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-app
+        path: dist/Clockwork-Orange-macOS.zip
+
   release:
     name: Create Release
-    needs: [build-arch, build-deb, build-windows]
+    needs: [build-arch, build-deb, build-windows, build-macos]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -152,6 +217,12 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: windows-executable
+        path: dist
+
+    - name: Download macOS Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: macos-app
         path: dist
 
     - name: Create Release

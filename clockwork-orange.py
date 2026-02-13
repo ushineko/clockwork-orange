@@ -501,8 +501,9 @@ def load_config_file():
     """Load configuration from file."""
     config_paths = [
         Path.home() / ".config" / "clockwork-orange.yml",
-        Path("C:/Users/Public/clockwork_config.yml"),  # Shared config for service
     ]
+    if sys.platform == "win32":
+        config_paths.append(Path("C:/Users/Public/clockwork_config.yml"))  # Shared config for service
 
     for config_path in config_paths:
         if config_path.exists():
@@ -898,12 +899,30 @@ def main():
                 print(f"[FAIL] Import {mod}: {e}")
                 results[mod] = False
 
+        # Test 2a: Platform-specific imports
+        if sys.platform == "darwin":
+            macos_modules = ["AppKit", "Foundation", "objc"]
+            for mod in macos_modules:
+                try:
+                    __import__(mod)
+                    print(f"[OK] Import {mod}")
+                    results[mod] = True
+                except ImportError as e:
+                    print(f"[FAIL] Import {mod}: {e}")
+                    results[mod] = False
+
         # Test 2b: Verify watchdog loaded from bundle (when frozen)
         if is_frozen:
             print("Verifying watchdog bundle paths...")
+            if sys.platform == "win32":
+                watchdog_platform_module = 'watchdog.observers.read_directory_changes'
+            elif sys.platform == "darwin":
+                watchdog_platform_module = 'watchdog.observers.fsevents'
+            else:
+                watchdog_platform_module = 'watchdog.observers.inotify'
             watchdog_modules = [
                 'watchdog', 'watchdog.events', 'watchdog.observers',
-                'watchdog.observers.read_directory_changes'
+                watchdog_platform_module
             ]
             bundle_ok = True
             for wmod in watchdog_modules:
@@ -1021,11 +1040,11 @@ def _create_argument_parser():
     available_plugins = plugin_manager.get_available_plugins()
 
     parser = argparse.ArgumentParser(
-        description="Set wallpaper or lock screen from URL, local file, or random image from directory (KDE Plasma 6 only)",
+        description="Set wallpaper or lock screen from URL, local file, or random image from directory (Linux KDE Plasma 6, Windows 10/11, macOS)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-IMPORTANT: This script is designed specifically for KDE Plasma 6 and requires
-qdbus6 and kwriteconfig6 commands. It will not work with older KDE versions.
+Supported platforms: Linux (KDE Plasma 6), Windows 10/11, macOS 13+.
+Linux requires qdbus6 and kwriteconfig6 commands (KDE Plasma 6).
 
 Examples:
   # Regular wallpaper operations:

@@ -10,10 +10,20 @@ CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 # Note: import ctypes moved to function scope to avoid PyInstaller freeze issues?
 
 IS_WINDOWS = sys.platform == "win32"
+IS_MACOS = sys.platform == "darwin"
+IS_LINUX = sys.platform == "linux"
 
 
 def is_windows():
     return IS_WINDOWS
+
+
+def is_macos():
+    return IS_MACOS
+
+
+def is_linux():
+    return IS_LINUX
 
 
 def set_wallpaper(image_path: Path) -> bool:
@@ -24,6 +34,8 @@ def set_wallpaper(image_path: Path) -> bool:
 
     if IS_WINDOWS:
         return _set_wallpaper_windows(image_path)
+    elif IS_MACOS:
+        return _set_wallpaper_macos(image_path)
     else:
         return _set_wallpaper_linux(image_path)
 
@@ -31,11 +43,13 @@ def set_wallpaper(image_path: Path) -> bool:
 def set_lockscreen_wallpaper(image_path: Path) -> bool:
     """
     Set the lock screen wallpaper.
-    Returns False on Windows as it is not supported/required.
+    Returns False on Windows and macOS as it is not supported/required.
     """
     if IS_WINDOWS:
-        # Windows lockscreen is not supported/requested
         print("[INFO] Lock screen wallpaper not supported on Windows.")
+        return False
+    elif IS_MACOS:
+        print("[INFO] Lock screen wallpaper on macOS requires elevated privileges. Not supported.")
         return False
     else:
         return _set_lockscreen_wallpaper_linux(image_path)
@@ -56,6 +70,8 @@ def get_monitor_count() -> int:
                 f"[DEBUG] Failed to get monitor count via screeninfo, assuming 1: {e}"
             )
             return 1
+    elif IS_MACOS:
+        return _get_monitor_count_macos()
     else:
         # Linux: Use qdbus6 to query Plasma Shell for desktop count
         cmd = [
@@ -80,7 +96,9 @@ def get_monitor_count() -> int:
 
 def set_wallpaper_multi_monitor(image_paths: list) -> bool:
     """Set different wallpaper for each monitor."""
-    if not IS_WINDOWS:
+    if IS_MACOS:
+        return _set_wallpaper_multi_monitor_macos(image_paths)
+    elif IS_LINUX:
         return _set_wallpaper_multi_monitor_linux(image_paths)
 
     if not image_paths:
@@ -418,6 +436,110 @@ def _reload_screensaver_config_linux():
         pass
 
 
+# --- macOS Implementations ---
+
+
+def _set_wallpaper_macos(image_path: Path) -> bool:
+    """Set wallpaper on macOS using NSWorkspace."""
+    print(f"[DEBUG] Setting macOS wallpaper: {image_path}")
+    if not image_path.exists():
+        print(f"[ERROR] File does not exist: {image_path}")
+        return False
+
+    try:
+        import AppKit
+        import Foundation
+
+        workspace = AppKit.NSWorkspace.sharedWorkspace()
+        file_url = Foundation.NSURL.fileURLWithPath_(str(image_path))
+        options = {
+            AppKit.NSWorkspaceDesktopImageScalingKey: AppKit.NSImageScaleProportionallyUpOrDown,
+            AppKit.NSWorkspaceDesktopImageAllowClippingKey: True,
+        }
+
+        for screen in AppKit.NSScreen.screens():
+            result, error = workspace.setDesktopImageURL_forScreen_options_error_(
+                file_url, screen, options, None
+            )
+            if not result:
+                print(f"[ERROR] Failed to set wallpaper: {error}")
+                return False
+        return True
+    except ImportError:
+        return _set_wallpaper_macos_osascript(image_path)
+
+
+def _set_wallpaper_macos_osascript(image_path: Path) -> bool:
+    """Fallback: set wallpaper via AppleScript."""
+    script = f'tell application "System Events" to set picture of every desktop to "{image_path}"'
+    try:
+        subprocess.run(["osascript", "-e", script], check=True, capture_output=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] osascript failed: {e.stderr}")
+        return False
+
+
+def _get_monitor_count_macos() -> int:
+    """Get monitor count on macOS."""
+    try:
+        import AppKit
+
+        count = len(AppKit.NSScreen.screens())
+        print(f"[DEBUG] Detected {count} monitors (macOS)")
+        return count
+    except ImportError:
+        try:
+            result = subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    'tell application "System Events" to count of desktops',
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return int(result.stdout.strip())
+        except Exception as e:
+            print(f"[DEBUG] Failed to detect monitor count on macOS: {e}")
+            return 1
+
+
+def _set_wallpaper_multi_monitor_macos(image_paths: list) -> bool:
+    """Set per-screen wallpapers on macOS."""
+    if not image_paths:
+        return False
+
+    try:
+        import AppKit
+        import Foundation
+
+        workspace = AppKit.NSWorkspace.sharedWorkspace()
+        screens = AppKit.NSScreen.screens()
+        options = {
+            AppKit.NSWorkspaceDesktopImageScalingKey: AppKit.NSImageScaleProportionallyUpOrDown,
+            AppKit.NSWorkspaceDesktopImageAllowClippingKey: True,
+        }
+
+        for i, screen in enumerate(screens):
+            path = Path(image_paths[i % len(image_paths)]).resolve()
+            if not path.exists():
+                print(f"[ERROR] File does not exist: {path}")
+                continue
+            file_url = Foundation.NSURL.fileURLWithPath_(str(path))
+            result, error = workspace.setDesktopImageURL_forScreen_options_error_(
+                file_url, screen, options, None
+            )
+            if not result:
+                print(f"[ERROR] Failed to set wallpaper on screen {i}: {error}")
+                return False
+        return True
+    except ImportError:
+        # Fallback: set all screens to first image via osascript
+        return _set_wallpaper_macos_osascript(Path(image_paths[0]).resolve())
+
+
 # --- Service Management ---
 
 SERVICE_NAME_LINUX = "clockwork-orange.service"
@@ -425,12 +547,17 @@ SERVICE_NAME_WINDOWS = "ClockworkOrangeService"
 
 
 def get_service_name():
-    return SERVICE_NAME_WINDOWS if IS_WINDOWS else SERVICE_NAME_LINUX
+    if IS_WINDOWS:
+        return SERVICE_NAME_WINDOWS
+    elif IS_MACOS:
+        return None
+    else:
+        return SERVICE_NAME_LINUX
 
 
 def service_is_active() -> str:
     """Returns 'active', 'inactive', 'failed', or 'unknown'."""
-    if IS_WINDOWS:
+    if IS_WINDOWS or IS_MACOS:
         return "inactive"
     else:
         return _service_is_active_linux()
@@ -439,26 +566,28 @@ def service_is_active() -> str:
 def service_get_status_details() -> str:
     if IS_WINDOWS:
         return "Windows mode uses System Tray app, not a background service."
+    elif IS_MACOS:
+        return "macOS mode uses the GUI app with system tray. No background service."
     else:
         return _service_get_status_details_linux()
 
 
 def service_start():
-    if IS_WINDOWS:
+    if IS_WINDOWS or IS_MACOS:
         pass
     else:
         return _service_start_linux()
 
 
 def service_stop():
-    if IS_WINDOWS:
+    if IS_WINDOWS or IS_MACOS:
         pass
     else:
         return _service_stop_linux()
 
 
 def service_restart():
-    if IS_WINDOWS:
+    if IS_WINDOWS or IS_MACOS:
         pass
     else:
         return _service_restart_linux()
@@ -467,12 +596,14 @@ def service_restart():
 def service_install(base_path: Path):
     if IS_WINDOWS:
         print("Service installation is not used on Windows. Use the Tray App.")
+    elif IS_MACOS:
+        print("Service installation is not used on macOS. Use the GUI app.")
     else:
         return _service_install_linux(base_path)
 
 
 def service_uninstall():
-    if IS_WINDOWS:
+    if IS_WINDOWS or IS_MACOS:
         pass
     else:
         return _service_uninstall_linux()
@@ -481,6 +612,8 @@ def service_uninstall():
 def service_get_logs() -> str:
     if IS_WINDOWS:
         return "Check console output or %TEMP% for logs."
+    elif IS_MACOS:
+        return "Check the Activity Log in the GUI."
     else:
         return _service_get_logs_linux()
 
@@ -589,7 +722,8 @@ def acquire_instance_lock(app_id: str) -> bool:
     if IS_WINDOWS:
         return _acquire_lock_windows(app_id)
     else:
-        return _acquire_lock_linux(app_id)
+        # Both macOS and Linux use fcntl file locking
+        return _acquire_lock_posix(app_id)
 
 
 def _acquire_lock_windows(app_id: str) -> bool:
@@ -619,7 +753,7 @@ def _acquire_lock_windows(app_id: str) -> bool:
     return True
 
 
-def _acquire_lock_linux(app_id: str) -> bool:
+def _acquire_lock_posix(app_id: str) -> bool:
     global global_lock_handle
     import fcntl
 

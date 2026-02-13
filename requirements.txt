@@ -3,6 +3,9 @@ Pillow==12.0.0
 requests==2.32.5
 PyYAML==6.0.3
 watchdog==6.0.0
-pywin32==311
-pyinstaller==6.16.0
-screeninfo==0.8.1
+# Windows only
+pywin32==311; sys_platform == "win32"
+screeninfo==0.8.1; sys_platform == "win32"
+# macOS only
+pyobjc-core>=10.0; sys_platform == "darwin"
+pyobjc-framework-Cocoa>=10.0; sys_platform == "darwin"
