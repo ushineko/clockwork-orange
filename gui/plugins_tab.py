@@ -891,10 +891,16 @@ class SinglePluginWidget(QWidget):
             return
 
         path = Path(path_str).expanduser().resolve()
-        if path.exists() and path.is_dir():
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
-        else:
+        if not (path.exists() and path.is_dir()):
             QMessageBox.warning(self, "Error", f"Directory does not exist:\n{path}")
+            return
+
+        import platform_utils
+        if platform_utils.is_macos():
+            import subprocess
+            subprocess.Popen(["open", str(path)])
+        else:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def _configure_action_buttons(self, plugin_name):
         is_runnable = plugin_name != "local"
