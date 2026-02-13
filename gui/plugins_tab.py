@@ -857,33 +857,28 @@ class SinglePluginWidget(QWidget):
         self.current_plugin_widgets[field] = widget
         return widget
 
-    def _file_dialog_options(self):
-        """Return dialog options appropriate for the current platform.
-
-        On macOS, the native NSOpenPanel can fail to acquire foreground focus
-        when the process isn't a fully registered GUI app (e.g. running from
-        source). This causes the dialog to open behind the main window,
-        blocking the main thread and spinning CPU. Using Qt's built-in dialog
-        avoids this.
-        """
+    def browse_file(self, widget):
+        dlg = QFileDialog(self, "Select File", widget.text())
+        dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
         import platform_utils
         if platform_utils.is_macos():
-            return QFileDialog.Option.DontUseNativeDialog
-        return QFileDialog.Option(0)
-
-    def browse_file(self, widget):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select File", widget.text(), options=self._file_dialog_options()
-        )
-        if path:
-            widget.setText(path)
+            dlg.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        if dlg.exec():
+            paths = dlg.selectedFiles()
+            if paths:
+                widget.setText(paths[0])
 
     def browse_directory(self, widget):
-        path = QFileDialog.getExistingDirectory(
-            self, "Select Directory", widget.text(), options=self._file_dialog_options()
-        )
-        if path:
-            widget.setText(path)
+        dlg = QFileDialog(self, "Select Directory", widget.text())
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
+        dlg.setOption(QFileDialog.Option.ShowDirsOnly, True)
+        import platform_utils
+        if platform_utils.is_macos():
+            dlg.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        if dlg.exec():
+            paths = dlg.selectedFiles()
+            if paths:
+                widget.setText(paths[0])
 
     def open_file_manager(self, path_str):
         """Open the directory in the default file manager."""
