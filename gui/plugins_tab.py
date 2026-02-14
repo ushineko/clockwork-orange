@@ -504,7 +504,6 @@ class SinglePluginWidget(QWidget):
         self.watcher = QFileSystemWatcher()
         self.watcher.directoryChanged.connect(self.on_directory_changed)
         self._scan_debounce_timer = None
-        self._scanning = False
 
         self.init_ui()
         self.load_plugin_ui()
@@ -657,13 +656,15 @@ class SinglePluginWidget(QWidget):
         self.log_viewer.setFont(QFont(font_family, font_size))
 
     def on_directory_changed(self, path):
-        """Handle directory changes for auto-refresh (debounced)."""
+        """Handle directory changes for auto-refresh (debounced).
+
+        Filesystem watchers can fire many rapid events for a single
+        logical change (e.g. file write = create + modify + close).
+        Debounce into a single scan after events settle.
+        """
         if not self.isVisible():
             return
-        if self._scanning:
-            return
 
-        # Debounce: coalesce rapid FSEvents into a single scan
         if self._scan_debounce_timer is not None:
             self._scan_debounce_timer.stop()
 
@@ -1010,13 +1011,6 @@ class SinglePluginWidget(QWidget):
 
     def scan_for_review(self):
         """Scan download directory for images to review."""
-        self._scanning = True
-        try:
-            self._scan_for_review_inner()
-        finally:
-            self._scanning = False
-
-    def _scan_for_review_inner(self):
         current_config = self.get_config()
 
         # Determine directory
