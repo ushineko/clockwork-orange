@@ -38,12 +38,15 @@ else
     cd "$AUR_DIR"
 fi
 
-# Step 2: Copy package files
+# Step 2: Copy package files and update pkgver from .tag
 echo -e "\n${GREEN}[2/5] Copying package files...${NC}"
 cp "${REPO_ROOT}/PKGBUILD" .
 cp "${REPO_ROOT}/clockwork-orange.install" .
 
-echo "  - PKGBUILD"
+# Update pkgver in PKGBUILD to match .tag (strip 'v' prefix)
+PKGVER="${VERSION#v}"
+sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" PKGBUILD
+echo "  - PKGBUILD (pkgver=${PKGVER})"
 echo "  - clockwork-orange.install"
 
 # Step 3: Generate .SRCINFO
