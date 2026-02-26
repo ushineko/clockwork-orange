@@ -3,13 +3,16 @@
 Main GUI window for clockwork-orange.
 Refactored to use Tree Sidebar navigation.
 """
+import html as html_mod
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 import yaml
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QColor, QCursor, QFont, QIcon, QPainter, QPen, QPixmap
+from PyQt6.QtGui import (QAction, QColor, QCursor, QDesktopServices, QFont,
+                         QIcon, QPainter, QPen, QPixmap)
 from PyQt6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel,
                              QMainWindow, QMenu, QPushButton, QSplitter,
                              QStackedWidget, QSystemTrayIcon, QTextBrowser,
@@ -230,9 +233,17 @@ class AboutDialog(QDialog):
 
         # === Scrollable README ===
         readme_browser = QTextBrowser()
-        readme_browser.setOpenExternalLinks(True)
+        readme_browser.setOpenExternalLinks(False)
         readme_content = self.load_readme()
         readme_browser.setMarkdown(readme_content)
+        # Post-process: Qt's markdown parser doesn't add id attrs to headings,
+        # so TOC anchor links have nothing to target. Add them ourselves.
+        html = readme_browser.toHtml()
+        html = self._add_heading_anchors(html)
+        readme_browser.setHtml(html)
+        readme_browser.anchorClicked.connect(
+            lambda url: self._handle_link(url, readme_browser)
+        )
         layout.addWidget(readme_browser, 1)  # stretch factor 1
 
         # Close button
@@ -267,6 +278,42 @@ class AboutDialog(QDialog):
                 pass
 
         return "# README\n\nREADME file not found."
+
+    @staticmethod
+    def _add_heading_anchors(html):
+        """Add id attributes to heading tags for TOC anchor navigation.
+
+        Qt's markdown-to-HTML conversion omits id attributes on headings,
+        so anchor links like #features have nothing to target. This generates
+        GitHub-style slug IDs (lowercase, hyphens, duplicate suffixes).
+        """
+        seen = {}
+
+        def _make_anchor(match):
+            tag = match.group(1)
+            attrs = match.group(2) or ""
+            content = match.group(3)
+            # Strip HTML tags, then unescape entities (e.g. &amp; -> &)
+            plain = re.sub(r"<[^>]+>", "", content)
+            plain = html_mod.unescape(plain)
+            slug = plain.lower().strip()
+            slug = re.sub(r"[^\w\s-]", "", slug)
+            slug = slug.replace(" ", "-")
+            # Handle duplicate headings (append -1, -2, etc.)
+            count = seen.get(slug, 0)
+            seen[slug] = count + 1
+            anchor = slug if count == 0 else f"{slug}-{count}"
+            return f"<{tag}{attrs} id=\"{anchor}\">{content}</{tag}>"
+
+        return re.sub(r"<(h[1-6])([^>]*)>(.*?)</\1>", _make_anchor, html)
+
+    @staticmethod
+    def _handle_link(url, browser):
+        """Route link clicks: external links open in browser, anchors scroll."""
+        if url.scheme() in ("http", "https", "mailto"):
+            QDesktopServices.openUrl(url)
+        elif url.hasFragment():
+            browser.scrollToAnchor(url.fragment())
 
     def get_version_string(self):
         """Get the application version string"""
