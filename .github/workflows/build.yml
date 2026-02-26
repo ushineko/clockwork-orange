@@ -234,3 +234,79 @@ jobs:
         files: dist/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-aur:
+    name: Publish to AUR
+    needs: [build-arch]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Configure SSH for AUR
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur_deploy
+        chmod 600 ~/.ssh/aur_deploy
+        printf '%s\n' "Host aur.archlinux.org" "  IdentityFile ~/.ssh/aur_deploy" "  User aur" "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
+        chmod 600 ~/.ssh/config
+
+    - name: Clone AUR Repo
+      run: git clone ssh://aur@aur.archlinux.org/clockwork-orange-git.git aur-pkg
+
+    - name: Update AUR Package
+      run: |
+        cp PKGBUILD clockwork-orange.install aur-pkg/
+        cd aur-pkg
+
+        # Generate .SRCINFO with tabs (AUR requires tab-indented fields)
+        PKGVER=$(grep -oP '(?<=^pkgver=).*' PKGBUILD)
+        PKGREL=$(grep -oP '(?<=^pkgrel=).*' PKGBUILD)
+        T=$(printf '\t')
+        {
+          echo "pkgbase = clockwork-orange-git"
+          echo "${T}pkgdesc = Advanced wallpaper manager and downloader with plugin support for KDE Plasma 6"
+          echo "${T}pkgver = ${PKGVER}"
+          echo "${T}pkgrel = ${PKGREL}"
+          echo "${T}url = https://github.com/ushineko/clockwork-orange"
+          echo "${T}install = clockwork-orange.install"
+          echo "${T}arch = any"
+          echo "${T}license = MIT"
+          echo "${T}makedepends = git"
+          echo "${T}depends = python"
+          echo "${T}depends = python-requests"
+          echo "${T}depends = python-yaml"
+          echo "${T}depends = python-pillow"
+          echo "${T}depends = python-watchdog"
+          echo "${T}depends = python-pyqt6"
+          echo "${T}depends = qt6-tools"
+          echo "${T}depends = kconfig"
+          echo "${T}depends = python-psutil"
+          echo "${T}optdepends = python-pytorch: Required for Stable Diffusion AI wallpaper generation"
+          echo "${T}optdepends = python-pytorch-cuda: CUDA acceleration for Stable Diffusion (NVIDIA GPUs)"
+          echo "${T}optdepends = python-diffusers: Required for Stable Diffusion AI wallpaper generation"
+          echo "${T}optdepends = python-transformers: Required for Stable Diffusion AI wallpaper generation"
+          echo "${T}optdepends = python-accelerate: Optimized inference for Stable Diffusion"
+          echo "${T}provides = clockwork-orange"
+          echo "${T}conflicts = clockwork-orange"
+          echo "${T}source = clockwork-orange::git+https://github.com/ushineko/clockwork-orange.git"
+          echo "${T}sha256sums = SKIP"
+          echo ""
+          echo "pkgname = clockwork-orange-git"
+        } > .SRCINFO
+
+    - name: Commit and Push to AUR
+      run: |
+        cd aur-pkg
+        git config user.name "ushineko"
+        git config user.email "ushineko@users.noreply.github.com"
+        git add PKGBUILD clockwork-orange.install .SRCINFO
+        if git diff --cached --quiet; then
+          echo "No changes to publish"
+        else
+          VERSION=$(grep -oP '(?<=^pkgver=).*' PKGBUILD)
+          git commit -m "Update to ${VERSION}"
+          git push
+        fi
