@@ -258,11 +258,17 @@ jobs:
 
     - name: Update AUR Package
       run: |
+        # Read version from .tag and strip 'v' prefix
+        VERSION=$(cat .tag | tr -d '[:space:]')
+        PKGVER=${VERSION#v}
+
+        # Update pkgver in PKGBUILD before copying
+        sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" PKGBUILD
+
         cp PKGBUILD clockwork-orange.install aur-pkg/
         cd aur-pkg
 
         # Generate .SRCINFO with tabs (AUR requires tab-indented fields)
-        PKGVER=$(grep -oP '(?<=^pkgver=).*' PKGBUILD)
         PKGREL=$(grep -oP '(?<=^pkgrel=).*' PKGBUILD)
         T=$(printf '\t')
         {
@@ -306,7 +312,7 @@ jobs:
         if git diff --cached --quiet; then
           echo "No changes to publish"
         else
-          VERSION=$(grep -oP '(?<=^pkgver=).*' PKGBUILD)
+          VERSION=$(cat ../.tag | tr -d '[:space:]')
           git commit -m "Update to ${VERSION}"
           git push
         fi
