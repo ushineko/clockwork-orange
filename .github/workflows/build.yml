@@ -248,10 +248,15 @@ jobs:
     - name: Configure SSH for AUR
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur_deploy
+        printf '%s\n' "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur_deploy
         chmod 600 ~/.ssh/aur_deploy
         printf '%s\n' "Host aur.archlinux.org" "  IdentityFile ~/.ssh/aur_deploy" "  User aur" "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
         chmod 600 ~/.ssh/config
+
+    - name: Verify SSH Access
+      run: |
+        ssh-keygen -l -f ~/.ssh/aur_deploy
+        ssh -vT aur@aur.archlinux.org 2>&1 | head -30 || true
 
     - name: Clone AUR Repo
       run: git clone ssh://aur@aur.archlinux.org/clockwork-orange-git.git aur-pkg
