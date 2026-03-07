@@ -6,15 +6,26 @@ set -e
 APP_DATA_DIR="$HOME/.local/share/clockwork-orange"
 VENV_DIR="$APP_DATA_DIR/venv-sd"
 
+# Pin to Python 3.13 — Python 3.14 has segfaults with scipy/openblas
+PYTHON_BIN="python3.13"
+
 echo "========================================================"
 echo "  Clockwork Orange - Stable Diffusion Setup"
 echo "========================================================"
 echo "Installation Target: $VENV_DIR"
+echo "Python: $PYTHON_BIN"
 echo ""
 echo "This script will create an isolated virtual environment and install"
 echo "the necessary dependencies for local AI image generation."
 echo "WARNING: This requires approx 2-4GB of disk space and a decent internet connection."
 echo ""
+
+# Verify pinned Python is available
+if ! command -v "$PYTHON_BIN" &> /dev/null; then
+    echo "ERROR: $PYTHON_BIN not found."
+    echo "On Arch/CachyOS: paru -S python313"
+    exit 1
+fi
 
 read -p "Do you want to proceed? [y/N] " -n 1 -r
 echo
@@ -32,9 +43,9 @@ if [[ -d "$VENV_DIR" ]]; then
     rm -rf "$VENV_DIR"
 fi
 
-# Create venv
-python3 -m venv "$VENV_DIR"
-echo "Created venv at $VENV_DIR"
+# Create venv with pinned Python
+"$PYTHON_BIN" -m venv "$VENV_DIR"
+echo "Created venv at $VENV_DIR ($(\"$PYTHON_BIN\" --version))"
 
 # Activate venv for installation
 source "$VENV_DIR/bin/activate"
