@@ -122,6 +122,16 @@ class StableDiffusionPlugin(PluginBase):
         # Check Dependencies at Runtime
         try:
             import torch
+            import scipy
+            if tuple(int(x) for x in scipy.__version__.split(".")) < (1, 17, 1):
+                return {
+                    "status": "error",
+                    "message": (
+                        f"scipy {scipy.__version__} is incompatible with Python 3.14+ "
+                        "(segfaults during import). Upgrade to >=1.17.1:\n"
+                        "  pip install 'scipy>=1.17.1'"
+                    ),
+                }
             from diffusers import (DPMSolverMultistepScheduler,
                                    StableDiffusionPipeline)
         except ImportError:
