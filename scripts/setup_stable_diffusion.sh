@@ -64,7 +64,7 @@ fi
 
 echo ""
 echo "[3/3] Installing Diffusers and Transformers..."
-pip install diffusers transformers accelerate scipy -q
+pip install diffusers transformers accelerate 'scipy>=1.17.1' -q
 
 echo ""
 echo "========================================================"
