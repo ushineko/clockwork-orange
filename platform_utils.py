@@ -438,6 +438,51 @@ def _reload_screensaver_config_linux():
 
 # --- macOS Implementations ---
 
+MACOS_WALLPAPER_CACHE_MAX_MB = 500
+_MACOS_WALLPAPER_CACHE_DIR = Path.home() / "Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches"
+
+
+def _prune_macos_wallpaper_cache():
+    """Delete macOS wallpaper cache if it exceeds the size threshold.
+
+    macOS caches each wallpaper set via NSWorkspace but never prunes the cache.
+    With frequent cycling this can grow to hundreds of GB. Deleting the contents
+    is safe — macOS regenerates the current wallpaper's cache entry immediately.
+    """
+    try:
+        cache_dir = _MACOS_WALLPAPER_CACHE_DIR
+        if not cache_dir.is_dir():
+            return
+
+        result = subprocess.run(
+            ["du", "-sk", str(cache_dir)],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return
+
+        size_kb = int(result.stdout.split()[0])
+        size_mb = size_kb / 1024
+
+        if size_mb <= MACOS_WALLPAPER_CACHE_MAX_MB:
+            return
+
+        print(f"[INFO] macOS wallpaper cache is {size_mb:.0f} MB (threshold {MACOS_WALLPAPER_CACHE_MAX_MB} MB), pruning")
+
+        import shutil
+        for entry in cache_dir.iterdir():
+            try:
+                if entry.is_dir():
+                    shutil.rmtree(entry)
+                else:
+                    entry.unlink()
+            except OSError as e:
+                print(f"[WARN] Failed to remove cache entry {entry.name}: {e}")
+
+        print("[INFO] macOS wallpaper cache pruned")
+    except Exception as e:
+        print(f"[WARN] Wallpaper cache cleanup failed (non-fatal): {e}")
+
 
 def _set_wallpaper_macos(image_path: Path) -> bool:
     """Set wallpaper on macOS using NSWorkspace."""
@@ -464,6 +509,7 @@ def _set_wallpaper_macos(image_path: Path) -> bool:
             if not result:
                 print(f"[ERROR] Failed to set wallpaper: {error}")
                 return False
+        _prune_macos_wallpaper_cache()
         return True
     except ImportError:
         return _set_wallpaper_macos_osascript(image_path)
@@ -534,6 +580,7 @@ def _set_wallpaper_multi_monitor_macos(image_paths: list) -> bool:
             if not result:
                 print(f"[ERROR] Failed to set wallpaper on screen {i}: {error}")
                 return False
+        _prune_macos_wallpaper_cache()
         return True
     except ImportError:
         # Fallback: set all screens to first image via osascript
