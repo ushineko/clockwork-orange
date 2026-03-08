@@ -7,6 +7,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import sys
 import traceback
@@ -25,6 +26,37 @@ else:
 
 # Stable Diffusion venv location
 SD_VENV_DIR = Path.home() / ".local" / "share" / "clockwork-orange" / "venv-sd"
+
+# CPU cores to exclude for the stable_diffusion plugin (Linux only).
+# PyTorch initialization segfaults on certain CPU cores due to a suspected
+# interaction between libtorch and specific P-core scheduling. Excluding these
+# logical CPUs from the SD subprocess prevents the crashes.
+# Set to None to disable, or a set of logical CPU IDs to exclude.
+# To re-validate: taskset -c <cpu> python -c "import torch" in a loop.
+SD_EXCLUDE_CPUS: set[int] | None = {8, 9}
+
+
+def _get_cpu_affinity_preexec(plugin_name: str):
+    """
+    Return a preexec_fn that sets CPU affinity for the subprocess, or None.
+    Linux only; returns None on other platforms or if no exclusion is configured.
+    """
+    if plugin_name != "stable_diffusion":
+        return None
+    if SD_EXCLUDE_CPUS is None:
+        return None
+    if not hasattr(os, "sched_getaffinity"):
+        return None  # Not Linux
+
+    available = os.sched_getaffinity(0)
+    allowed = available - SD_EXCLUDE_CPUS
+    if not allowed or allowed == available:
+        return None  # Nothing to exclude, or exclusion would leave no CPUs
+
+    def _set_affinity():
+        os.sched_setaffinity(0, allowed)
+
+    return _set_affinity
 
 
 def get_python_for_plugin(plugin_name: str) -> str:
@@ -216,6 +248,7 @@ class PluginManager:
                 text=True,
                 check=True,
                 creationflags=CREATE_NO_WINDOW,
+                preexec_fn=_get_cpu_affinity_preexec(plugin_name),
             )
             try:
                 output = json.loads(result.stdout)
@@ -273,6 +306,7 @@ class PluginManager:
                 text=True,
                 bufsize=1,
                 universal_newlines=True,
+                preexec_fn=_get_cpu_affinity_preexec(plugin_name),
             )
 
             # Stream stderr (logs)
