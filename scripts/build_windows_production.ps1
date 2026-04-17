@@ -41,6 +41,8 @@ $PyArgs = @(
     "--hidden-import", "servicemanager",
     "--collect-all", "gui",
     "--collect-all", "plugins",
+    "--collect-all", "ddgs",
+    "--collect-all", "primp",
     # Watchdog requires explicit hidden imports for platform-specific observers
     # Note: read_directory_changes imports from winapi - both must be included!
     "--hidden-import", "watchdog",

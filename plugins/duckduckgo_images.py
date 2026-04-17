@@ -14,6 +14,15 @@ from pathlib import Path
 import requests
 from PIL import Image
 
+try:
+    from ddgs import DDGS
+except ImportError:
+    # Linux distro packages (Arch/Debian) don't ship ddgs; fall back to the
+    # direct scrape path, which works from system Python where TLS
+    # fingerprints aren't an issue. Frozen Windows/macOS builds bundle ddgs
+    # via requirements.txt to survive DDG's anti-bot.
+    DDGS = None
+
 sys.path.append(str(Path(__file__).parent.parent))
 from plugins.base import PluginBase
 from plugins.blacklist import BlacklistManager
@@ -110,8 +119,10 @@ class DuckDuckGoImagesPlugin(PluginBase):
         if config.get("reset", False):
             self._perform_reset(download_dir)
 
-        # One shared HTTP session for the whole run: bounds connection-pool
+        # One shared HTTP session for image downloads: bounds connection-pool
         # growth and ensures sockets are released when the run finishes.
+        # URL discovery uses the ddgs library, which handles TLS fingerprinting
+        # and backend fallback (DuckDuckGo -> Bing) on its own.
         with requests.Session() as session:
             session.headers.update({
                 "User-Agent": _USER_AGENT,
@@ -280,6 +291,24 @@ class DuckDuckGoImagesPlugin(PluginBase):
         return count
 
     def _scrape_image_urls(self, query: str) -> list:
+        if DDGS is not None:
+            return self._scrape_via_ddgs(query)
+        return self._scrape_via_direct(query)
+
+    def _scrape_via_ddgs(self, query: str) -> list:
+        try:
+            with DDGS() as ddgs:
+                results = ddgs.images(
+                    query,
+                    size="Large",
+                    max_results=200,
+                )
+            return self._filter_results(results)
+        except Exception as e:
+            print(f"[DuckDuckGo] Scraping failed for '{query}': {e}", file=sys.stderr)
+            return []
+
+    def _scrape_via_direct(self, query: str) -> list:
         try:
             with self._session.get(
                 "https://duckduckgo.com/",
@@ -318,24 +347,29 @@ class DuckDuckGoImagesPlugin(PluginBase):
                         file=sys.stderr,
                     )
                     return []
-            results = data.get("results", [])
-
-            urls = []
-            seen = set()
-            for r in results:
-                url = r.get("image")
-                if not url or url in seen:
-                    continue
-                w, h = r.get("width", 0) or 0, r.get("height", 0) or 0
-                if w and h and (w < 1920 or h < 1080):
-                    continue
-                urls.append(url)
-                seen.add(url)
-            return urls
+            return self._filter_results(data.get("results", []))
 
         except Exception as e:
             print(f"[DuckDuckGo] Scraping failed for '{query}': {e}", file=sys.stderr)
             return []
+
+    def _filter_results(self, results) -> list:
+        urls = []
+        seen = set()
+        for r in results:
+            url = r.get("image")
+            if not url or url in seen:
+                continue
+            try:
+                w = int(r.get("width") or 0)
+                h = int(r.get("height") or 0)
+            except (TypeError, ValueError):
+                w, h = 0, 0
+            if w and h and (w < 1920 or h < 1080):
+                continue
+            urls.append(url)
+            seen.add(url)
+        return urls
 
     def _process_image(self, url: str, download_dir: Path) -> bool:
         try:

@@ -3,6 +3,7 @@ Pillow==12.0.0
 requests==2.32.5
 PyYAML==6.0.3
 watchdog==6.0.0
+ddgs==9.14.0
 # Windows only
 pywin32==311; sys_platform == "win32"
 screeninfo==0.8.1; sys_platform == "win32"
