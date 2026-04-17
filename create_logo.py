@@ -10,7 +10,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QImage, QPixmap
 from PyQt6.QtWidgets import QApplication
 
-SOURCE_IMAGE = "img/clockwork_orange_gemini_full.png"
+SOURCE_IMAGE = "img/clockwork_orange_icon.png"
 
 
 def create_clockwork_orange_logo(size=256):
