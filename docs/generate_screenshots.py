@@ -102,9 +102,7 @@ def apply_blur(pixmap_path, rects):
 DUMMY_CONFIG = {
     "plugins": {
         "local": {"enabled": True},
-        # Ensure google_images key exists so we can navigate to it.
-        # The key in available_plugins for google_images is "google_images"
-        "google_images": {
+        "duckduckgo_images": {
             "enabled": True,
             "query": [{"term": "cats", "enabled": True}],
         },
@@ -121,7 +119,7 @@ class MockPluginManager(PluginManager):
 
     def get_available_plugins(self):
         # Return list of plugin names expected
-        return ["local", "google_images", "wallhaven", "history"]
+        return ["local", "duckduckgo_images", "wallhaven", "history"]
 
     def get_plugin_schema(self, plugin_name):
         # Return empty or basic schema to avoid errors
@@ -220,8 +218,7 @@ class ScreenshotGenerator:
         # 2. Plugins
         # Expand plugins if needed, usually they are expanded by default or top level
         # Assuming "Local" or similar exists if enabled. The script in main_window inits them.
-        # "Google Images" is a good one
-        self.navigate_to("Google Images")
+        self.navigate_to("Duckduckgo Images")
         self.capture_screenshot(
             "02_plugin_google",
             "Plugin Configuration",

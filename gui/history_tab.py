@@ -128,13 +128,16 @@ class HistoryTab(QWidget):
 
     def import_existing_files(self):
         """Scan existing download directory and populate history."""
-        # Determine download directory from config or default
-        plugin_config = self.config_data.get("google_images", {})
+        # Determine download directory from config or default.
+        # Plugin config is nested under config_data["plugins"][<name>].
+        plugin_config = self.config_data.get("plugins", {}).get(
+            "duckduckgo_images", {}
+        )
         download_dir_str = plugin_config.get("download_dir")
 
         if not download_dir_str:
             # Fallback to default
-            download_dir = Path.home() / "Pictures" / "Wallpapers" / "GoogleImages"
+            download_dir = Path.home() / "Pictures" / "Wallpapers" / "DuckDuckGo"
         else:
             download_dir = Path(download_dir_str)
 

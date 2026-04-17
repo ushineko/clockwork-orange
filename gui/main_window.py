@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel,
                              QTreeWidgetItemIterator)
 from PyQt6.QtWidgets import QVBoxLayout as QVBoxLayoutDialog
 
+from config_migrations import load_and_migrate
 from plugin_manager import PluginManager
 
 from .blacklist_tab import BlacklistTab
@@ -650,8 +651,7 @@ class ClockworkOrangeGUI(QMainWindow):
         """Load global configuration."""
         if self.config_path.exists():
             try:
-                with open(self.config_path, "r") as f:
-                    self.config_data = yaml.safe_load(f) or {}
+                self.config_data = load_and_migrate(self.config_path)
 
                 # Update wallpaper timer interval if it exists
                 if hasattr(self, "wallpaper_timer") and self.wallpaper_timer:

@@ -19,6 +19,7 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 import platform_utils
+from config_migrations import load_and_migrate
 from plugin_manager import PluginManager
 
 # GUI imports (optional)
@@ -509,8 +510,7 @@ def load_config_file():
         if config_path.exists():
             try:
                 print(f"[DEBUG] Loading configuration from {config_path}")
-                with open(config_path, "r") as f:
-                    return yaml.safe_load(f) or {}
+                return load_and_migrate(config_path)
             except Exception as e:
                 print(f"[ERROR] Failed to load config file {config_path}: {e}")
 

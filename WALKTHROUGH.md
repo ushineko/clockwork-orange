@@ -69,7 +69,7 @@ You can use the executable just like the Python script.
 The best way to use Clockwork Orange on Windows:
 
 1. **Launch GUI**: Double-click `clockwork-orange.exe`
-2. **Configure Plugins**: Enable desired plugins (Google Images, Wallhaven, Local, etc.)
+2. **Configure Plugins**: Enable desired plugins (DuckDuckGo Images, Wallhaven, Local, etc.)
 3. **Set Interval**: Configure `default_wait` in Settings (seconds between wallpaper changes)
 4. **Enable Autostart**: Check "Autostart" in Settings → Basic
 5. **Minimize to Tray**: The GUI runs in background and changes wallpapers automatically

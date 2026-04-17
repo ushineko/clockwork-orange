@@ -170,12 +170,11 @@ class ServiceManagerWidget(QWidget):
         try:
             from pathlib import Path
 
-            import yaml
+            from config_migrations import load_and_migrate
 
             config_path = Path.home() / ".config" / "clockwork-orange.yml"
             if config_path.exists():
-                with open(config_path, "r") as f:
-                    config = yaml.safe_load(f) or {}
+                config = load_and_migrate(config_path)
 
                 # Load logs refresh interval
                 logs_refresh = config.get("logs_refresh_interval", 5)

@@ -34,7 +34,7 @@ A Python application for managing wallpapers and lock screen backgrounds, suppor
 - [Plugin System](#plugin-system)
   - [Local Plugin](#local-plugin)
   - [Wallhaven Plugin](#wallhaven-plugin)
-  - [Google Images Plugin](#google-images-plugin)
+  - [DuckDuckGo Images Plugin](#duckduckgo-images-plugin)
   - [Stable Diffusion Plugin](#ai-wallpapers-stable-diffusion)
   - [Review & Blacklist System](#review--blacklist-system)
 - [AI Wallpapers (Stable Diffusion)](#ai-wallpapers-stable-diffusion)
@@ -59,7 +59,7 @@ A Python application for managing wallpapers and lock screen backgrounds, suppor
 
 - **Cross-Platform**: Linux (KDE Plasma 6), Windows 10/11, and macOS 13+
 - **Multi-Monitor Support**: Automatically detects connected monitors and sets a unique random wallpaper for each one (all platforms)
-- **Dynamic Multi-Plugin Mode**: Concurrently pull wallpapers from multiple enabled plugins (e.g., Google Images + Local Folder)
+- **Dynamic Multi-Plugin Mode**: Concurrently pull wallpapers from multiple enabled plugins (e.g., DuckDuckGo Images + Local Folder)
 - **Fair Source Selection**: Intelligent randomization ensures equal representation from all enabled sources, preventing large local libraries from dominating
 - **Shared Blacklist**: Centralized, hash-based blacklist system shared across all plugins
 - **Dual Wallpaper Support**: Set different wallpapers for desktop and lock screen simultaneously (Linux only; dynamically pulled from different plugins)
@@ -67,7 +67,7 @@ A Python application for managing wallpapers and lock screen backgrounds, suppor
 - **Lock Screen Support**: Configure KDE Plasma 6 lock screen backgrounds (Linux only)
 - **Configuration File**: YAML-based configuration for persistent settings
 - **Service Mode**: Run as a background service with systemd (Linux) or GUI tray app (Windows/macOS)
-- **Plugin System**: Extensible plugin architecture (includes Google Images downloader)
+- **Plugin System**: Extensible plugin architecture (includes DuckDuckGo Images downloader)
 - **AI Wallpaper Generation**: Generate unique wallpapers locally using Stable Diffusion (optional)
 - **Image Review**: Built-in GUI tool to review, mark, and ban unwanted wallpapers
 - **Detailed Debugging**: Detailed logging for troubleshooting
@@ -242,10 +242,10 @@ plugins:
     path: "/home/user/Pictures/Wallpapers"
     recursive: true
 
-  # Google Images downloader
-  google_images:
+  # DuckDuckGo Images downloader
+  duckduckgo_images:
     enabled: true
-    query: 
+    query:
       - term: "4k nature wallpapers"
         enabled: true
       - term: "james webb telescope"
@@ -268,7 +268,7 @@ plugins:
 
 Clockwork Orange now supports a powerful **Dynamic Multi-Plugin Mode**.
 
-If you enable multiple plugins (e.g., Google Images and Local File Source) and run the script without specifying a single source flag (like `-f` or `-d`), it will automatically enter **Dynamic Mode**:
+If you enable multiple plugins (e.g., DuckDuckGo Images and Local File Source) and run the script without specifying a single source flag (like `-f` or `-d`), it will automatically enter **Dynamic Mode**:
 
 1.  **Aggregation**: It gathers valid image sources from all currently enabled plugins.
 2.  **Fair Selection**: It randomly selects a **source first**, then an image from that source. This ensures that a plugin with 10 images has the same chance of being picked as a plugin with 10,000 images.
@@ -335,25 +335,29 @@ plugins:
     resolutions: "2560x1440,3840x2160"
 ```
 
-### Google Images Plugin
-The built-in Google Images plugin allows you to scrape high-quality wallpapers based on search terms.
+### DuckDuckGo Images Plugin
+
+The built-in DuckDuckGo Images plugin queries DuckDuckGo's image search and downloads high-quality wallpapers based on search terms.
 - **Smart Search Terms UI**: Easily add, remove, and toggle individual search terms via the GUI
 - **Intelligent Processing**: Automatically downloads, resizes, and center-crops images to 4K (3840x2160)
 - **Quality Control**: Skips low-resolution thumbnails or duplicates
 - **Scheduling**: Built-in interval checks (Hourly/Daily/Weekly)
 - **Retention**: Automatically cleans up old files to save space
+- **`site:` scoping supported**: Queries like `site:reddit.com r/EarthPorn` work. Narrow scopes may return fewer results than Google would — broaden terms if a specific `site:` returns too little.
 
 **Usage:**
 Configure via the GUI "Plugins" tab or manually in `config.yml`:
 ```yaml
 plugins:
-  google_images:
+  duckduckgo_images:
     enabled: true
-    download_dir: "/home/user/Pictures/Wallpapers/Google"
+    download_dir: "/home/user/Pictures/Wallpapers/DuckDuckGo"
     query:
       - term: "4k cyberpunk city"
         enabled: true
 ```
+
+> **Upgrading from Google Images?** On first launch after this update, the app automatically migrates your `plugins.google_images` block to `plugins.duckduckgo_images`, preserving your queries, download path, and other settings. Your existing downloaded wallpapers remain in place and keep being served by the wallpaper engine.
 
 ### Review & Blacklist System
 The GUI includes a comprehensive **Review Mode** and **Shared Blacklist Manager**:
