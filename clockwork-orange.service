@@ -7,7 +7,9 @@ Type=simple
 Environment=DISPLAY=:0
 # Uses system Python 3 - ensure PyYAML is installed system-wide
 # For conda/virtual environments, update the path to your Python interpreter
-ExecStart=/usr/bin/python3 /home/nverenin/git/clockwork-orange/clockwork-orange.py --service
+# -u keeps stdout unbuffered so journald timestamps reflect real cycle timing
+# (block buffering otherwise flushes ~an hour of debug lines at once).
+ExecStart=/usr/bin/python3 -u /home/nverenin/git/clockwork-orange/clockwork-orange.py --service
 Restart=always
 RestartSec=10
 

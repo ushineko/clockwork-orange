@@ -37,6 +37,12 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp", "
 # Global flag for graceful shutdown
 shutdown_requested = False
 
+# Quiet window (seconds) used to coalesce a burst of rapid config-file writes
+# into a single wallpaper switch. A flurry of writes (e.g. several config saves
+# during login) within this window triggers exactly one cycle instead of one
+# per write.
+CONFIG_DEBOUNCE_SECONDS = 2.0
+
 
 def signal_handler(signum, frame):
     """Handle interrupt signals gracefully."""
@@ -1608,6 +1614,31 @@ class ConfigWatcher(FileSystemEventHandler):
         self._process_event(event)
 
 
+def _drain_config_change_burst(
+    change_event, debounce_seconds=CONFIG_DEBOUNCE_SECONDS, is_shutdown=None
+):
+    """Coalesce a burst of rapid config-file writes into a single trigger.
+
+    Call immediately after `change_event` was first observed set. Keeps
+    absorbing further change events until the config file has been quiet for
+    `debounce_seconds`, so a flurry of writes (e.g. several config saves during
+    login) results in exactly one wallpaper switch instead of one per write.
+    Returns promptly if shutdown is requested.
+    """
+    if is_shutdown is None:
+        is_shutdown = lambda: shutdown_requested
+
+    change_event.clear()
+    while not is_shutdown():
+        # If another change arrives within the quiet window, the burst is still
+        # ongoing -> reset the window. If the window elapses with no event, the
+        # burst has settled and we can trigger a single cycle.
+        if change_event.wait(timeout=debounce_seconds):
+            change_event.clear()
+        else:
+            return
+
+
 def _wait_for_next_cycle(config, default_wait, change_event=None):
     """Wait for the next cycle, respecting interrupt signals and config changes."""
     sleep_duration = default_wait
@@ -1621,7 +1652,7 @@ def _wait_for_next_cycle(config, default_wait, change_event=None):
     if change_event:
         # We still loop to check shutdown_requested, but use event.wait with timeout
         # However, event.wait returns true if event set, false if timeout.
-        # If event set, we return early (triggering next cycle immediately).
+        # If event set, we debounce the burst then return to trigger one cycle.
 
         start_time = time.time()
         while time.time() - start_time < sleep_duration:
@@ -1635,8 +1666,12 @@ def _wait_for_next_cycle(config, default_wait, change_event=None):
 
             # Better: wait for the event with a 1s timeout
             if change_event.wait(timeout=1.0):
+                # Coalesce any rapid follow-up writes (common at login) into a
+                # single trigger before cycling.
+                _drain_config_change_burst(change_event)
+                if shutdown_requested:
+                    return
                 print(f"[DEBUG] Config change detected, interrupting wait cycle")
-                change_event.clear()  # Reset for next time
                 return  # Exit wait immediately
 
     else:
