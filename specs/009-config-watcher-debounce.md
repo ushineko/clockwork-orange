@@ -38,24 +38,13 @@ Two problems were observed in production logs (daemon PID 1556, 2026-06-27):
 
 ## Acceptance Criteria
 
-- [x] A `_drain_config_change_burst` helper absorbs further config-change events
-      until the file has been quiet for a debounce window, then returns once.
-      (`clockwork-orange.py` `_drain_config_change_burst`)
-- [x] `_wait_for_next_cycle` calls the debounce helper on the first detected
-      change instead of returning immediately, so a flurry of writes yields a
-      single trigger. (`clockwork-orange.py` `_wait_for_next_cycle`)
-- [x] The debounce helper returns promptly when shutdown is requested (does not
-      block for the full sleep interval). (`is_shutdown` guard on the loop;
-      `test_returns_promptly_on_shutdown`)
-- [x] A single, settled config change still interrupts the wait (does not wait
-      the full `default_wait`). (`test_single_change_returns_after_quiet_window`)
-- [x] `clockwork-orange.service` runs Python unbuffered (`-u`) so journald
-      timestamps track real cycle timing.
-- [x] Unit tests cover: (a) coalescing a multi-write burst into one return that
-      occurs only after the quiet window, and (b) a single change returning
-      after roughly the debounce window (not immediately, not the full wait).
-      (`tests/test_config_debounce.py`)
-- [x] Existing test suite passes. (12 passed, 2 skipped — Windows-only)
+- [x] A `_drain_config_change_burst` helper absorbs further config-change events until the file has been quiet for a debounce window, then returns once — `clockwork-orange.py` `_drain_config_change_burst`.
+- [x] `_wait_for_next_cycle` calls the debounce helper on the first detected change instead of returning immediately, so a flurry of writes yields a single trigger — `clockwork-orange.py` `_wait_for_next_cycle`.
+- [x] The debounce helper returns promptly when shutdown is requested, rather than blocking for the full sleep interval — `is_shutdown` guard on the loop; `test_returns_promptly_on_shutdown`.
+- [x] A single, settled config change still interrupts the wait, rather than waiting the full `default_wait` — `test_single_change_returns_after_quiet_window`.
+- [x] `clockwork-orange.service` runs Python unbuffered (`-u`) so journald timestamps track real cycle timing.
+- [x] Unit tests cover (a) coalescing a multi-write burst into one return that occurs only after the quiet window, and (b) a single change returning after roughly the debounce window (not immediately, not the full wait) — `tests/test_config_debounce.py`.
+- [x] Existing test suite passes (12 passed, 2 skipped — Windows-only).
 
 ## Risks & Assumptions
 
