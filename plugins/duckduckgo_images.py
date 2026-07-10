@@ -33,6 +33,24 @@ _USER_AGENT = (
     "(KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36"
 )
 
+# Minimum acceptable source dimensions. Anything smaller is not a usable
+# wallpaper and is almost always an ad, icon, or thumbnail substitute.
+_MIN_WIDTH, _MIN_HEIGHT = 1920, 1080
+
+# Wallpapers are landscape. Rejecting portrait/near-square sources is the
+# single most effective content filter: it drops portrait photos of people,
+# square product shots (toys, packaging), and most ad banners, none of which
+# a resolution-only gate catches. Bounds span ~4:3 (1.33) through ~21:9
+# (2.33) with a little slack. Sources outside this band are rejected rather
+# than force-cropped into a 16:9 wallpaper.
+_MIN_ASPECT, _MAX_ASPECT = 1.2, 2.5
+
+# Cap on how many candidates to pull per query. DuckDuckGo relevance decays
+# sharply past the first page or two; deep in a 200-result set a "4k nature
+# wallpapers" query bleeds into tangential images (people, toys, misc). A
+# tighter cap keeps us in the high-relevance head of the list.
+_MAX_RESULTS = 60
+
 
 class DuckDuckGoImagesPlugin(PluginBase):
     def get_description(self) -> str:
@@ -260,27 +278,29 @@ class DuckDuckGoImagesPlugin(PluginBase):
         total_terms: int,
     ) -> int:
 
-        image_urls = self._scrape_image_urls(query)
+        candidates = self._scrape_image_urls(query)
 
         print(
-            f"[DuckDuckGo] Found {len(image_urls)} potential images for '{query}'",
+            f"[DuckDuckGo] Found {len(candidates)} potential images for '{query}'",
             file=sys.stderr,
         )
 
         count = 0
-        for j, url in enumerate(image_urls):
+        for j, candidate in enumerate(candidates):
             if count >= limit:
                 break
 
             term_slice = 90 / total_terms
-            current_percent = int(progress_base + (j / max(len(image_urls), 1)) * term_slice)
+            current_percent = int(progress_base + (j / max(len(candidates), 1)) * term_slice)
 
             print(
                 f"::PROGRESS:: {current_percent} :: Checking candidate {j+1} for image {count+1}/{limit}...",
                 file=sys.stderr,
             )
 
-            if self._process_image(url, download_dir):
+            if self._process_image(
+                candidate["image"], download_dir, referer=candidate.get("referer", "")
+            ):
                 count += 1
             else:
                 print(
@@ -300,8 +320,11 @@ class DuckDuckGoImagesPlugin(PluginBase):
             with DDGS() as ddgs:
                 results = ddgs.images(
                     query,
+                    safesearch="on",
                     size="Large",
-                    max_results=200,
+                    type_image="photo",
+                    layout="Wide",
+                    max_results=_MAX_RESULTS,
                 )
             return self._filter_results(results)
         except Exception as e:
@@ -333,7 +356,10 @@ class DuckDuckGoImagesPlugin(PluginBase):
                     "o": "json",
                     "q": query,
                     "vqd": vqd,
-                    "f": ",,,size:Large,,",
+                    # type:photo drops clipart/gif/transparent; layout:Wide
+                    # asks DuckDuckGo for landscape sources; size:Large keeps
+                    # the dimension bucket high. p=1 is strict safe-search.
+                    "f": "type:photo,size:Large,layout:Wide",
                     "p": "1",
                 },
                 headers={"Referer": "https://duckduckgo.com/"},
@@ -347,14 +373,25 @@ class DuckDuckGoImagesPlugin(PluginBase):
                         file=sys.stderr,
                     )
                     return []
-            return self._filter_results(data.get("results", []))
+            return self._filter_results(data.get("results", [])[:_MAX_RESULTS])
 
         except Exception as e:
             print(f"[DuckDuckGo] Scraping failed for '{query}': {e}", file=sys.stderr)
             return []
 
     def _filter_results(self, results) -> list:
-        urls = []
+        """Turn raw DuckDuckGo results into a list of candidate dicts.
+
+        Each candidate carries the source image URL plus the page it was found
+        on (`referer`). The page URL is sent as the Referer header when the
+        image is downloaded so hosts with hotlink protection return the real
+        image instead of an ad/placeholder substitute.
+
+        When a result reports its dimensions, both the resolution and the
+        aspect-ratio gates are applied here to avoid wasting bandwidth. Results
+        without dimensions pass through and are re-checked after download.
+        """
+        candidates = []
         seen = set()
         for r in results:
             url = r.get("image")
@@ -365,13 +402,24 @@ class DuckDuckGoImagesPlugin(PluginBase):
                 h = int(r.get("height") or 0)
             except (TypeError, ValueError):
                 w, h = 0, 0
-            if w and h and (w < 1920 or h < 1080):
-                continue
-            urls.append(url)
+            if w and h:
+                if w < _MIN_WIDTH or h < _MIN_HEIGHT:
+                    continue
+                if not self._is_wallpaper_shaped(w, h):
+                    continue
+            candidates.append({"image": url, "referer": r.get("url") or ""})
             seen.add(url)
-        return urls
+        return candidates
 
-    def _process_image(self, url: str, download_dir: Path) -> bool:
+    @staticmethod
+    def _is_wallpaper_shaped(width: int, height: int) -> bool:
+        """True if the dimensions are landscape and within the wallpaper band."""
+        if width <= 0 or height <= 0:
+            return False
+        ratio = width / height
+        return _MIN_ASPECT <= ratio <= _MAX_ASPECT
+
+    def _process_image(self, url: str, download_dir: Path, referer: str = "") -> bool:
         try:
             if self.history_manager.seen_url(url):
                 return False
@@ -384,7 +432,15 @@ class DuckDuckGoImagesPlugin(PluginBase):
 
             print(f"[DuckDuckGo] Downloading {url}...", file=sys.stderr)
 
-            with self._session.get(url, timeout=10) as img_response:
+            # Send the originating page as the Referer. Many hosts serve a
+            # different image (ad, watermark, "unavailable" placeholder) to
+            # requests that look like anonymous hotlinkers; a matching Referer
+            # coaxes the real image out and is the main defence against
+            # ads/placeholders slipping in.
+            headers = {"Referer": referer} if referer else {}
+            with self._session.get(
+                url, headers=headers, timeout=10
+            ) as img_response:
                 if img_response.status_code != 200:
                     return False
                 content = img_response.content
@@ -396,10 +452,22 @@ class DuckDuckGoImagesPlugin(PluginBase):
             if img.mode in ("RGBA", "P"):
                 img = img.convert("RGB")
 
-            min_w, min_h = 1920, 1080
-            if img.width < min_w or img.height < min_h:
+            if img.width < _MIN_WIDTH or img.height < _MIN_HEIGHT:
                 print(
-                    f"[DuckDuckGo] Rejected low-res image: {img.width}x{img.height} (needs {min_w}x{min_h})",
+                    f"[DuckDuckGo] Rejected low-res image: {img.width}x{img.height} (needs {_MIN_WIDTH}x{_MIN_HEIGHT})",
+                    file=sys.stderr,
+                )
+                img.close()
+                return False
+
+            # Shape gate on the decoded image. This is the authoritative check:
+            # it catches portrait/square substitutes and hotlink placeholders
+            # that reported no dimensions (or lied about them) at discovery,
+            # before _resize_and_crop would force-fill them into a wallpaper.
+            if not self._is_wallpaper_shaped(img.width, img.height):
+                print(
+                    f"[DuckDuckGo] Rejected non-landscape image: {img.width}x{img.height} "
+                    f"(aspect must be {_MIN_ASPECT}-{_MAX_ASPECT})",
                     file=sys.stderr,
                 )
                 img.close()
