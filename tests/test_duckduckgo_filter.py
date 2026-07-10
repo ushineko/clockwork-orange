@@ -131,6 +131,30 @@ class TestProcessImage(unittest.TestCase):
             self.assertFalse(ok)
             self.assertEqual(list(Path(d).glob("*.jpg")), [])
 
+    def test_content_duplicate_records_url_then_removes_file(self):
+        # A landscape image whose *content* is already in history: the URL must
+        # still be recorded (so it is skipped without re-download next run) and
+        # the redundant file removed. The real HistoryManager.add_entry hashes
+        # the file, so it must be called while the file still exists — deleting
+        # first (the old bug) would make it raise FileNotFoundError.
+        self.plugin.history_manager.seen_image.return_value = True
+        existed_at_call = {}
+
+        def _record(url, path, source=None):
+            existed_at_call["value"] = Path(path).exists()
+
+        self.plugin.history_manager.add_entry.side_effect = _record
+        self.plugin._session = _FakeSession(_png_bytes(3840, 2160))
+        with TemporaryDirectory() as d:
+            ok = self.plugin._process_image(
+                "http://cdn/dup.jpg", Path(d), referer="http://page/dup"
+            )
+            self.assertFalse(ok)
+            self.assertEqual(list(Path(d).glob("*.jpg")), [])  # cleaned up
+        self.plugin.history_manager.add_entry.assert_called_once()
+        # The ordering guarantee: file present when the URL was recorded.
+        self.assertTrue(existed_at_call.get("value"))
+
 
 if __name__ == "__main__":
     unittest.main()

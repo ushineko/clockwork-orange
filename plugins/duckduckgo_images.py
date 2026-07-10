@@ -499,8 +499,12 @@ class DuckDuckGoImagesPlugin(PluginBase):
                     f"[DuckDuckGo] Image content already in history. Skipping.",
                     file=sys.stderr,
                 )
-                filepath.unlink()
+                # Record the URL before deleting the file: add_entry hashes the
+                # file to store the url->content mapping, so this URL is skipped
+                # by seen_url on future runs without re-downloading. Deleting
+                # first would make add_entry raise FileNotFoundError.
                 self.history_manager.add_entry(url, filepath, source="duckduckgo_images")
+                filepath.unlink()
                 return False
 
             self.history_manager.add_entry(url, filepath, source="duckduckgo_images")

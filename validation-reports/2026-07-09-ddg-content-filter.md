@@ -31,14 +31,22 @@ portrait photos of people, square product/toy shots). Root causes:
   set capped to 60.
 - `_filter_results` carries each result's source-page URL; `_process_image`
   sends it as `Referer` on the image download.
+- Fixed a pre-existing ordering bug in the history-dedup branch of
+  `_process_image`: the file was `unlink()`ed before `add_entry()` hashed it,
+  raising `FileNotFoundError` (surfaced as a misleading "Failed to process
+  image" log line). `add_entry` now runs before the file is removed, so the
+  URL->content mapping is recorded and the duplicate URL is skipped on future
+  runs without re-downloading. Confirmed live: dedup path now logs only
+  "already in history. Skipping." with no error output.
 
 ### Phase 3: Tests
 
-- New `tests/test_duckduckgo_filter.py` (7 cases): shape gate accept/reject,
+- New `tests/test_duckduckgo_filter.py` (8 cases): shape gate accept/reject,
   discovery filter (resolution + aspect + dedup + no-dims passthrough), Referer
   derivation, Referer sent on download, non-landscape decoded download rejected
-  before save. All pass.
-- Full suite: `python -m pytest tests/` → 19 passed, 2 skipped (platform-gated
+  before save, and the history-dedup ordering guarantee (file must exist when
+  `add_entry` records the URL). All pass.
+- Full suite: `python -m pytest tests/` → 20 passed, 2 skipped (platform-gated
   frozen-import tests), 0 failures.
 - `python -m py_compile plugins/duckduckgo_images.py` clean.
 - Status: PASSED
