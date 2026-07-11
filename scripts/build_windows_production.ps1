@@ -34,6 +34,7 @@ $PyArgs = @(
     "--add-data", "img;img",
     "--add-data", "plugins;plugins",
     "--add-data", "gui/icons;gui/icons",
+    "--hidden-import", "PyQt6.QtNetwork",
     "--hidden-import", "win32timezone",
     "--hidden-import", "win32service",
     "--hidden-import", "win32serviceutil",

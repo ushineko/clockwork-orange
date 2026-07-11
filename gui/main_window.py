@@ -13,6 +13,7 @@ import yaml
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (QAction, QColor, QCursor, QDesktopServices, QFont,
                          QIcon, QPainter, QPen, QPixmap)
+from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel,
                              QMainWindow, QMenu, QPushButton, QSplitter,
                              QStackedWidget, QSystemTrayIcon, QTextBrowser,
@@ -29,6 +30,27 @@ from .plugins_tab import SinglePluginWidget
 from .service_manager import ServiceManagerWidget
 from .settings_widgets import (AdvancedSettingsWidget, BasicSettingsWidget,
                                YamlEditorWidget)
+
+# Local-socket name the primary instance listens on so a second launch can ask
+# it to surface its window instead of exiting silently.
+SINGLE_INSTANCE_SERVER = "clockwork_orange_gui_singleton"
+
+
+def _notify_existing_instance(server_name: str) -> bool:
+    """Ask the already-running instance to raise its window.
+
+    Connects to the primary instance's local server and sends a short message.
+    Returns True if the primary instance was reached, False otherwise.
+    """
+    socket = QLocalSocket()
+    socket.connectToServer(server_name)
+    if not socket.waitForConnected(500):
+        return False
+    socket.write(b"SHOW")
+    socket.flush()
+    socket.waitForBytesWritten(500)
+    socket.disconnectFromServer()
+    return True
 
 
 # Worker thread for wallpaper changes
@@ -530,6 +552,44 @@ class ClockworkOrangeGUI(QMainWindow):
 
         # Initialize automatic wallpaper changing
         self._init_wallpaper_timer()
+
+    def start_single_instance_server(self, server_name: str):
+        """Listen for second-launch signals so this window can be surfaced.
+
+        A stale socket file from a crashed instance (POSIX) is removed first;
+        on Windows named pipes this is a harmless no-op.
+        """
+        QLocalServer.removeServer(server_name)
+        self._instance_server = QLocalServer(self)
+        # Restrict the socket to this user so other local accounts cannot poke
+        # the window (the payload is ignored regardless).
+        self._instance_server.setSocketOptions(
+            QLocalServer.SocketOption.UserAccessOption
+        )
+        self._instance_server.newConnection.connect(self._on_secondary_instance)
+        if not self._instance_server.listen(server_name):
+            print(
+                "[WARNING] Single-instance server failed to listen: "
+                f"{self._instance_server.errorString()}"
+            )
+
+    def _on_secondary_instance(self):
+        """A second launch was attempted; bring this window to the front."""
+        conn = self._instance_server.nextPendingConnection()
+        if conn is not None:
+            conn.readAll()
+            conn.disconnectFromServer()
+        self._raise_to_front()
+
+    def _raise_to_front(self):
+        """Restore, show, and focus the window (e.g. when hidden in the tray)."""
+        self.show()
+        self.setWindowState(
+            (self.windowState() & ~Qt.WindowState.WindowMinimized)
+            | Qt.WindowState.WindowActive
+        )
+        self.raise_()
+        self.activateWindow()
 
     def closeEvent(self, event):
         """Override close event to minimize to tray instead of exiting."""
@@ -1035,6 +1095,10 @@ def main():
         # This is instant compared to iterating processes
         if not platform_utils.acquire_instance_lock("clockwork_orange_gui_lock"):
             print("[DEBUG] Another instance is already running (Lock held)")
+            if _notify_existing_instance(SINGLE_INSTANCE_SERVER):
+                print("[DEBUG] Asked the running instance to show its window")
+            else:
+                print("[WARNING] Could not reach the running instance to surface it")
             return 0
 
         print(f"[DEBUG] Instance check took {time.time() - start_time:.4f}s")
@@ -1042,6 +1106,11 @@ def main():
         print(f"[WARNING] Failed to check for existing instances: {e}")
 
     window = ClockworkOrangeGUI()
+
+    # Listen for later launch attempts so they surface this window instead of
+    # exiting silently (which reads as "the app won't launch").
+    window.start_single_instance_server(SINGLE_INSTANCE_SERVER)
+
     if window.tray_icon:
         window.tray_icon.show()
         window.tray_icon.showMessage(
