@@ -187,7 +187,12 @@ jobs:
     - name: Package App as ZIP
       run: |
         cd dist
-        zip -r "Clockwork-Orange-macOS.zip" "Clockwork Orange.app"
+        # -y is REQUIRED: without it, zip dereferences symbolic links and stores
+        # the target's content instead of the link. That destroys the .app's
+        # framework symlinks (Python.framework, Qt frameworks), producing a
+        # malformed bundle that segfaults at launch in Qt's QLibraryInfo /
+        # CFBundle path resolution. Do not remove -y.
+        zip -r -y "Clockwork-Orange-macOS.zip" "Clockwork Orange.app"
 
     - name: Upload macOS Artifact
       uses: actions/upload-artifact@v4
