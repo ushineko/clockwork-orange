@@ -1,4 +1,9 @@
-PyQt6==6.10.1
+# Pin the full Qt stack, not just the Python bindings. Pinning PyQt6 alone
+# leaves PyQt6-Qt6 (the Qt runtime) free to resolve to a newer 6.10.x,
+# producing non-reproducible builds and binding/runtime version drift.
+PyQt6==6.10.2
+PyQt6-Qt6==6.10.2
+PyQt6-sip==13.11.0
 Pillow==12.2.0
 requests==2.33.0
 PyYAML==6.0.3

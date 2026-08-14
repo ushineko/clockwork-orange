@@ -69,6 +69,33 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "Build successful! App is at: dist/Clockwork Orange.app"
     echo ""
+
+    # Stamp the real version into Info.plist. PyInstaller leaves
+    # CFBundleShortVersionString at 0.0.0 otherwise, which breaks release
+    # traceability (users can't tell which build they have).
+    PLIST="dist/Clockwork Orange.app/Contents/Info.plist"
+    if [ -f "$PLIST" ]; then
+        # git describe yields e.g. "v2.9.8" on a tag or "v2.9.8-3-gdeadbee" off-tag.
+        CLEAN_VERSION="${VERSION#v}"
+        # CFBundleShortVersionString must be up to three integers: extract X.Y.Z.
+        SHORT_VERSION=$(echo "$CLEAN_VERSION" | sed -E 's/^([0-9]+(\.[0-9]+){0,2}).*/\1/')
+        [ -z "$SHORT_VERSION" ] && SHORT_VERSION="0.0.0"
+        echo "Stamping version: CFBundleShortVersionString=$SHORT_VERSION CFBundleVersion=$CLEAN_VERSION"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $SHORT_VERSION" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $SHORT_VERSION" "$PLIST"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $CLEAN_VERSION" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $CLEAN_VERSION" "$PLIST"
+        # Editing Info.plist breaks the bundle's code-signature seal, so re-sign.
+        # Only the outer seal needs refreshing (nested code is unchanged and still
+        # validly signed), so avoid --deep, which chokes on bundled *.dist-info dirs.
+        # An invalid seal can itself trigger loader faults on recent macOS.
+        codesign --force --sign - "dist/Clockwork Orange.app" \
+            || echo "WARNING: re-sign after version stamp failed (continuing)"
+    else
+        echo "WARNING: Info.plist not found at $PLIST; skipping version stamp"
+    fi
+
+
     echo "Test with:"
     echo "  open 'dist/Clockwork Orange.app'"
     echo "  # or"
