@@ -5,6 +5,7 @@ Fetches, downloads, and processes images from DuckDuckGo's image search.
 """
 
 import hashlib
+import json
 import re
 import sys
 import time
@@ -15,13 +16,15 @@ import requests
 from PIL import Image
 
 try:
-    from ddgs import DDGS
+    import primp
 except ImportError:
-    # Linux distro packages (Arch/Debian) don't ship ddgs; fall back to the
-    # direct scrape path, which works from system Python where TLS
-    # fingerprints aren't an issue. Frozen Windows/macOS builds bundle ddgs
-    # via requirements.txt to survive DDG's anti-bot.
-    DDGS = None
+    # Linux distro packages (Arch/Debian) may not ship primp; fall back to
+    # the requests transport, which is not TLS-fingerprint blocked on modern
+    # system OpenSSL. Frozen Windows/macOS builds bundle primp because the
+    # Windows OpenSSL build IS soft-blocked by DuckDuckGo (measured: requests
+    # gets HTTP 403 on i.js there, primp's client gets 200). Both transports
+    # run the identical i.js discovery path below, so results are the same.
+    primp = None
 
 sys.path.append(str(Path(__file__).parent.parent))
 from plugins.base import PluginBase
@@ -138,21 +141,24 @@ class DuckDuckGoImagesPlugin(PluginBase):
             self._perform_reset(download_dir)
 
         # One shared HTTP session for image downloads: bounds connection-pool
-        # growth and ensures sockets are released when the run finishes.
-        # URL discovery uses the ddgs library, which handles TLS fingerprinting
-        # and backend fallback (DuckDuckGo -> Bing) on its own.
+        # growth and ensures sockets are released when the run finishes. Image
+        # downloads stay on requests because third-party CDNs don't
+        # fingerprint-block; only DuckDuckGo's own endpoints do. URL discovery
+        # uses a separate cookie-persisting client (see _make_discovery_client).
         with requests.Session() as session:
             session.headers.update({
                 "User-Agent": _USER_AGENT,
                 "Accept-Language": "en-US,en;q=0.9",
             })
             self._session = session
+            self._discovery = self._make_discovery_client()
             try:
                 total_images_downloaded = self._process_batch(
                     queries, download_dir, limit
                 )
             finally:
                 self._session = None
+                self._discovery = None
 
         self._update_last_run(download_dir)
 
@@ -310,46 +316,65 @@ class DuckDuckGoImagesPlugin(PluginBase):
 
         return count
 
+    def _make_discovery_client(self):
+        """One cookie-persisting client for the vqd + i.js call pair.
+
+        DuckDuckGo's i.js requires the session cookie set by the landing
+        page, so both calls must share a client. primp is preferred: its
+        client is NOT TLS-fingerprint soft-blocked (measured: on the frozen
+        Windows/OpenSSL build, requests gets HTTP 403 from i.js while primp
+        gets 200). requests is the fallback for environments without primp,
+        where system OpenSSL is not blocked. No browser impersonation is
+        used: an impersonated primp client gets a 403 from i.js.
+        """
+        if primp is not None:
+            return primp.Client(timeout=20, cookie_store=True)
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": _USER_AGENT,
+            "Accept-Language": "en-US,en;q=0.9",
+        })
+        return session
+
+    def _http_get(self, url: str, params=None, headers=None):
+        """GET via the discovery client, normalized to (status, text).
+
+        primp.Client.get and requests.Session.get share this signature, so
+        the discovery path is transport-agnostic.
+        """
+        resp = self._discovery.get(url, params=params, headers=headers, timeout=20)
+        return resp.status_code, resp.text
+
+    def _get_vqd(self, query: str) -> str:
+        """Fetch the per-query vqd token DuckDuckGo requires for i.js."""
+        _, text = self._http_get(
+            "https://duckduckgo.com/",
+            params={"q": query, "iax": "images", "ia": "images"},
+        )
+        match = re.search(r'vqd=["\'](\d-[\d-]+)["\']', text) or re.search(
+            r'"vqd":"(\d-[\d-]+)"', text
+        )
+        return match.group(1) if match else ""
+
     def _scrape_image_urls(self, query: str) -> list:
-        if DDGS is not None:
-            return self._scrape_via_ddgs(query)
-        return self._scrape_via_direct(query)
+        """Discover candidate image URLs via DuckDuckGo's i.js endpoint.
 
-    def _scrape_via_ddgs(self, query: str) -> list:
+        One code path on every platform. i.js applies the content filters
+        (photo / large / wide) server-side, which is what keeps results
+        on-topic -- unlike ddgs 9.x's backends, which dropped those filters
+        and pulled in unrelated images. Transport is selected in
+        _make_discovery_client; the flow here is identical either way.
+        """
         try:
-            with DDGS() as ddgs:
-                results = ddgs.images(
-                    query,
-                    safesearch="on",
-                    size="Large",
-                    type_image="photo",
-                    layout="Wide",
-                    max_results=_MAX_RESULTS,
-                )
-            return self._filter_results(results)
-        except Exception as e:
-            print(f"[DuckDuckGo] Scraping failed for '{query}': {e}", file=sys.stderr)
-            return []
-
-    def _scrape_via_direct(self, query: str) -> list:
-        try:
-            with self._session.get(
-                "https://duckduckgo.com/",
-                params={"q": query, "iax": "images", "ia": "images"},
-                timeout=15,
-            ) as landing:
-                vqd_match = re.search(r'vqd=["\'](\d-[\d-]+)["\']', landing.text)
-                if not vqd_match:
-                    vqd_match = re.search(r'"vqd":"(\d-[\d-]+)"', landing.text)
-            if not vqd_match:
+            vqd = self._get_vqd(query)
+            if not vqd:
                 print(
                     f"[DuckDuckGo] Failed to extract vqd token for '{query}'",
                     file=sys.stderr,
                 )
                 return []
-            vqd = vqd_match.group(1)
 
-            with self._session.get(
+            status, text = self._http_get(
                 "https://duckduckgo.com/i.js",
                 params={
                     "l": "us-en",
@@ -359,20 +384,26 @@ class DuckDuckGoImagesPlugin(PluginBase):
                     # type:photo drops clipart/gif/transparent; layout:Wide
                     # asks DuckDuckGo for landscape sources; size:Large keeps
                     # the dimension bucket high. p=1 is strict safe-search.
+                    # These are honoured server-side -- the on-topic filter.
                     "f": "type:photo,size:Large,layout:Wide",
                     "p": "1",
                 },
                 headers={"Referer": "https://duckduckgo.com/"},
-                timeout=15,
-            ) as resp:
-                try:
-                    data = resp.json()
-                except ValueError as e:
-                    print(
-                        f"[DuckDuckGo] Non-JSON response for '{query}': {e}",
-                        file=sys.stderr,
-                    )
-                    return []
+            )
+            if status != 200:
+                print(
+                    f"[DuckDuckGo] i.js returned HTTP {status} for '{query}'",
+                    file=sys.stderr,
+                )
+                return []
+            try:
+                data = json.loads(text)
+            except ValueError as e:
+                print(
+                    f"[DuckDuckGo] Non-JSON response for '{query}': {e}",
+                    file=sys.stderr,
+                )
+                return []
             return self._filter_results(data.get("results", [])[:_MAX_RESULTS])
 
         except Exception as e:
