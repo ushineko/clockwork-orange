@@ -984,6 +984,13 @@ def main():
         import os
         os._exit(exit_code)
 
+    # Handle DuckDuckGo transport diagnostic
+    if getattr(args, "ddg_probe", False):
+        import ddg_probe
+
+        ddg_probe.run_probe()
+        sys.exit(0)
+
     # Load configuration file and merge with command line arguments
     config = load_config_file()
 
@@ -1160,6 +1167,12 @@ Configuration File:
     parser.add_argument(
         "--run-plugin",
         help="Run a specific plugin (internal use for frozen builds)",
+    )
+
+    parser.add_argument(
+        "--ddg-probe",
+        action="store_true",
+        help="Run the DuckDuckGo transport diagnostic (TLS fingerprint + i.js block check)",
     )
 
     return parser

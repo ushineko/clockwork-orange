@@ -124,6 +124,22 @@ jobs:
         }
         Write-Host "Self-test PASSED!"
 
+    # Diagnostic only (never fails the build). Captures the built exe's real
+    # OpenSSL/TLS fingerprint and whether DDG's i.js is blocked, to verify the
+    # TLS-block theory in validation-reports/2026-04-17-1646-ddg-ddgs-backend.md
+    # with measured data instead of inference. --noconsole detaches stdout, so
+    # Start-Process must redirect it to a file to capture the output.
+    - name: DDG Transport Probe (diagnostic, non-fatal)
+      shell: pwsh
+      continue-on-error: true
+      run: |
+        Write-Host "Running DuckDuckGo transport probe on built executable..."
+        Start-Process -FilePath ".\dist\clockwork-orange.exe" -ArgumentList "--ddg-probe" -Wait -NoNewWindow -RedirectStandardOutput ddg-probe.out -RedirectStandardError ddg-probe.err
+        Write-Host "--- ddg-probe stdout ---"
+        if (Test-Path ddg-probe.out) { Get-Content ddg-probe.out }
+        Write-Host "--- ddg-probe stderr ---"
+        if (Test-Path ddg-probe.err) { Get-Content ddg-probe.err }
+
     - name: Upload Windows Artifact
       uses: actions/upload-artifact@v4
       with:
@@ -183,6 +199,15 @@ jobs:
       run: |
         echo "Running self-test on built .app..."
         "dist/Clockwork Orange.app/Contents/MacOS/Clockwork Orange" --self-test
+
+    # Diagnostic only (never fails the build). See the Windows step above for
+    # rationale; the .app inner binary writes straight to the terminal so no
+    # redirection is needed here.
+    - name: DDG Transport Probe (diagnostic, non-fatal)
+      continue-on-error: true
+      run: |
+        echo "Running DuckDuckGo transport probe on built .app..."
+        "dist/Clockwork Orange.app/Contents/MacOS/Clockwork Orange" --ddg-probe
 
     - name: Package App as ZIP
       run: |
