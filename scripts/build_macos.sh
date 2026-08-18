@@ -44,7 +44,6 @@ pyinstaller \
     --add-data "gui/icons:gui/icons" \
     --collect-all gui \
     --collect-all plugins \
-    --collect-all ddgs \
     --collect-all primp \
     --hidden-import AppKit \
     --hidden-import Foundation \
