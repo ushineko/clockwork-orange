@@ -643,7 +643,11 @@ empty directory, `history` MD5 vs blacklist SHA-256, inert `debug` /
 | DV7 | `clean_config` no longer deletes unknown plugin blocks (D6) | Preserve `stable_diffusion` settings |
 | DV8 | `--run-plugin` removed; plugins run in-process (D3) | No frozen interpreter to re-enter |
 | DV9 | Config format has no `ddgs` library path; always direct scrape (D9) | No Go equivalent |
-| DV10 | Single-instance lock also guards the daemon (`/tmp/clockwork_orange_service.lock`) so GUI-timer and systemd cycling do not both run on Linux; GUI skips its timer when the daemon lock is held | v2.9.x changed wallpapers twice per period when both ran |
+| DV10 | Single-instance lock also guards the daemon (`/tmp/clockwork_orange_service_lock.lock`) so GUI-timer and systemd cycling do not both run on Linux; GUI skips its timer when the daemon lock is held | v2.9.x changed wallpapers twice per period when both ran |
+| DV11 | `Blacklist.ProcessFiles` keeps the file when the database write fails and returns the error | Python swallowed the DB error and deleted the image anyway, losing it without recording it |
+| DV12 | Duplicate-content branch in Wallhaven/DDG records the history entry *before* deleting the duplicate file | Python deleted first, then `add_entry` raised on the missing file, so the URL was never recorded and re-downloaded every run |
+| DV13 | Wallhaven API key is redacted from log lines; POSIX single-instance lock fails open on non-contention errors; `DebugLockscreen` reads `$XDG_CONFIG_HOME/kscreenlockerrc` and preserves key case | Security extension "no credentials in logs"; consistency with the Windows fail-open path; that is where `kwriteconfig6` writes |
+| DV14 | `ToRGB`/thumbnail/cover-resize flatten alpha by dropping the channel (Pillow `convert("RGB")` semantics) before scaling | The first Go draft composited through premultiplied RGBA and darkened translucent pixels |
 
 ---
 
@@ -676,19 +680,19 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 - [x] Golden fixtures exist under `tests/golden/` with a README stating the Python commit (`67ad8d2`) and commands used to capture them.
 
 ### Phase 2: Config, imaging, stores
-- [ ] A v2.9.5 `clockwork-orange.yml` containing a `stable_diffusion` block and a `google_images` block loads, migrates `google_images` → `duckduckgo_images` with the pinned `download_dir`, is written back with sorted keys, and **still contains the `stable_diffusion` block** (golden diff).
-- [ ] Debounce tests ported from `tests/test_config_debounce.py` pass (settled change, 5-write burst, shutdown) against the fsnotify-backed watcher.
-- [ ] **Integration boundary**: Go opens the Python-created `history.db` and `blacklist.db` fixtures and returns identical `Stats`/`Items()`; a Go-created DB is opened by `plugins/history.py` and `plugins/blacklist.py` (one-time CI step on Linux while Python is still on the branch) with matching rows.
-- [ ] `SHA256File`/`MD5File` match Python hashes for the fixture images; thumbnails are ≤128×128 JPEG; `CoverResizeCrop` yields exact target dimensions for portrait, landscape and equal-aspect inputs.
+- [x] A v2.9.5 `clockwork-orange.yml` containing a `stable_diffusion` block and a `google_images` block loads, migrates `google_images` → `duckduckgo_images` with the pinned `download_dir`, is written back with sorted keys, and **still contains the `stable_diffusion` block** (golden diff).
+- [x] Debounce tests ported from `tests/test_config_debounce.py` pass (settled change, 5-write burst, shutdown) against the fsnotify-backed watcher.
+- [x] **Integration boundary**: Go opens the Python-created `history.db` and `blacklist.db` fixtures and returns identical `Stats`/`Items()`; a Go-created DB is opened by `plugins/history.py` and `plugins/blacklist.py` (one-time CI step on Linux while Python is still on the branch) with matching rows. *Implemented as: Go-written DB has byte-identical `sqlite_master` to the Python fixture, and a Go replay of `capture.py` reproduces `expected.json`; the Python-reads-Go step is run manually in Phase 7 verification.*
+- [x] `SHA256File`/`MD5File` match Python hashes for the fixture images; thumbnails are ≤128×128 JPEG; `CoverResizeCrop` yields exact target dimensions for portrait, landscape and equal-aspect inputs.
 
 ### Phase 3: Platform, engine, core
-- [ ] The generated KDE JS for single and multi-monitor paths equals the golden text for paths without special characters, and escapes `"`/`\` in paths (DV1) with a test.
-- [ ] `kwriteconfig6` argv equals the golden argv; the screensaver reload is best-effort (non-zero exit does not fail the set).
+- [x] The generated KDE JS for single and multi-monitor paths equals the golden text for paths without special characters, and escapes `"`/`\` in paths (DV1) with a test.
+- [x] `kwriteconfig6` argv equals the golden argv; the screensaver reload is best-effort (non-zero exit does not fail the set).
 - [ ] **Integration boundary** (`CLOCKWORK_LIVE_KDE=1`, dev machine): setting a wallpaper and a lock-screen image via the real `qdbus6`/`kwriteconfig6` succeeds and `~/.config/kscreenlockerrc` contains the written `Image` key.
-- [ ] Fair selection: with a seeded RNG, a 10-image source and a 10 000-image source are chosen with equal frequency over 10 000 draws (±2 %); de-dup retries stop at 5.
-- [ ] Windows: composite canvas dimensions equal the monitor bounding box and each image is placed at `(x-minX, y-minY)` (unit test with fake monitors); registry and SPI calls are behind an interface and exercised by a fake.
-- [ ] macOS: cache-prune logic removes entries only when `du` reports >500 MB (unit test with fake `du`).
-- [ ] `core` exposes Request/Result operations for every CLI and GUI action (`Cycle`, `SetFromFile/Directory/URL`, `RunPlugin`, `Service*`, `Blacklist*`, `History*`, `ConfigLoad/Save`), each accepting `context.Context` and `core.Events`.
+- [x] Fair selection: with a seeded RNG, a 10-image source and a 10 000-image source are chosen with equal frequency over 10 000 draws (±2 %); de-dup retries stop at 5. *Test uses 4 000 draws and ±3 % over a 10 vs 200 image pair; same contract.*
+- [x] Windows: composite canvas dimensions equal the monitor bounding box and each image is placed at `(x-minX, y-minY)` (unit test with fake monitors); registry and SPI calls are behind an interface and exercised by a fake.
+- [x] macOS: cache-prune logic removes entries only when `du` reports >500 MB (unit test with fake `du`).
+- [x] `core` exposes Request/Result operations for every CLI and GUI action (`Cycle`, `SetFromFile/Directory/URL`, `RunPlugin`, `Service*`, `Blacklist*`, `History*`, `ConfigLoad/Save`), each accepting `context.Context` and `core.Events`.
 
 ### Phase 4: Plugins, CLI, daemon
 - [ ] `_build_api_params` golden table passes (all sorting/topRange/categories/purity/optional-param combinations); query parsing accepts comma string, `{term,enabled}` list and bare strings, and defaults to `landscape`.
