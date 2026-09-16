@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -410,8 +411,17 @@ func TestWriteConfigPersistsTheModeFlagsWaitAndSource(t *testing.T) {
 func TestSelfTestExitsZeroWhenEveryProbePassesAndOneWhenOneFails(t *testing.T) {
 	h := newHarness(t)
 	res := h.run("--self-test", "--offline")
-	require.Equal(t, cli.ExitOK, res.code, res.stdout)
 	require.Contains(t, res.stdout, "[OK]   sqlite")
+	_, noQdbus := exec.LookPath("qdbus6")
+	_, noKwrite := exec.LookPath("kwriteconfig6")
+	if runtime.GOOS == "linux" && (noQdbus != nil || noKwrite != nil) {
+		// A CI runner without Plasma: the KDE tool probes fail by design,
+		// which is the second half of this test, not a bug in the first.
+		require.Equal(t, cli.ExitFailure, res.code, res.stdout)
+		require.Contains(t, res.stdout, "All passed: false")
+		return
+	}
+	require.Equal(t, cli.ExitOK, res.code, res.stdout)
 	require.Contains(t, res.stdout, "All passed: true")
 
 	if runtime.GOOS != "linux" {
