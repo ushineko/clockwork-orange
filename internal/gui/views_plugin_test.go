@@ -143,5 +143,9 @@ func TestLocalPluginHasNoDownloadButton(t *testing.T) {
 	wh := u.buildPlugin("wallhaven")
 	require.True(t, findButton(local, "Download now").Disabled())
 	require.False(t, findButton(wh, "Download now").Disabled())
+	require.Nil(t, findButton(wh, "Apply blacklist (0)"), "the Review tab's content is built only when it is selected")
+	u.pluginTab = 1
+	wh = u.buildPlugin("wallhaven")
+	require.Nil(t, findButton(wh, "Download now"), "and the Configuration tab's only when it is")
 	require.True(t, findButton(wh, "Apply blacklist (0)").Disabled(), "nothing marked, nothing to apply")
 }

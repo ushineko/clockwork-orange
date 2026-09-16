@@ -484,21 +484,36 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 		card("Configuration", form.body),
 		card("Actions", container.NewHBox(download, reset)),
 	)
-	hint := dim("←/→ navigate  ·  Space mark/unmark")
+	// Plain words, no arrow glyphs: the arrows come from a fallback font and
+	// Fyne's shaper drew the run boundary after them as a missing glyph.
+	hint := dim("Arrow keys: previous/next  ·  Space: mark/unmark")
 	toolbar := container.NewBorder(nil, nil,
 		container.NewHBox(apply, rescan), hint,
 		dim(fmt.Sprintf("  %d image(s) in %s", len(rv.images), rv.dir)))
 	reviewTab := container.NewBorder(toolbar, nil, nil, nil, rv.widget(u))
+	// Only the selected tab carries its real content; the other holds an
+	// empty box. AppTabs sizes itself to its tallest item, so with both
+	// present a plugin with a long form (Wallhaven) laid its Review tab out
+	// in a pane taller than the window and the image sat off-centre. A tab
+	// change rebuilds the section, which is how every other state change
+	// here is drawn too.
+	var configContent, reviewContent fyne.CanvasObject = container.NewWithoutLayout(), container.NewWithoutLayout()
+	if u.pluginTab == 1 {
+		reviewContent = reviewTab
+	} else {
+		configContent = configTab
+	}
 	tabs := container.NewAppTabs(
-		container.NewTabItemWithIcon("Configuration", theme.SettingsIcon(), configTab),
-		container.NewTabItemWithIcon("Review", theme.FileImageIcon(), reviewTab),
+		container.NewTabItemWithIcon("Configuration", theme.SettingsIcon(), configContent),
+		container.NewTabItemWithIcon("Review", theme.FileImageIcon(), reviewContent),
 	)
 	tabs.SelectIndex(u.pluginTab)
 	tabs.OnSelected = func(*container.TabItem) {
-		u.pluginTab = tabs.SelectedIndex()
-		if u.pluginTab == 1 {
-			rv.draw(u) // the preview may not have loaded while hidden
+		if tabs.SelectedIndex() == u.pluginTab {
+			return
 		}
+		u.pluginTab = tabs.SelectedIndex()
+		u.refresh()
 	}
 
 	// Border, not VBox: the content pane is a Scroll, which sizes its content
