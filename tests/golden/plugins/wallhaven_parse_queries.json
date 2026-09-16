@@ -1,0 +1,13 @@
+{
+  "comma": [
+    "a",
+    "b",
+    "c"
+  ],
+  "list_dicts": [
+    "x",
+    "z"
+  ],
+  "empty": [],
+  "empty_list": []
+}

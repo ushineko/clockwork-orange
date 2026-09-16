@@ -1,5 +1,6 @@
 #!/bin/bash
-# AUR Package Update Script for clockwork-orange-git
+# AUR Package Update Script for clockwork-orange-git (manual fallback; CI does
+# this on every tag from packaging/arch/aur/PKGBUILD)
 # Usage: ./scripts/update_aur.sh [commit message]
 
 set -e
@@ -40,8 +41,8 @@ fi
 
 # Step 2: Copy package files and update pkgver from .tag
 echo -e "\n${GREEN}[2/5] Copying package files...${NC}"
-cp "${REPO_ROOT}/PKGBUILD" .
-cp "${REPO_ROOT}/clockwork-orange.install" .
+cp "${REPO_ROOT}/packaging/arch/aur/PKGBUILD" .
+cp "${REPO_ROOT}/packaging/arch/clockwork-orange.install" .
 
 # Update pkgver in PKGBUILD to match .tag (strip 'v' prefix)
 PKGVER="${VERSION#v}"

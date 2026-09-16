@@ -1,0 +1,4 @@
+plugins:
+  duckduckgo_images:
+    download_dir: /data/wp
+    enabled: true

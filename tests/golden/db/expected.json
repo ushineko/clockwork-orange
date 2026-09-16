@@ -1,0 +1,39 @@
+{
+  "blacklist": {
+    "is_blacklisted": {
+      "0000000000000000000000000000000000000000000000000000000000000000": false,
+      "ce1adb4be70cd831f391e3eb30ab6ee5a9140dfb0fe677565ff921e240e7d0b0": true,
+      "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef": true
+    },
+    "items": [
+      {
+        "date": "2023-11-14 22:13",
+        "has_thumbnail": true,
+        "hash": "ce1adb4be70cd831f391e3eb30ab6ee5a9140dfb0fe677565ff921e240e7d0b0",
+        "source": "local",
+        "timestamp": 1700000000.5
+      },
+      {
+        "date": "2023-11-14 22:13",
+        "has_thumbnail": false,
+        "hash": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "source": "manual",
+        "timestamp": 1700000000.5
+      }
+    ]
+  },
+  "history": {
+    "seen_image": {
+      "landscape_1920x1080.png": true,
+      "square_600x600.png": false
+    },
+    "seen_url": {
+      "https://example.com/a.jpg": true,
+      "https://example.com/zzz.jpg": false
+    },
+    "stats": {
+      "total_records": 3,
+      "unique_images": 2
+    }
+  }
+}

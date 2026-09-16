@@ -1,0 +1,70 @@
+# Maintainer: ushineko <https://github.com/ushineko>
+#
+# Builds clockwork-orange from the checkout this file lives in, not from a
+# download: `makepkg` here, `make pkg-arch` at the repository root, and the
+# GitHub Actions job all package exactly the tree they are run in. The version
+# is .tag at the repository root (spec 010 D7), the same file `make build`
+# stamps into the binaries. The AUR job publishes a copy with `source=` pointing
+# at the GitHub repository (see .github/workflows/build.yml).
+pkgname=clockwork-orange-git
+pkgver=4.0.0
+pkgrel=1
+pkgdesc="Wallpaper manager and downloader with plugin support (Wallhaven, DuckDuckGo Images) for KDE Plasma 6"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ushineko/clockwork-orange"
+license=('MIT')
+# The daemon is static. The window is Fyne over GLFW, built with both the X11
+# and the Wayland back end, so it needs OpenGL, X11 and Wayland at run time.
+# qt6-tools provides qdbus6 and kconfig provides kwriteconfig6, which the KDE
+# platform layer shells out to (spec 010 R4).
+depends=('libgl' 'libx11' 'libxcursor' 'libxrandr' 'libxinerama' 'libxi' 'libxxf86vm' 'libxkbcommon' 'wayland' 'qt6-tools' 'kconfig')
+makedepends=('go' 'git' 'gcc' 'pkgconf' 'mesa' 'wayland-protocols')
+provides=("${pkgname%-git}")
+conflicts=("${pkgname%-git}")
+options=('!strip' '!debug') # Go binaries: stripped by the linker flags in the Makefile; no separate debug package
+install=clockwork-orange.install
+source=()
+sha256sums=()
+
+# The repository root, two levels up from this file.
+_root="$(cd "${startdir}/../.." && pwd)"
+
+pkgver() {
+	cd "${_root}"
+	local _tag
+	_tag="$(tr -d '[:space:]' < .tag 2>/dev/null || echo v0.0.0)"
+	printf "%s.r%s.g%s" "${_tag#v}" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+	cd "${_root}"
+	# GOFLAGS=-buildvcs=false: the tree may be owned by another user in CI, and
+	# the version is stamped by hand anyway.
+	export GOFLAGS="-buildvcs=false -mod=readonly"
+	export CGO_ENABLED=1
+	make build build-gui
+}
+
+check() {
+	cd "${_root}"
+	# The GUI tests need no display; the parity tag is what `make test` adds.
+	# Named trees rather than ./..., so makepkg's own pkg/ and src/ directories
+	# (when BUILDDIR is the PKGBUILD's) are not walked.
+	GOFLAGS="-buildvcs=false" go test -tags parity ./cmd/... ./internal/... ./tests/...
+}
+
+package() {
+	cd "${_root}"
+	install -Dm755 bin/clockwork-orange "${pkgdir}/usr/bin/clockwork-orange"
+	install -Dm755 bin/clockwork-orange-gui "${pkgdir}/usr/bin/clockwork-orange-gui"
+	install -Dm644 packaging/io.ushineko.clockwork-orange.desktop \
+		"${pkgdir}/usr/share/applications/io.ushineko.clockwork-orange.desktop"
+	for res in 16 32 48 64 128 256 512; do
+		install -Dm644 "packaging/icons/clockwork-orange-${res}x${res}.png" \
+			"${pkgdir}/usr/share/icons/hicolor/${res}x${res}/apps/clockwork-orange.png"
+	done
+	install -Dm644 internal/platform/clockwork-orange.service \
+		"${pkgdir}/usr/lib/systemd/user/clockwork-orange.service"
+	install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+	install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

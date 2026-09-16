@@ -1,0 +1,43 @@
+{
+  "paths": [
+    "/home/nverenin/git/clockwork-orange.worktrees/v4-go-rewrite/tests/golden/images/landscape_1920x1080.png",
+    "/home/nverenin/git/clockwork-orange.worktrees/v4-go-rewrite/tests/golden/images/portrait_1080x1920.png",
+    "/home/nverenin/git/clockwork-orange.worktrees/v4-go-rewrite/tests/golden/images/square_600x600.png"
+  ],
+  "single": [
+    "qdbus6",
+    "org.kde.plasmashell",
+    "/PlasmaShell",
+    "org.kde.PlasmaShell.evaluateScript",
+    "\n    desktops().forEach(d => {\n        d.currentConfigGroup = Array(\"Wallpaper\",\n                                     \"org.kde.image\",\n                                     \"General\");\n        d.writeConfig(\"Image\", \"file:///home/nverenin/git/clockwork-orange.worktrees/v4-go-rewrite/tests/golden/images/landscape_1920x1080.png\");\n        d.reloadConfig();\n    });\n    "
+  ],
+  "multi": [
+    "qdbus6",
+    "org.kde.plasmashell",
+    "/PlasmaShell",
+    "org.kde.PlasmaShell.evaluateScript",
+    "\n    var allDesktops = desktops();\n    var images = [\"file:///home/nverenin/git/clockwork-orange.worktrees/v4-go-rewrite/tests/golden/images/landscape_1920x1080.png\", \"file:///home/nverenin/git/clockwork-orange.worktrees/v4-go-rewrite/tests/golden/images/portrait_1080x1920.png\"];\n\n    for (var i = 0; i < allDesktops.length; i++) {\n        var d = allDesktops[i];\n        d.currentConfigGroup = Array(\"Wallpaper\", \"org.kde.image\", \"General\");\n        var img = images[i % images.length];\n        d.writeConfig(\"Image\", img);\n        d.reloadConfig();\n    }\n    "
+  ],
+  "lockscreen": [
+    "kwriteconfig6",
+    "--file",
+    "kscreenlockerrc",
+    "--group",
+    "Greeter",
+    "--group",
+    "Wallpaper",
+    "--group",
+    "org.kde.image",
+    "--group",
+    "General",
+    "--key",
+    "Image",
+    "file:///home/nverenin/git/clockwork-orange.worktrees/v4-go-rewrite/tests/golden/images/square_600x600.png"
+  ],
+  "reload": [
+    "qdbus6",
+    "org.freedesktop.ScreenSaver",
+    "/ScreenSaver",
+    "configure"
+  ]
+}

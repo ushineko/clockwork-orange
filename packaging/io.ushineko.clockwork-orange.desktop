@@ -1,0 +1,21 @@
+[Desktop Entry]
+Type=Application
+Name=Clockwork Orange
+GenericName=Wallpaper manager
+Comment=Wallpaper and lock screen manager for KDE Plasma 6
+Exec=clockwork-orange-gui
+Icon=clockwork-orange
+Terminal=false
+# One main category: desktop-file-validate warns that two of them can put the
+# entry in the menu twice. Keywords below are what a launcher search matches.
+Categories=Graphics;
+Keywords=wallpaper;desktop;background;lockscreen;kde;plasma;
+StartupNotify=true
+# The basename of this file must stay io.ushineko.clockwork-orange.desktop. Fyne
+# sets the Wayland app_id from the application's unique ID (app.NewWithID in
+# internal/gui), and a Wayland compositor resolves a window's icon by matching
+# that app_id to a desktop file of the same name. Renaming this file to
+# clockwork-orange.desktop silently costs the taskbar icon on every Wayland
+# session. StartupWMClass covers the X11 and XWayland case, where the match is
+# on WM_CLASS instead.
+StartupWMClass=io.ushineko.clockwork-orange

@@ -40,6 +40,15 @@ These specs document features that have been implemented:
 - **004**: Windows Support - Windows 10/11 platform support with PyInstaller
 - **005**: Blacklist System - Shared blacklist and image review functionality
 - **006**: Service/Daemon Mode - Background service with systemd/Task Scheduler
+- **007**: macOS Support - macOS 13+ platform support with PyInstaller .app bundle
+- **008**: Replace Google Images with DuckDuckGo - image source plugin swap with config migration
+- **009**: Config Watcher Debounce - coalesce config-write bursts, unbuffered service logging
+
+- **010**: Clockwork Orange v4.0 - native Go rewrite (CLI + daemon, Fyne GUI), drops the Stable Diffusion plugin, converts build/packaging/CI. Specs 001–009 describe the Python 2.9.x line that v4 ports; the Python sources were deleted at the v4 cutover and live in the `v2.9.5` tag.
+
+## Pending Specs
+
+None. Spec 010's remaining acceptance criteria are the manual Windows and macOS verification (R9.6).
 
 ## Using Specs with Ralph Loop Mode
 

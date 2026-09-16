@@ -1,0 +1,47 @@
+{
+  "landscape_1920x1080.png": {
+    "md5": "aa9253d9016123192e4c690b4dd4bbc3",
+    "sha256": "db613dc59c31eee3514933a6766961965466cb669156fefdf260e064e6ba9c42",
+    "thumbnail_format": "JPEG",
+    "thumbnail_size": [
+      128,
+      72
+    ]
+  },
+  "portrait_1080x1920.png": {
+    "md5": "0cccae962e5efc5a8c1b57d5761b53ba",
+    "sha256": "ddd84cc03994e6aac8a12d3dbab0117a8bb6f4e85dc1655e394c706397ad6cf6",
+    "thumbnail_format": "JPEG",
+    "thumbnail_size": [
+      72,
+      128
+    ]
+  },
+  "rgba_400x300.png": {
+    "md5": "4b41ef07e431e5bfca6969179615c8b9",
+    "sha256": "7afff2e7b2696bfe2c23ad3d15bcc7e88021cfdb05a6509172731ed8306b6003",
+    "thumbnail_format": "JPEG",
+    "thumbnail_size": [
+      128,
+      96
+    ]
+  },
+  "small_800x600.jpg": {
+    "md5": "01d25fce5ddd663887cdd67a8c6576f8",
+    "sha256": "ce1adb4be70cd831f391e3eb30ab6ee5a9140dfb0fe677565ff921e240e7d0b0",
+    "thumbnail_format": "JPEG",
+    "thumbnail_size": [
+      128,
+      96
+    ]
+  },
+  "square_600x600.png": {
+    "md5": "fab0b22299b0550856eaf280460c5c9e",
+    "sha256": "fbc7ae752423e7b46322a38bfa76e6504319e6b34c15995ef05544a228bb3505",
+    "thumbnail_format": "JPEG",
+    "thumbnail_size": [
+      128,
+      128
+    ]
+  }
+}
