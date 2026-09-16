@@ -136,6 +136,12 @@ func walk(o fyne.CanvasObject, visit func(fyne.CanvasObject) bool) bool {
 		}
 	case *container.Scroll:
 		return walk(c.Content, visit)
+	case *container.AppTabs:
+		for _, item := range c.Items {
+			if !walk(item.Content, visit) {
+				return false
+			}
+		}
 	}
 	return true
 }

@@ -556,6 +556,10 @@ Design system (copy from nmsbonker unless noted):
   window now" (exec(2) on Unix, a fresh process on Windows). Rationale: Fyne
   draws text without hinting (upstream issue #5347, closed not planned), and
   at 1.2× it reads well on the dev machine's 1.5× Wayland desktop.
+- R7.18 The plugin section is two tabs, Configuration (form + Download Now /
+  Reset & Run) and Review (preview, Apply Blacklist, Rescan); the selected
+  tab persists across rebuilds and the review keys act only while its tab is
+  showing. In one column the review sat below the fold.
 - R7.14 Headless tests with `test.NewApp()` and the `testUI(t)` helper for:
   schema→form generation for all four field types, searchTerms round-trip
   incl. legacy string, review-mode keyboard marking, auto-save coalescing,

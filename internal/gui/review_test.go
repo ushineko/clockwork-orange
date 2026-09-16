@@ -126,6 +126,7 @@ func TestApplyBlacklistSendsProcessBlacklistWithTheMarkedPaths(t *testing.T) {
 	body := u.buildPlugin("local")
 	rv := u.review
 	require.NotNil(t, rv)
+	u.pluginTab = 1 // the review keys work only on the Review tab
 	require.Equal(t, want, rv.images)
 	rv.handleKey(u, fyne.KeySpace)
 	rv.handleKey(u, fyne.KeyRight)
@@ -143,4 +144,24 @@ func TestApplyBlacklistSendsProcessBlacklistWithTheMarkedPaths(t *testing.T) {
 	require.Equal(t, []any{want[0], want[2]}, got["targets"])
 	require.Equal(t, dir, got["path"], "the plugin's own block rides along")
 	require.Zero(t, rv.markedCount(), "rescanned after the run")
+}
+
+// The arrow keys move the review only while its tab is showing; on the
+// Configuration tab they would change an image nobody can see (R7.18).
+func TestReviewKeysAreIgnoredOnTheConfigurationTab(t *testing.T) {
+	u, _, _ := testUI(t)
+	dir, _ := reviewDir(t, 3)
+	doc := config.Defaults()
+	doc.Plugins["local"] = map[string]any{"enabled": true, "path": dir}
+	writeDoc(t, doc)
+	u.loadConfigNow()
+	u.content = nil
+	_ = u.buildPlugin("local")
+	u.current = 1 // the Local section
+	u.pluginTab = 0
+	u.onTypedKey(&fyne.KeyEvent{Name: fyne.KeyRight})
+	require.Equal(t, 0, u.review.index)
+	u.pluginTab = 1
+	u.onTypedKey(&fyne.KeyEvent{Name: fyne.KeyRight})
+	require.Equal(t, 1, u.review.index)
 }

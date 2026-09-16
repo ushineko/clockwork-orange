@@ -471,12 +471,39 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 		apply.Disable()
 	}
 	rv.applyBtn = apply
+	rescan := widget.NewButtonWithIcon("Rescan", theme.ViewRefreshIcon(), func() {
+		rv.scan()
+		rv.draw(u)
+	})
+
+	// Two tabs (R7.18): the form and its actions, and the review. In one
+	// column the review sat below the fold of every plugin with more than a
+	// few settings, and the keys it listens for went to a pane nobody could
+	// see. The selected tab survives the rebuilds every operation causes.
+	configTab := container.NewVBox(
+		card("Configuration", form.body),
+		card("Actions", container.NewHBox(download, reset)),
+	)
+	reviewTab := container.NewBorder(
+		container.NewHBox(apply, rescan, dim(fmt.Sprintf("%d image(s) in %s", len(rv.images), rv.dir))),
+		nil, nil, nil,
+		rv.widget(u),
+	)
+	tabs := container.NewAppTabs(
+		container.NewTabItemWithIcon("Configuration", theme.SettingsIcon(), configTab),
+		container.NewTabItemWithIcon("Review", theme.FileImageIcon(), reviewTab),
+	)
+	tabs.SelectIndex(u.pluginTab)
+	tabs.OnSelected = func(*container.TabItem) {
+		u.pluginTab = tabs.SelectedIndex()
+		if u.pluginTab == 1 {
+			rv.draw(u) // the preview may not have loaded while hidden
+		}
+	}
 
 	return container.NewVBox(
 		heading(pluginTitle(name), info.Description),
-		card("Configuration", form.body),
-		card("Actions", container.NewHBox(download, reset, apply)),
-		rv.widget(u),
+		tabs,
 	)
 }
 

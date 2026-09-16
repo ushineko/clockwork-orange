@@ -123,6 +123,9 @@ type ui struct {
 	review *reviewModel
 	// blState is the Blacklist section's filter and selection.
 	blState blacklistState
+	// pluginTab is the plugin sections' selected tab (0 configuration, 1
+	// review), kept across rebuilds and shared by every plugin section.
+	pluginTab int
 	// journalStop ends the Service section's auto-refresh ticker.
 	journalStop func()
 	// runs guards one plugin run at a time from the run dialog.

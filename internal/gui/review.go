@@ -300,8 +300,9 @@ func abs(n int) int {
 
 // --- widgets -------------------------------------------------------------------
 
-// previewHeight is the preview pane's fixed height.
-const previewHeight = 380
+// previewHeight is the preview pane's fixed height. It has a tab to itself,
+// so it can be tall.
+const previewHeight = 640
 
 // widget builds the review pane: the preview and the info panel side by side.
 func (r *reviewModel) widget(u *ui) fyne.CanvasObject {
@@ -425,8 +426,8 @@ func (u *ui) onTypedKey(e *fyne.KeyEvent) {
 	if u.review == nil || u.review.preview == nil {
 		return
 	}
-	if _, isPlugin := pluginForTitle(u.currentTitle()); !isPlugin {
-		return
+	if _, isPlugin := pluginForTitle(u.currentTitle()); !isPlugin || u.pluginTab != 1 {
+		return // the keys belong to the Review tab; on Configuration they would move an unseen image
 	}
 	u.review.handleKey(u, e.Name)
 }
