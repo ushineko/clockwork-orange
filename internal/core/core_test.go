@@ -61,6 +61,10 @@ func testDeps(t *testing.T, monitors int) (*Deps, *fakePlatform, string) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	// The daemon lock lives in /tmp by default; on a machine where the real
+	// daemon is running, RunLoop would be refused and every loop test would
+	// fail (the first makepkg check() on the dev machine did exactly that).
+	t.Setenv("CLOCKWORK_LOCK_DIR", home)
 	h, err := store.OpenHistory(filepath.Join(home, "history.db"))
 	require.NoError(t, err)
 	b, err := store.OpenBlacklist(filepath.Join(home, "blacklist.db"))
@@ -214,7 +218,13 @@ func TestSecondLoopIsRefusedWhileTheFirstHoldsTheDaemonLock(t *testing.T) {
 				}
 			}})
 	}()
-	<-started
+	select {
+	case <-started:
+	case err := <-done:
+		t.Fatalf("the first loop ended before its first cycle: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("the first loop did not start")
+	}
 	require.True(t, DaemonRunning())
 	err := RunLoop(ctx, LoopRequest{Request: Request{Deps: d}, Mode: ModeDesktop, Wait: time.Hour, Sources: []string{dir}})
 	require.ErrorIs(t, err, ErrDaemonRunning)

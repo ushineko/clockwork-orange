@@ -98,7 +98,10 @@ func TestInstallWritesEmbeddedUnitUnderXDGConfigHomeThenReloadsAndEnables(t *tes
 
 	got, err := os.ReadFile(filepath.Join(dir, "systemd", "user", "clockwork-orange.service"))
 	require.NoError(t, err)
-	require.Equal(t, UnitFile, got)
+	exe, err := os.Executable()
+	require.NoError(t, err)
+	require.Equal(t, string(UnitFileFor(exe)), string(got), "ExecStart names the binary that installed the unit")
+	require.NotContains(t, string(got), "/usr/bin/clockwork-orange", "the test binary is not in /usr/bin")
 	require.Equal(t, [][]string{
 		{"systemctl", "--user", "daemon-reload"},
 		{"systemctl", "--user", "enable", "clockwork-orange.service"},

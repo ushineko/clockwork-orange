@@ -596,6 +596,12 @@ Design system (copy from nmsbonker unless noted):
   categories/keywords from the current file. `install.sh`/`uninstall.sh`
   from nmsbonker adapted (installs both binaries, desktop file, icon, and
   the user unit; `--dry-run`, `--no-gui`).
+- R8.7a `clockwork-orange service install` writes the embedded unit with
+  `ExecStart` naming the binary that ran it (symlinks resolved), so an
+  `install.sh` install in `~/.local/bin` produces a unit that starts; the
+  packaged file (`/usr/lib/systemd/user/`) keeps `/usr/bin/clockwork-orange`
+  and is what `UnitFileFor("/usr/bin/clockwork-orange")` yields byte for
+  byte. This is the Python's `service_install(base_path)` behaviour.
 - R8.8 `release_version.sh` unchanged. `.tag` bumped to `v4.0.0` only in
   the release step (release workflow in `.claude/CLAUDE.md` still applies).
 - R8.9 Removed at cutover: all `*.py`, `requirements.txt`, `gui/`,
@@ -748,13 +754,13 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 - [ ] Windows CI builds both `.exe`s with CGO, embeds the icon, and `--self-test` passes; the GUI exe has the windowsgui subsystem.
 - [ ] macOS CI produces `Clockwork Orange.app` via `fyne package`, includes the CLI binary, and `--self-test` passes.
 - [ ] `release` job refuses when the git tag differs from `.tag`; `publish-aur` regenerates `.SRCINFO` with `makepkg --printsrcinfo` and pushes only when changed.
-- [ ] `install.sh --dry-run` lists exactly the files it would install; `uninstall.sh` removes exactly those.
+- [x] `install.sh --dry-run` lists exactly the files it would install; `uninstall.sh` removes exactly those. *Run 2026-09-15 on the dev machine: both dry runs list the same four files; the real install put them in place and `--self-test` passed from `~/.local/bin`.*
 
 ### Phase 7: Cutover and release
 - [ ] All Python sources and Python-only tooling listed in R8.9 are deleted in one commit; `git grep -l "python"` in the tree returns only historical specs, validation reports and this spec.
 - [ ] README, `docs/architecture.md`, `GUI.md`, `specs/README.md` updated; SD section replaced by the deferral note.
 - [ ] Manual platform verification (R9.6) completed on Windows, macOS and KDE and recorded in `validation-reports/`.
-- [ ] Dotfiles systemd unit updated to the new `ExecStart` and the live user service restarted (operator step recorded).
+- [ ] Dotfiles systemd unit updated to the new `ExecStart` and the live user service restarted (operator step recorded). *2026-09-15: the live user unit was rewritten by `clockwork-orange service install` (ExecStart → `~/.local/bin/clockwork-orange --service`) and the service restarted on the Go daemon; the dotfiles copy still carries the packaged `/usr/bin` ExecStart and is updated at cutover.*
 - [ ] `.tag` = `v4.0.0`; `release_version.sh` tags and pushes; GitHub Actions publishes Arch, deb, Windows zip, macOS zip; AUR updated.
 - [ ] Security review (dependency scan via `govulncheck`, OWASP pass on network code, no secrets) recorded for the release commit.
 

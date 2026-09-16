@@ -93,6 +93,16 @@ func TestUnitFileIsTheR45TextWithNoPythonInterpreter(t *testing.T) {
 	}
 }
 
+// A unit installed by a binary outside /usr/bin names that binary; the
+// packaged path yields the shipped file unchanged.
+func TestUnitFileForRewritesExecStartOnly(t *testing.T) {
+	require.Equal(t, UnitFile, UnitFileFor("/usr/bin/clockwork-orange"))
+	local := string(UnitFileFor("/home/me/.local/bin/clockwork-orange"))
+	require.Contains(t, local, "ExecStart=/home/me/.local/bin/clockwork-orange --service\n")
+	require.NotContains(t, local, "/usr/bin/")
+	require.Equal(t, len(UnitFile)+len("/home/me/.local/bin")-len("/usr/bin"), len(local), "nothing else changes")
+}
+
 func TestNewReturnsTheHostPlatformNamedAfterGOOS(t *testing.T) {
 	p := New(&FakeRunner{})
 	require.Equal(t, runtime.GOOS, p.Name())

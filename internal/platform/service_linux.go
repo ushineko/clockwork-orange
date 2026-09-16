@@ -91,7 +91,8 @@ func (s *LinuxService) Stop(ctx context.Context) error { return s.checked(ctx, "
 // Restart implements Service.
 func (s *LinuxService) Restart(ctx context.Context) error { return s.checked(ctx, "restart") }
 
-// Install implements Service: write the embedded unit, daemon-reload, enable.
+// Install implements Service: write the embedded unit with ExecStart naming
+// this binary (UnitFileFor), daemon-reload, enable.
 func (s *LinuxService) Install(ctx context.Context) error {
 	path := unitPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -99,7 +100,7 @@ func (s *LinuxService) Install(ctx context.Context) error {
 	}
 	// Unit files are conventionally world-readable; systemd --user only needs
 	// the owner bit, but 0644 matches what shutil.copy2 produced before.
-	if err := os.WriteFile(path, UnitFile, 0o644); err != nil { //nolint:gosec // G306: see above.
+	if err := os.WriteFile(path, installedUnit(), 0o644); err != nil { //nolint:gosec // G306: see above.
 		return fmt.Errorf("write unit file: %w", err)
 	}
 	s.Events.Debugf("Installed %s", path)
