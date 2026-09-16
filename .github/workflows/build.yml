@@ -247,12 +247,17 @@ jobs:
         useradd -m builder
     - uses: actions/checkout@v4
     - name: Configure SSH for AUR
+      # Explicit paths through GIT_SSH_COMMAND rather than ~/.ssh/config: in
+      # the Arch container the v4.0.0 run failed with "Host key verification
+      # failed" although the config asked for accept-new, so the host key is
+      # fetched up front and ssh is told exactly which files to use.
       run: |
-        mkdir -p ~/.ssh
-        printf '%s\n' "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur_deploy
-        chmod 600 ~/.ssh/aur_deploy
-        printf '%s\n' "Host aur.archlinux.org" "  IdentityFile ~/.ssh/aur_deploy" "  User aur" "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
-        chmod 600 ~/.ssh/config
+        mkdir -p "$HOME/.ssh"
+        printf '%s\n' "${{ secrets.AUR_SSH_KEY }}" > "$HOME/.ssh/aur_deploy"
+        chmod 600 "$HOME/.ssh/aur_deploy"
+        ssh-keyscan -t ed25519,rsa aur.archlinux.org >> "$HOME/.ssh/known_hosts" 2>/dev/null
+        chmod 600 "$HOME/.ssh/known_hosts"
+        echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/aur_deploy -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
     - name: Clone AUR repo
       run: git clone ssh://aur@aur.archlinux.org/clockwork-orange-git.git aur-pkg
     - name: Update PKGBUILD and regenerate .SRCINFO
