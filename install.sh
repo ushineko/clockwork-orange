@@ -99,6 +99,17 @@ if [ "$WITH_GUI" -eq 1 ]; then
     fi
 fi
 
+# The Python versions' install-desktop-entry.sh wrote a launcher entry of the
+# same display name that ran `python3 …/clockwork-orange.py --gui`. Left in
+# place it sits beside the new one in the menu, indistinguishable, and starts
+# the old program. It is removed only when it still points at the Python
+# entrypoint, so a user's own entry of that name is left alone.
+LEGACY_ENTRY="${APP_DIR}/clockwork-orange.desktop"
+if [ -f "$LEGACY_ENTRY" ] && grep -q 'clockwork-orange\.py' "$LEGACY_ENTRY"; then
+    echo "Removing the legacy Python launcher entry ${LEGACY_ENTRY} ..."
+    run rm -f "$LEGACY_ENTRY"
+fi
+
 if [ "$WITH_GUI" -eq 1 ] && command -v update-desktop-database >/dev/null 2>&1; then
     run update-desktop-database "${APP_DIR}"
 fi
