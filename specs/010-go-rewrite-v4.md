@@ -549,6 +549,13 @@ Design system (copy from nmsbonker unless noted):
   passes 0, which KDE shows until dismissed). The README is rewritten for v4
   ahead of Phase 7 so the About section stops describing the Python program;
   it avoids emoji, which Fyne's font does not have glyphs for.
+- R7.17 Appearance gains "Interface scale" (System, 1.1×–2×), stored in the
+  Fyne preference store and handed to Fyne as `FYNE_SCALE` after the app is
+  created and before the window is, which scopes it to this program; an
+  explicit `FYNE_SCALE` from the shell wins. A change offers "Restart the
+  window now" (exec(2) on Unix, a fresh process on Windows). Rationale: Fyne
+  draws text without hinting (upstream issue #5347, closed not planned), and
+  at 1.2× it reads well on the dev machine's 1.5× Wayland desktop.
 - R7.14 Headless tests with `test.NewApp()` and the `testUI(t)` helper for:
   schema→form generation for all four field types, searchTerms round-trip
   incl. legacy string, review-mode keyboard marking, auto-save coalescing,

@@ -334,3 +334,27 @@ func TestWindowSizeRestoresFromTheConfigAndPersistsAfterAResize(t *testing.T) {
 	default:
 	}
 }
+
+// The interface scale reaches Fyne through FYNE_SCALE at window creation
+// (R7.16): a saved preference sets it, an explicit environment value wins,
+// and the Select's labels round-trip.
+func TestInterfaceScalePreferenceSetsFyneScaleUnlessTheEnvironmentDoes(t *testing.T) {
+	u, _, _ := testUI(t)
+	t.Setenv(scaleEnv, "")
+	u.applyScalePreference()
+	require.Empty(t, os.Getenv(scaleEnv), "no preference: Fyne decides")
+
+	u.app.Preferences().SetFloat(prefScale, 1.2)
+	u.applyScalePreference()
+	require.Equal(t, "1.20", os.Getenv(scaleEnv))
+
+	t.Setenv(scaleEnv, "0.9")
+	u.applyScalePreference()
+	require.Equal(t, "0.9", os.Getenv(scaleEnv), "the shell's value wins")
+
+	for _, s := range scaleChoices {
+		require.Equal(t, s, scaleValue(scaleLabel(s)))
+	}
+	require.Equal(t, "System", scaleLabel(0))
+	require.Equal(t, float32(0), scaleValue("nonsense"))
+}

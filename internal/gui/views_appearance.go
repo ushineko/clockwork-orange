@@ -7,6 +7,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -79,12 +80,25 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 		}
 	}
 
+	// Interface scale (R7.16): saved now, applied when the window next opens,
+	// because Fyne fixes a window's scale when it is created.
+	scaleSel := widget.NewSelect(scaleLabels(), nil)
+	scaleSel.SetSelected(scaleLabel(float32(u.app.Preferences().Float(prefScale))))
+	restart := widget.NewButtonWithIcon("Restart the window now", theme.ViewRefreshIcon(), func() { u.restart() })
+	restart.Hide()
+	scaleSel.OnChanged = func(v string) {
+		u.app.Preferences().SetFloat(prefScale, float64(scaleValue(v)))
+		restart.Show()
+		u.flash("Interface scale saved. It applies when the window next opens.", StatusInfo)
+	}
+
 	form := widget.NewForm(
 		widget.NewFormItem("Color scheme", scheme),
 		widget.NewFormItem("Font", font),
 		widget.NewFormItem("Text size", size),
 		widget.NewFormItem("Console font", consoleFont),
 		widget.NewFormItem("Console text size", consoleSizeSel),
+		widget.NewFormItem("Interface scale", container.NewHBox(scaleSel, restart)),
 	)
 
 	noteText := widget.NewLabel(
@@ -95,6 +109,13 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 			"and plugin runs.")
 	noteText.Wrapping = fyne.TextWrapWord
 	noteText.Importance = widget.LowImportance
+
+	scaleNote := widget.NewLabel(
+		"Interface scale enlarges everything in the window, text included, on top of the desktop's " +
+			"own scale. Fyne draws text without hinting, which on a fractionally scaled desktop reads " +
+			"soft at the default size; 1.2 is usually enough. It takes effect when the window is opened.")
+	scaleNote.Wrapping = fyne.TextWrapWord
+	scaleNote.Importance = widget.LowImportance
 
 	fontNote := widget.NewLabel(
 		"Fonts are read from the system font directories. Fyne draws its own text and does " +
@@ -133,5 +154,36 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 		widget.NewSeparator(),
 		schemeNote,
 		fontNote,
+		scaleNote,
 	))
+}
+
+// scaleLabels are the Select's entries for scaleChoices.
+func scaleLabels() []string {
+	out := make([]string, 0, len(scaleChoices))
+	for _, s := range scaleChoices {
+		out = append(out, scaleLabel(s))
+	}
+	return out
+}
+
+// scaleLabel names one choice; anything not in the table is shown as its
+// number so a value set by hand is not silently replaced.
+func scaleLabel(s float32) string {
+	if s <= 0 {
+		return "System"
+	}
+	return fmt.Sprintf("%g×", s)
+}
+
+// scaleValue is the inverse of scaleLabel.
+func scaleValue(label string) float32 {
+	if label == "System" {
+		return 0
+	}
+	var f float32
+	if _, err := fmt.Sscanf(label, "%g", &f); err != nil || f <= 0 {
+		return 0
+	}
+	return f
 }

@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -147,7 +149,39 @@ const (
 	prefScheme = "appearance.scheme"
 	prefFont   = "appearance.font"
 	prefSize   = "appearance.textSize"
+	// prefScale is the interface scale multiplier, applied through FYNE_SCALE
+	// at window creation (see applyScalePreference). 0 means the system's.
+	prefScale = "appearance.scale"
 )
+
+// scaleEnv is Fyne's scale override, read when a window is created.
+const scaleEnv = "FYNE_SCALE"
+
+// scaleChoices are the interface scales Appearance offers; 0 is "System".
+var scaleChoices = []float32{0, 1.1, 1.2, 1.3, 1.5, 1.75, 2} //nolint:gochecknoglobals // a fixed table
+
+/*
+applyScalePreference hands the saved interface scale to Fyne (R7.16).
+
+Fyne has no per-application scale setting: FYNE_SCALE in the environment or a
+scale in ~/.config/fyne/settings.json, which every Fyne program on the machine
+reads. But the environment variable is read when a window is created, not when
+the process starts, so setting it here, after the app exists and before the
+window does, scopes it to this program. An explicit FYNE_SCALE from the shell
+wins, so a capture script can still force one.
+
+Why it exists: Fyne's text has no hinting, and on a fractional-scale Wayland
+desktop it reads soft; drawn a fifth larger it reads well. A user who wants
+that should not have to know an environment variable.
+*/
+func (u *ui) applyScalePreference() {
+	if os.Getenv(scaleEnv) != "" {
+		return
+	}
+	if s := u.app.Preferences().Float(prefScale); s > 0 {
+		_ = os.Setenv(scaleEnv, strconv.FormatFloat(s, 'f', 2, 32))
+	}
+}
 
 // loadAppearance reads the saved appearance, falling back to the defaults. A
 // stale value — a scheme that was renamed, a font since uninstalled — falls back
@@ -351,6 +385,7 @@ func Run(o Options) {
 	u.win.SetIcon(appIcon())
 	a.SetIcon(appIcon())
 	u.loadAppearance()
+	u.applyScalePreference()
 	if o.Scheme != "" {
 		// Forced for this run only, so a capture does not overwrite whatever
 		// the user had chosen.
