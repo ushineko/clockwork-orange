@@ -1,0 +1,4 @@
+plugins:
+  google_images:
+    download_dir: /data/wp
+    enabled: true

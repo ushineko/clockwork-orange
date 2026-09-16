@@ -1,181 +1,129 @@
-# Project-Specific Guidelines: clockwork-orange
+# Project-Specific Guidelines: clockwork-orange (v4, Go)
 
 This file extends the global Ralph methodology (`~/.claude/CLAUDE.md`).
+It describes the **Go rewrite on branch `v4-go-rewrite`** (spec 010). `main`
+still carries the Python 2.9.x line until cutover; its rules live in the
+`main` copy of this file.
 
 ---
 
 ## Selected Policies
 
+- `languages/go.md`
+- `languages/bash.md`
 - `git/standard.md`
 - `release-safety/simplified.md`
-
-**Not selected**: `languages/python.md` — this project's Python conventions differ from the global policy. See [Python Conventions (Project Override)](#python-conventions-project-override) below.
+- `security/owasp-review.md`
+- `testing/philosophy.md`
+- `communication/standards.md`
 
 ---
 
 ## Project Overview
 
-- **Type**: Desktop application (GUI + CLI)
-- **Language**: Python 3.10+
-- **Platforms**: KDE Plasma 6 (Linux), Windows 10/11, macOS 13+
-- **Framework**: PyQt6 for GUI
-- **Purpose**: Wallpaper and lock screen management with plugin system
+- **Type**: Go CLI/daemon + desktop GUI (Fyne)
+- **Purpose**: Wallpaper and lock-screen manager with source plugins (local
+  folder, Wallhaven, DuckDuckGo Images), shared blacklist/history, systemd
+  daemon on KDE Plasma 6, tray app on Windows 10/11 and macOS 13+.
+- **Module**: `github.com/ushineko/clockwork-orange`
+- **Design reference**: `~/git/nmsbonker` (Fyne design system, build layout,
+  CI). `~/git/angou` is the older sibling. When this file and their
+  conventions disagree, this file wins; otherwise copy nmsbonker.
+- **Spec of record**: `specs/010-go-rewrite-v4.md`. Requirement IDs (`R2.6`,
+  `DV1`) are referenced from code comments and tests.
 
 ---
 
-## Relaxed Rules
+## Issue Tracking
 
-### Release Safety: Simplified
-
-**Justification**: This is a desktop application with no backend databases, APIs, or infrastructure. Schema migrations and multi-phase rollouts do not apply.
-
-**What this means**:
-- Document rollback approach (revert commit, reinstall previous version)
-- Skip formal Expand-Migrate-Contract checklists
-- Skip ringed rollout planning
-- Focus on: Can users easily revert to previous version if needed?
-- For releases: Users reinstall previous version from GitHub Releases
+Personal public GitHub repository, no issue tracker. Spec files are named
+without ticket IDs (`specs/NNN-short-description.md`). Do not prompt for
+ticket IDs.
 
 ---
 
-## Python Conventions (Project Override)
+## Architecture rules
 
-This section **overrides** the global `languages/python.md` policy. The global policy targets a different project profile (>=3.12, uv, pyproject.toml, Pydantic). This project's conventions:
-
-### Targets and Tooling
-- **Python**: 3.10+ (must run on all supported platforms)
-- **Packaging**: `pip` with `requirements.txt` (no uv, no pyproject.toml)
-- **Build**: PyInstaller for frozen executables
-- **Testing**: `pytest`
-- **No Pydantic**: Configuration is YAML-based via PyYAML
-
-### Style
-- Follow PEP 8
-- Use type hints for function signatures where practical
-- Prefer `list`, `dict`, `tuple` over `typing.List`, `typing.Dict`, `typing.Tuple`
-- Keep functions focused; extract helpers when patterns repeat
-
-### Platform Awareness
-- Conditional imports for platform-specific modules (`pywin32`, `AppKit`)
-- Use `platform_utils.py` as the abstraction layer for OS differences
-- Guard platform-specific code paths with runtime checks, not import-time failures
-
----
-
-## Additional Rules
-
-### Platform-Specific Testing
-
-When making changes:
-- Test on Windows if modifying `platform_utils.py` or Windows-specific code
-- Test GUI changes with PyQt6
-- Run `--self-test` on frozen executables after build changes
-
-### Build Verification
-
-Before releasing Windows builds:
-1. Run `.\scripts\build_windows.ps1` (debug build)
-2. Execute `.\dist\clockwork-orange.exe --self-test`
-3. Verify all imports pass, especially platform-specific ones
-
----
-
-## Release Workflow
-
-When the user says **"release"** or **"releasing"**, follow this workflow:
-
-### Step 1: Determine Version Bump
-
-Use semantic versioning (semver) to determine the new version:
-
-| Change Type | Version Component | Example |
-|-------------|-------------------|---------|
-| Bugfix / minor patch | Patch (x.y.**Z**) | v2.7.2 → v2.7.3 |
-| New feature | Minor (x.**Y**.0) | v2.7.2 → v2.8.0 |
-| Major/breaking change | Major (**X**.0.0) | v2.7.2 → v3.0.0 |
-
-### Step 2: Confirm Version with User
-
-**Before updating `.tag`**, use `AskUserQuestion` to confirm:
-
-```
-Current version: v2.7.2
-Suggested new version: v2.7.3 (patch bump for bugfix)
-
-Options:
-1. Accept v2.7.3
-2. Use minor bump (v2.8.0)
-3. Use major bump (v3.0.0)
-4. Other (specify custom version)
-```
-
-### Step 3: Update .tag File
-
-Update the `.tag` file with the confirmed version:
-```
-v2.7.3
-```
-
-### Step 4: Run Release Script
-
-**On Linux/macOS:**
-```bash
-./release_version.sh
-```
-
-**On Windows (via Git Bash or MSYS2):**
-```bash
-bash release_version.sh
-```
-
-The script will:
-1. Commit `.tag` if modified
-2. Create annotated git tag
-3. Push to remote (main branch + tag)
-
-### Step 5: Verify Release
-
-After the script completes:
-1. Confirm tag appears on GitHub
-2. GitHub Actions will build Windows executable automatically
-3. Check Actions workflow for build success
-
-### Release Checklist
-
-- [ ] All tests passing
-- [ ] Self-test passes on frozen executable (if Windows changes)
-- [ ] Version confirmed with user
-- [ ] `.tag` updated
-- [ ] `release_version.sh` executed successfully
-- [ ] Tag visible on GitHub
-- [ ] GitHub Actions build successful
+- **CLI/GUI parity**: every user-facing operation is a headless function in
+  `internal/core` taking a request struct and returning a result struct. The
+  cobra CLI (`cmd/clockwork-orange`) and the Fyne GUI
+  (`cmd/clockwork-orange-gui`) render only. A new operation lands in core
+  first, then in both front ends, in the same commit. Enforced by
+  `tests/parity` with a documented allow-list.
+- **Straight port**: behaviour matches Python 2.9.5 unless the spec's
+  "Deliberate Deviations" table says otherwise. Known quirks are ported, not
+  fixed, without a spec entry. Golden fixtures in `tests/golden/` are the
+  oracle; do not regenerate them from Go.
+- **On-disk compatibility**: `~/.config/clockwork-orange.yml` (YAML, sorted
+  keys), `~/.config/clockwork-orange/history.db` and `blacklist.db` must stay
+  readable by both 2.9.x and 4.x. Unknown YAML keys and plugin blocks
+  (notably `stable_diffusion`) are preserved on save.
+- **Long-running work is cancellable** (`context.Context`) and reports
+  progress through `internal/events`; the GUI never blocks its render thread
+  (`fyne.Do`, never `fyne.DoAndWait`).
+- **Nothing transient may reflow the interface**: result banners and the
+  progress indicator float over the content as popups and never insert
+  themselves into a section's layout.
+- **Platform code lives in `internal/platform`** behind interfaces with fakes;
+  build-tagged files per OS. External tools (`qdbus6`, `kwriteconfig6`,
+  `systemctl`, `journalctl`, `osascript`, `du`) are invoked with exact argv
+  recorded in golden tests.
+- **The daemon builds with `CGO_ENABLED=0`.** Only the GUI may need CGO.
 
 ---
 
 ## Environment
 
-- **Python**: 3.10+ (3.12 for development)
-- **Package Manager**: pip (from requirements.txt)
-- **Build Tool**: PyInstaller for Windows executables
-- **GUI Framework**: PyQt6
+- Go from `go.mod` (`go 1.25.0` minimum, no `toolchain` line; the linter pin
+  lives in the Makefile). Local toolchain may be newer.
+- Fyne needs CGO, OpenGL and X11/Wayland headers for `make build-gui`.
+- Runtime tools on Linux: KDE Plasma 6 (`qdbus6`, `kwriteconfig6`), systemd
+  user session.
+- `make test` runs `go test -race -tags parity ./...`; `make lint` runs the
+  pinned golangci-lint with `config/.golangci-v2.12.2.yml`.
+- Live integration tests are env-gated: `CLOCKWORK_LIVE_KDE=1`,
+  `CLOCKWORK_LIVE_NET=1`, `CLOCKWORK_LIVE_SYSTEMD=1`.
 
-### Key Dependencies
-- PyQt6 (GUI)
-- Pillow (image processing)
-- requests (network)
-- PyYAML (configuration)
-- watchdog (file system monitoring)
-- pywin32 (Windows-specific features)
+---
+
+## Platform-Specific Testing
+
+- Test on Windows when touching `internal/platform/*_windows.go`.
+- Test on macOS when touching `internal/platform/*_darwin.go` or cgo code.
+- Run `--self-test` on every packaged artifact (CI does this).
+
+---
+
+## Git
+
+- Work happens on `v4-go-rewrite` until the rewrite is stabilised; `main`
+  is not touched until the cutover merge.
+- Never add `Co-Authored-By` trailers or AI attribution footers. No
+  exceptions.
+- Commit subjects: lowercase conventional prefix, imperative
+  (`feat(config): port google_images migration`).
+- Connectivity check before push/pull (`git/standard.md`).
+
+---
+
+## Release Workflow
+
+`.tag` (`vX.Y.Z`) is the version of record; the Makefile, PKGBUILD and CI
+derive from it. When the user says **"release"**: determine the semver bump,
+confirm with `AskUserQuestion`, update `.tag`, run `./release_version.sh`,
+then verify the tag on GitHub and the Actions build. The CI `release` job
+refuses a tag that differs from `.tag`.
 
 ---
 
 ## Security Extensions
 
-### Additional Checks for This Project
-
-- **No network credentials**: API keys (Wallhaven, etc.) should use config files, not hardcoded
-- **Safe file operations**: Validate paths for wallpaper sources, avoid path traversal
-- **Plugin security**: Plugins should not execute arbitrary code from network sources
+- No network credentials in source; the Wallhaven API key comes from the
+  config file only and is never logged.
+- Validate paths for wallpaper sources; escape paths interpolated into the
+  KDE JavaScript payload (DV1).
+- Plugins never execute code from network sources.
+- Dependency scan: `govulncheck ./...` before each release commit.
 
 ---
 
@@ -184,15 +132,15 @@ After the script completes:
 | Category | Setting | Policy Module | Notes |
 |----------|---------|---------------|-------|
 | Git | Standard | `git/standard.md` | Conventional commits, connectivity checks, no co-authored-by |
-| Release Safety | Simplified | `release-safety/simplified.md` | Desktop app, no backend infrastructure |
-| Python | Project override | *(inline above)* | 3.10+, pip, requirements.txt |
-| Validation Reports | Strict | *(core methodology)* | Required before every commit |
-| Code Quality Checks | Strict | *(core methodology)* | Always check for dead code, duplication |
-| Test Requirements | Strict | *(core methodology)* | Tests must pass |
-| Communication Style | Strict | *(core methodology)* | Factual language, no superlatives |
+| Release Safety | Simplified | `release-safety/simplified.md` | Desktop app; rollback = reinstall previous release |
+| Go | Policy | `languages/go.md` | Plus the architecture rules above |
+| Validation Reports | Strict | *(core methodology)* | Required before every commit with code changes |
+| Code Quality Checks | Strict | *(core methodology)* | Dead code, duplication, `make lint` clean |
+| Test Requirements | Strict | *(core methodology)* | `make test` must pass |
+| Communication Style | Strict | `communication/standards.md` | Factual language, no superlatives |
 | Tool Installation | Strict | *(core methodology)* | Always ask before installing |
-| Security | Mandatory | *(core methodology)* | CVE scanning, OWASP checks |
+| Security | Mandatory | `security/owasp-review.md` | govulncheck, OWASP checks |
 
 ---
 
-*Updated 2026-02-26 — added Selected Policies, Python project override, macOS platform*
+*Updated 2026-09-15 — rewritten for the v4 Go port (spec 010 Phase 1)*

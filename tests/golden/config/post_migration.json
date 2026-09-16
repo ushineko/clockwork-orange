@@ -1,0 +1,29 @@
+{
+  "default_wait": 120,
+  "dual_wallpapers": true,
+  "plugins": {
+    "duckduckgo_images": {
+      "download_dir": "/home/nverenin/Pictures/Wallpapers/GoogleImages",
+      "enabled": true,
+      "limit": 5,
+      "query": "mountains"
+    },
+    "local": {
+      "enabled": true,
+      "path": "~/Pictures"
+    },
+    "stable_diffusion": {
+      "enabled": false,
+      "prompt": [
+        {
+          "enabled": true,
+          "term": "a castle"
+        }
+      ],
+      "steps": 30
+    }
+  },
+  "unknown_top_level": {
+    "keep": "me"
+  }
+}

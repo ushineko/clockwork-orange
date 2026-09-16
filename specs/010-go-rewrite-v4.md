@@ -4,7 +4,7 @@
 > GitHub repository, no tracker). Consider creating a GitHub issue for
 > traceability.
 
-## Status: PENDING
+## Status: IN_PROGRESS
 
 - **Priority**: High
 - **Estimated Complexity**: High
@@ -670,10 +670,10 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 ## Acceptance Criteria
 
 ### Phase 0–1: Foundations
-- [ ] `go build ./...` with `CGO_ENABLED=0` builds `cmd/clockwork-orange`; `make build-gui` builds `cmd/clockwork-orange-gui` on the dev machine.
-- [ ] `make lint` passes with the copied golangci config; `make test` runs with `-race -tags parity`.
-- [ ] `.claude/CLAUDE.md` lists the Go policy set and the architecture rules; the Python override section is gone.
-- [ ] Golden fixtures exist under `tests/golden/` with a README stating the Python commit (`67ad8d2`) and commands used to capture them.
+- [x] `go build ./...` with `CGO_ENABLED=0` builds `cmd/clockwork-orange`; `make build-gui` builds `cmd/clockwork-orange-gui` on the dev machine.
+- [x] `make lint` passes with the copied golangci config; `make test` runs with `-race -tags parity`.
+- [x] `.claude/CLAUDE.md` lists the Go policy set and the architecture rules; the Python override section is gone.
+- [x] Golden fixtures exist under `tests/golden/` with a README stating the Python commit (`67ad8d2`) and commands used to capture them.
 
 ### Phase 2: Config, imaging, stores
 - [ ] A v2.9.5 `clockwork-orange.yml` containing a `stable_diffusion` block and a `google_images` block loads, migrates `google_images` → `duckduckgo_images` with the pinned `download_dir`, is written back with sorted keys, and **still contains the `stable_diffusion` block** (golden diff).

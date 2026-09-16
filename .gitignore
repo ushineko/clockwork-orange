@@ -219,3 +219,13 @@ dist_test_service/
 
 # Claude Code user settings (project config is tracked, user settings are not)
 .claude/settings.*
+
+# Go (spec 010)
+/bin/
+/dist/
+/clockwork-orange
+/clockwork-orange-gui
+coverage.out
+/packaging/arch/pkg/
+/packaging/arch/src/
+/packaging/arch/*.pkg.tar.zst

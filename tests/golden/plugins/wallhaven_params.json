@@ -1,0 +1,61 @@
+{
+  "all_optionals": {
+    "apikey": "",
+    "atleast": "3840x2160",
+    "categories": "111",
+    "order": "desc",
+    "page": 1,
+    "purity": "100",
+    "q": "landscape",
+    "ratios": "16x9,21x9",
+    "resolutions": "1920x1080,2560x1440",
+    "sorting": "relevance"
+  },
+  "defaults": {
+    "apikey": "",
+    "categories": "111",
+    "order": "desc",
+    "page": 1,
+    "purity": "100",
+    "q": "landscape",
+    "sorting": "relevance"
+  },
+  "empty_optionals": {
+    "apikey": "",
+    "categories": "111",
+    "order": "desc",
+    "page": 1,
+    "purity": "100",
+    "q": "landscape",
+    "sorting": "relevance"
+  },
+  "no_people_nsfw": {
+    "apikey": "KEY",
+    "categories": "110",
+    "order": "desc",
+    "page": 1,
+    "purity": "101",
+    "q": "landscape",
+    "sorting": "relevance"
+  },
+  "toplist": {
+    "apikey": "",
+    "categories": "111",
+    "order": "desc",
+    "page": 1,
+    "purity": "100",
+    "q": "landscape",
+    "sorting": "toplist",
+    "topRange": "1w"
+  },
+  "toplist_default_range": {
+    "apikey": "",
+    "categories": "111",
+    "order": "desc",
+    "page": 1,
+    "purity": "100",
+    "q": "landscape",
+    "sorting": "toplist",
+    "topRange": "1M"
+  }
+}
