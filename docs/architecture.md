@@ -184,8 +184,23 @@ func SetDualFromSources(ctx, s Setter, sources []string, ev events.Events) error
 ### `internal/core`
 
 Request/Result structs per operation; every function `func Op(ctx context.Context, req OpRequest) (OpResult, error)`.
-Operations: `LoadConfig`, `SaveConfig`, `Cycle` (one dynamic multi-plugin cycle: collect enabled plugin sources, set per mode), `RunDaemon` (cycling loop with watcher), `SetFromFile/Directory/URL`, `RunPlugin`, `ServiceStatus/Start/Stop/Restart/Install/Uninstall/Logs`, `BlacklistList/Remove/Add`, `HistoryStats/Clear/Import`, `PluginsList`, `SelfTest`, `DebugLockscreen`, `WriteConfig`.
+Operations: `LoadConfig`, `SaveConfig`, `ResolveMode` (merge_config_with_args), `Cycle` (one dynamic multi-plugin cycle: collect enabled plugin sources, set per mode), `RunLoop` (cycling loop with watcher and the daemon lock), `DaemonRunning`, `SetFromFile/Directory/URL`, `CollectSources`, `RunPlugin`, `PluginsList`, `PluginNames`, `AvailablePluginNames`, `ServiceStatus/Start/Stop/Restart/Install/Uninstall/Logs`, `BlacklistList/Remove/Add`, `HistoryStats/Clear/Import`, `SelfTest`, `DebugLockscreen`, `WriteConfig`, `Version`.
 Each request embeds `core.Request{ConfigPath string; Events events.Events}`.
+
+### `internal/cli`
+
+cobra tree over `core`. The root command is the v2.9.5 argparse surface
+(`--lockscreen --desktop -u -f -d --plugin --plugin-config -w
+--debug-lockscreen --write-config --gui --service --self-test`); subcommands
+`service`, `blacklist`, `history`, `plugins`, `plugin`, `config`, `version`
+each render one core operation. `App.Execute(ctx, args, stdout, stderr) int`
+maps errors to exit codes: `UsageError` → 2, `ExitError` → its code
+(the GUI child's status, or a self-test that already printed its verdict),
+anything else → 1. Log lines go to stderr through a `log/slog` handler that
+prints `[LEVEL] msg`; plugin progress renders as the `::PROGRESS::` and
+`::IMAGE_SAVED::` marker lines. A bare invocation or `--gui` runs the
+`clockwork-orange-gui` binary found beside the CLI, on PATH, or at
+`$CLOCKWORK_ORANGE_GUI`.
 
 ## Testing conventions
 

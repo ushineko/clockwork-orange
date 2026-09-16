@@ -10,9 +10,18 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// lockDir is where TryLock creates its lock files; a variable so tests can
-// keep their locks out of the shared /tmp.
-var lockDir = "/tmp"
+// lockDir is where TryLock creates its lock files. CLOCKWORK_LOCK_DIR
+// overrides it so test binaries in different packages (which `go test ./...`
+// runs concurrently) do not contend for the one daemon lock in /tmp.
+const lockDir = "/tmp"
+
+func lockPath(id string) string {
+	dir := os.Getenv("CLOCKWORK_LOCK_DIR")
+	if dir == "" {
+		dir = lockDir
+	}
+	return dir + "/" + id + ".lock"
+}
 
 type flockLock struct{ f *os.File }
 
@@ -42,7 +51,7 @@ func (noopLock) Release() {}
 // from starting. (The Python returned False there, which would have made the
 // GUI silently refuse to start.)
 func TryLock(id string) (Lock, bool) {
-	path := lockDir + "/" + id + ".lock"
+	path := lockPath(id)
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // G302: the file carries no data; it is a lock token, 0644 as in the Python.
 	if err != nil {
 		log.Printf("[WARN] Could not create lock file %s: %v (continuing without single-instance lock)", path, err)

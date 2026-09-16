@@ -160,15 +160,26 @@ func (m Mode) String() string {
 	}
 }
 
-// ResolveMode merges the CLI flags with the config document the way
-// merge_config_with_args did (R2.5): dual_wallpapers forces both, otherwise
-// each flag is OR-ed with its config key.
+/*
+ResolveMode merges the CLI flags with the config document the way
+merge_config_with_args did (R2.5).
+
+dual_wallpapers forces both. Otherwise the config keys apply only when
+neither flag was given, and `desktop` is consulted before `lockscreen`, so a
+file with both set (and no dual_wallpapers) yields desktop-only, and an
+explicit --lockscreen is never widened to dual by a `desktop: true` in the
+file. Those two edges are Python behaviour, ported as-is.
+*/
 func ResolveMode(doc config.Document, desktop, lockscreen bool) Mode {
 	if doc.DualWallpapers {
 		return ModeDual
 	}
-	desktop = desktop || doc.Desktop
-	lockscreen = lockscreen || doc.Lockscreen
+	if !desktop && !lockscreen {
+		desktop = doc.Desktop
+	}
+	if !desktop && !lockscreen {
+		lockscreen = doc.Lockscreen
+	}
 	switch {
 	case desktop && lockscreen:
 		return ModeDual

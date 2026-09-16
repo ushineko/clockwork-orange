@@ -191,7 +191,8 @@ clockwork-orange.yml
 *.src.tar.*
 pkg/
 src/
-clockwork-orange/
+# PyInstaller output directory at the repo root only: cmd/clockwork-orange/ is the Go CLI.
+/clockwork-orange/
 
 # Debian packaging
 *.deb

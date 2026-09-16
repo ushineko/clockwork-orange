@@ -95,3 +95,9 @@ func PluginNames(req Request) ([]string, error) {
 	}
 	return plugins.Names(d.Registry), nil
 }
+
+// AvailablePluginNames lists the plugins compiled into this build without
+// opening any store (the `--plugin` choices and the self-test registry probe).
+func AvailablePluginNames() []string {
+	return plugins.Names(plugins.Registry(plugins.Deps{}))
+}

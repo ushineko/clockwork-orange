@@ -407,6 +407,18 @@ macOS:
   and `::IMAGE_SAVED:: <path>` lines for script compatibility.
 - R6.8 `--service` sets the 900 s default wait and enables the config
   watcher; there is no daemonisation, PID file, or privilege change.
+- R6.9 Additions over v2.9.5, all optional: persistent `--config PATH` and
+  `--log-level LEVEL`; a hidden `--offline` that skips the self-test network
+  probe (for containers without egress); `CLOCKWORK_ORANGE_GUI` names the GUI
+  binary explicitly (build trees, tests); `CLOCKWORK_LOCK_DIR` relocates the
+  single-instance lock files (test isolation). Ported as-is from
+  `merge_config_with_args`: a missing config file contributes no
+  `default_wait`, so `-d DIR` sets once, while a GUI-written file (which
+  always carries `default_wait: 300`) makes the same command cycle; the
+  config's `desktop`/`lockscreen` keys apply only when neither flag is given,
+  `desktop` first; `-u URL` alone still requires enabled plugins to pass
+  validation. The GUI is run as a child process whose exit status is
+  returned, rather than exec(2)'d, so one code path serves Windows.
 
 ### R7. GUI (`cmd/clockwork-orange-gui`, `internal/gui`)
 
@@ -688,23 +700,23 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 ### Phase 3: Platform, engine, core
 - [x] The generated KDE JS for single and multi-monitor paths equals the golden text for paths without special characters, and escapes `"`/`\` in paths (DV1) with a test.
 - [x] `kwriteconfig6` argv equals the golden argv; the screensaver reload is best-effort (non-zero exit does not fail the set).
-- [ ] **Integration boundary** (`CLOCKWORK_LIVE_KDE=1`, dev machine): setting a wallpaper and a lock-screen image via the real `qdbus6`/`kwriteconfig6` succeeds and `~/.config/kscreenlockerrc` contains the written `Image` key.
+- [x] **Integration boundary** (`CLOCKWORK_LIVE_KDE=1`, dev machine): setting a wallpaper and a lock-screen image via the real `qdbus6`/`kwriteconfig6` succeeds and `~/.config/kscreenlockerrc` contains the written `Image` key. *Run 2026-09-15 on the dev machine: pass; the previous lock-screen image is restored by the test.*
 - [x] Fair selection: with a seeded RNG, a 10-image source and a 10 000-image source are chosen with equal frequency over 10 000 draws (±2 %); de-dup retries stop at 5. *Test uses 4 000 draws and ±3 % over a 10 vs 200 image pair; same contract.*
 - [x] Windows: composite canvas dimensions equal the monitor bounding box and each image is placed at `(x-minX, y-minY)` (unit test with fake monitors); registry and SPI calls are behind an interface and exercised by a fake.
 - [x] macOS: cache-prune logic removes entries only when `du` reports >500 MB (unit test with fake `du`).
 - [x] `core` exposes Request/Result operations for every CLI and GUI action (`Cycle`, `SetFromFile/Directory/URL`, `RunPlugin`, `Service*`, `Blacklist*`, `History*`, `ConfigLoad/Save`), each accepting `context.Context` and `core.Events`.
 
 ### Phase 4: Plugins, CLI, daemon
-- [ ] `_build_api_params` golden table passes (all sorting/topRange/categories/purity/optional-param combinations); query parsing accepts comma string, `{term,enabled}` list and bare strings, and defaults to `landscape`.
-- [ ] DDG: filename is `md5(url).jpg`; images below 1920×1080 are rejected before and after decode; output is 3840×2160 JPEG; vqd regex fallbacks are unit-tested against saved HTML.
-- [ ] `.last_run` interval logic matches Python for Hourly/Daily/Weekly/always/unknown/parse-error/force (table test).
-- [ ] **Integration boundary** (`CLOCKWORK_LIVE_NET=1`): one real Wallhaven search returns ≥1 item and one real DDG vqd + `i.js` round-trip returns results.
-- [ ] Every v2.9.5 flag is accepted with identical validation messages and exit codes (table test over the `_validate_args` cases); `--run-plugin` is rejected as unknown (exit 2).
-- [ ] `clockwork-orange` with no args and with `--gui` execs `clockwork-orange-gui`; missing GUI binary exits 1 with guidance.
-- [ ] `--service` runs the dynamic cycle with a 900 s default, reloads config every cycle, and a settled config edit interrupts the wait within ~2 s (integration test with a temp `HOME`).
-- [ ] `service install|uninstall|start|stop|restart|status|logs` work against systemd in a throwaway `XDG_CONFIG_HOME` (`CLOCKWORK_LIVE_SYSTEMD=1`).
-- [ ] `--self-test` exits 0 on the dev machine and 1 when a probe fails (fault-injected test).
-- [ ] Parity test passes with the documented allow-list.
+- [x] `_build_api_params` golden table passes (all sorting/topRange/categories/purity/optional-param combinations); query parsing accepts comma string, `{term,enabled}` list and bare strings, and defaults to `landscape`.
+- [x] DDG: filename is `md5(url).jpg`; images below 1920×1080 are rejected before and after decode; output is 3840×2160 JPEG; vqd regex fallbacks are unit-tested against saved HTML.
+- [x] `.last_run` interval logic matches Python for Hourly/Daily/Weekly/always/unknown/parse-error/force (table test).
+- [x] **Integration boundary** (`CLOCKWORK_LIVE_NET=1`): one real Wallhaven search returns ≥1 item and one real DDG vqd + `i.js` round-trip returns results. *Run 2026-09-15: both pass.*
+- [x] Every v2.9.5 flag is accepted with identical validation messages and exit codes (table test over the `_validate_args` cases); `--run-plugin` is rejected as unknown (exit 2).
+- [x] `clockwork-orange` with no args and with `--gui` execs `clockwork-orange-gui`; missing GUI binary exits 1 with guidance.
+- [x] `--service` runs the dynamic cycle with a 900 s default, reloads config every cycle, and a settled config edit interrupts the wait within ~2 s (integration test with a temp `HOME`).
+- [ ] `service install|uninstall|start|stop|restart|status|logs` work against systemd in a throwaway `XDG_CONFIG_HOME` (`CLOCKWORK_LIVE_SYSTEMD=1`). *Env-gated test exists (`internal/cli/service_live_test.go`); it skips on the dev machine because the production unit is active. Run in the Phase 6 container or after cutover.*
+- [x] `--self-test` exits 0 on the dev machine and 1 when a probe fails (fault-injected test).
+- [x] Parity test passes with the documented allow-list. *Phase 4 shape: every leaf maps to one core operation and every exception carries a reason; the `gui.Actions()` comparison lands with the GUI in Phase 5.*
 
 ### Phase 5: GUI
 - [ ] Design-system files carry the "Copied from nmsbonker" header; `theme.go`/`fonts.go`/`cursor_*.go`/`views_table.go` diff against nmsbonker only in the header comment and module path.

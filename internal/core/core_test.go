@@ -86,13 +86,20 @@ func writeConfig(t *testing.T, doc config.Document) string {
 	return config.DefaultPath()
 }
 
-// dual_wallpapers in the config forces dual mode even with no flags, and a
-// flag ORs with its config key -- merge_config_with_args semantics (R2.5).
+// dual_wallpapers in the config forces dual mode even with no flags; the
+// config's desktop/lockscreen keys apply only when no flag was given, and an
+// explicit --lockscreen is not widened to dual by `desktop: true` in the file
+// -- merge_config_with_args semantics (R2.5).
 func TestResolveModeMergesFlagsWithConfig(t *testing.T) {
 	require.Equal(t, ModeDual, ResolveMode(config.Document{DualWallpapers: true}, false, false))
-	require.Equal(t, ModeDual, ResolveMode(config.Document{Desktop: true}, false, true))
+	require.Equal(t, ModeLockscreen, ResolveMode(config.Document{Desktop: true}, false, true))
+	require.Equal(t, ModeDesktop, ResolveMode(config.Document{Lockscreen: true}, true, false))
+	require.Equal(t, ModeDual, ResolveMode(config.Document{}, true, true))
 	require.Equal(t, ModeLockscreen, ResolveMode(config.Document{}, false, true))
 	require.Equal(t, ModeDesktop, ResolveMode(config.Document{Desktop: true}, false, false))
+	require.Equal(t, ModeLockscreen, ResolveMode(config.Document{Lockscreen: true}, false, false))
+	require.Equal(t, ModeDesktop, ResolveMode(config.Document{Desktop: true, Lockscreen: true}, false, false),
+		"both keys without dual_wallpapers is desktop-only, as in the Python")
 	require.Equal(t, ModeDefault, ResolveMode(config.Document{}, false, false))
 }
 

@@ -16,7 +16,6 @@ import (
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/imaging"
-	"github.com/ushineko/clockwork-orange/internal/plugins"
 	"github.com/ushineko/clockwork-orange/internal/store"
 )
 
@@ -108,8 +107,7 @@ func SelfTest(ctx context.Context, req SelfTestRequest) SelfTestResult {
 		add("network", err, "HEAD "+selfTestURL)
 	}
 
-	reg := plugins.Registry(plugins.Deps{})
-	names := plugins.Names(reg)
+	names := AvailablePluginNames()
 	var regErr error
 	if len(names) != 3 {
 		regErr = fmt.Errorf("expected 3 plugins, found %d", len(names))
