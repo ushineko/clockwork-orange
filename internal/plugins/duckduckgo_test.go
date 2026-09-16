@@ -36,12 +36,15 @@ func TestExtractVqdTriesTheAttributeFormThenTheJSONForm(t *testing.T) {
 	require.Empty(t, extractVqd([]byte(`vqd="abc"`)), "token must start with a digit and a dash")
 }
 
-func TestFilterResultsDedupesAndRejectsSmallReportedDimensionsOnly(t *testing.T) {
+func TestFilterResultsDedupesAndRejectsSmallOrNonLandscapeReportedDimensions(t *testing.T) {
 	results := []map[string]any{
-		{"image": "https://a/big.jpg", "width": float64(3840), "height": float64(2160)},
-		{"image": "https://a/big.jpg", "width": float64(3840), "height": float64(2160)}, // dup
+		{"image": "https://a/big.jpg", "url": "https://page/big", "width": float64(3840), "height": float64(2160)},
+		{"image": "https://a/big.jpg", "url": "https://page/big2", "width": float64(3840), "height": float64(2160)}, // dup
 		{"image": "https://a/small.jpg", "width": float64(1280), "height": float64(720)},
 		{"image": "https://a/tall.jpg", "width": float64(1920), "height": float64(1000)},
+		{"image": "https://a/square.jpg", "width": float64(2000), "height": float64(2000)},   // product shot
+		{"image": "https://a/portrait.jpg", "width": float64(1920), "height": float64(2560)}, // person
+		{"image": "https://a/ultrawide.jpg", "width": float64(5120), "height": float64(1440)},
 		{"image": "https://a/nodims.jpg"},
 		{"image": "https://a/strdims.jpg", "width": "1920", "height": "1080"},
 		{"image": "https://a/baddims.jpg", "width": "wide", "height": float64(10)}, // int() raised: both zeroed, passes
@@ -49,10 +52,24 @@ func TestFilterResultsDedupesAndRejectsSmallReportedDimensionsOnly(t *testing.T)
 		{"image": "", "width": float64(4000), "height": float64(4000)},
 		{"width": float64(4000), "height": float64(4000)},
 	}
-	require.Equal(t, []string{
-		"https://a/big.jpg", "https://a/nodims.jpg", "https://a/strdims.jpg", "https://a/baddims.jpg", "https://a/onlyw.jpg",
+	require.Equal(t, []ddgCandidate{
+		{"https://a/big.jpg", "https://page/big"},
+		{"https://a/nodims.jpg", ""},
+		{"https://a/strdims.jpg", ""},
+		{"https://a/baddims.jpg", ""},
+		{"https://a/onlyw.jpg", ""},
 	}, filterResults(results))
-	require.Equal(t, []string{}, filterResults(nil))
+	require.Equal(t, []ddgCandidate{}, filterResults(nil))
+}
+
+// The shape gate from 2.9.6 (validation-reports/2026-07-09-ddg-content-filter.md).
+func TestIsWallpaperShapedAcceptsLandscapeWithinTheBand(t *testing.T) {
+	for _, d := range [][2]int{{3840, 2160}, {1920, 1080}, {1920, 1200}, {2560, 1080}} {
+		require.Truef(t, isWallpaperShaped(d[0], d[1]), "%dx%d", d[0], d[1])
+	}
+	for _, d := range [][2]int{{2000, 2000}, {1920, 2560}, {5120, 1440}, {0, 0}} {
+		require.Falsef(t, isWallpaperShaped(d[0], d[1]), "%dx%d", d[0], d[1])
+	}
 }
 
 // fakeDDG serves the landing page, i.js and image files.
@@ -108,7 +125,7 @@ func (f *fakeDDG) addImage(name string, body []byte, dims ...int) string {
 	p := "/img/" + name
 	f.images[p] = body
 	u := f.srv.URL + p
-	r := map[string]any{"image": u}
+	r := map[string]any{"image": u, "url": "https://page.example" + p}
 	if len(dims) == 2 {
 		r["width"], r["height"] = dims[0], dims[1]
 	}
@@ -140,6 +157,7 @@ func TestDuckDuckGoRunScrapesDownloadsProcessesAndRecordsA4KJPEG(t *testing.T) {
 	bigURL := f.addImage("big.png", syntheticPNG(t, 1920, 1080), 1920, 1080)
 	smallReportedURL := f.addImage("small-reported.png", syntheticPNG(t, 1920, 1080), 800, 600) // filtered before download
 	smallActualURL := f.addImage("small-actual.png", syntheticPNG(t, 800, 600))                 // no dims: fetched then rejected
+	portraitURL := f.addImage("portrait.png", syntheticPNG(t, 2000, 3000))                      // no dims, wide enough: fetched then rejected by shape
 	missingURL := f.addImage("missing.png", nil)                                                // 404 after registration
 	delete(f.images, "/img/missing.png")
 
@@ -164,7 +182,7 @@ func TestDuckDuckGoRunScrapesDownloadsProcessesAndRecordsA4KJPEG(t *testing.T) {
 	require.Equal(t, 2160, img.Bounds().Dy())
 
 	// History: only the saved image.
-	for u, wantSeen := range map[string]bool{bigURL: true, smallReportedURL: false, smallActualURL: false, missingURL: false} {
+	for u, wantSeen := range map[string]bool{bigURL: true, smallReportedURL: false, smallActualURL: false, portraitURL: false, missingURL: false} {
 		seen, err := h.SeenURL(u)
 		require.NoError(t, err)
 		require.Equal(t, wantSeen, seen, "history for %s", u)
@@ -184,30 +202,34 @@ func TestDuckDuckGoRunScrapesDownloadsProcessesAndRecordsA4KJPEG(t *testing.T) {
 	require.Equal(t, "json", q.Get("o"))
 	require.Equal(t, "4k nature wallpapers", q.Get("q"))
 	require.Equal(t, "4-111222333444", q.Get("vqd"))
-	require.Equal(t, ",,,size:Large,,", q.Get("f"))
+	require.Equal(t, "type:photo,size:Large,layout:Wide", q.Get("f"), "the 2.9.9 server-side content filter")
 	require.Equal(t, "1", q.Get("p"))
 	require.Equal(t, "https://duckduckgo.com/", ijs[0].Header.Get("Referer"))
 	for _, r := range f.requests {
 		require.Equal(t, ddgUserAgent, r.Header.Get("User-Agent"), "%s", r.URL)
 		require.Equal(t, "en-US,en;q=0.9", r.Header.Get("Accept-Language"), "%s", r.URL)
 	}
-	require.Empty(t, landings[0].Header.Get("Referer"), "Referer is only sent to i.js")
+	require.Empty(t, landings[0].Header.Get("Referer"), "Referer is only sent to i.js and to image downloads")
 	require.Len(t, f.requestsFor("/img/big.png"), 1)
+	require.Equal(t, "https://page.example/img/big.png", f.requestsFor("/img/big.png")[0].Header.Get("Referer"),
+		"the source page goes as Referer so hotlink-protected hosts serve the real image")
 	require.Empty(t, f.requestsFor("/img/small-reported.png"), "reported dimensions filter before download")
 	require.Len(t, f.requestsFor("/img/small-actual.png"), 1)
 	require.Len(t, f.requestsFor("/img/missing.png"), 1)
+	require.Len(t, f.requestsFor("/img/portrait.png"), 1)
 
 	// Events.
 	require.Equal(t, []string{filepath.Join(dir, want)}, rec.saved)
-	// 0 (scrape), then per candidate over 3 urls (0, 30, 60) with "Skipped"
-	// repeats for the two rejects, then 95 and 100.
-	require.Equal(t, []int{0, 0, 30, 30, 60, 60, 95, 100}, rec.pcts())
+	// 0 (scrape), then per candidate over 4 urls (0, 22, 45, 67) with "Skipped"
+	// repeats for the three rejects, then 95 and 100.
+	require.Equal(t, []int{0, 0, 22, 22, 45, 45, 67, 67, 95, 100}, rec.pcts())
 	require.Equal(t, "Scraping '4k nature wallpapers'...", rec.progress[0].msg)
 	require.Equal(t, "Checking candidate 1 for image 1/10...", rec.progress[1].msg)
 	require.Equal(t, "Checking candidate 2 for image 2/10...", rec.progress[2].msg)
 	require.Equal(t, "Skipped low-quality/duplicate image...", rec.progress[3].msg)
-	require.True(t, rec.hasLogContaining("Found 3 potential images for '4k nature wallpapers'"))
+	require.True(t, rec.hasLogContaining("Found 4 potential images for '4k nature wallpapers'"))
 	require.True(t, rec.hasLogContaining("Rejected low-res image: 800x600 (needs 1920x1080)"))
+	require.True(t, rec.hasLogContaining("Rejected non-landscape image: 2000x3000 (aspect must be 1.2-2.5)"))
 	require.True(t, rec.hasLogContaining("Processing image: 1920x1080"))
 	require.True(t, rec.hasLogContaining("Saved processed image to "+filepath.Join(dir, want)))
 }

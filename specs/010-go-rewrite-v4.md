@@ -332,6 +332,16 @@ macOS:
   including "unknown interval → never", parse error → run, `force` bypass.
   Retention sorts **all** files by mtime and deletes the oldest beyond
   `max_files` (includes `.last_run`, as in Python). `reset` wipes the dir.
+- R5.4a Base version: the port was measured against 2.9.5; `main` moved to
+  2.9.9 while it was built. Of those releases, the second-launch fix and the
+  record-before-delete fix were already in the port (R7.19, DV12); the
+  DuckDuckGo content filter (2.9.6) and request shape (2.9.9) are ported:
+  `f=type:photo,size:Large,layout:Wide`, the first 60 results, a landscape
+  aspect gate of 1.2–2.5 at discovery and on the decoded image, the source
+  page sent as `Referer` on the download, and a non-200 from `i.js` logged
+  and treated as no results. `--ddg-probe` (2.9.9, a TLS-fingerprint
+  diagnostic for the frozen Python builds) is not ported: the Go client is
+  not the OpenSSL build it probed (DV15). The macOS zip uses `zip -y` (2.9.8).
 - R5.4 `duckduckgo_images`: schema (`query` default `4k nature wallpapers`
   with the 10 suggestions, `download_dir` `~/Pictures/Wallpapers/DuckDuckGo`,
   `interval` Daily, `limit` 10, `max_files` 50). Discovery: `GET

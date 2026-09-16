@@ -34,9 +34,22 @@ const (
 	ddgLog            = "[DuckDuckGo]"
 	ddgMinWidth       = 1920
 	ddgMinHeight      = 1080
-	ddgTargetWidth    = 3840
-	ddgTargetHeight   = 2160
-	ddgJPEGQuality    = 90
+	// Wallpapers are landscape (2.9.6, validation-reports/2026-07-09-ddg-
+	// content-filter.md): rejecting portrait and near-square sources drops
+	// portraits of people, square product shots and most ad banners, which a
+	// resolution gate alone lets through. The band spans ~4:3 to ~21:9 with
+	// a little slack; sources outside it are rejected, not force-cropped.
+	ddgMinAspect = 1.2
+	ddgMaxAspect = 2.5
+	// DuckDuckGo relevance decays sharply past the first pages; deep in a
+	// 200-result set a clean query bleeds into tangential images.
+	ddgMaxResults = 60
+	// ddgResultFilter is i.js's `f`: photo (no clipart/gif/transparent),
+	// large, landscape. Honoured server-side, which is the on-topic filter.
+	ddgResultFilter = "type:photo,size:Large,layout:Wide"
+	ddgTargetWidth  = 3840
+	ddgTargetHeight = 2160
+	ddgJPEGQuality  = 90
 )
 
 // The two vqd token patterns tried in order against the landing page.
@@ -49,8 +62,16 @@ var (
 // directory is empty.
 var errNoImages = errors.New("No images found or downloaded") //nolint:staticcheck // ST1005: the Python plugin's message text (R5.4)
 
+// ddgCandidate is one discovered image: the file URL and the page it was
+// found on, sent as the Referer when downloading so hosts with hotlink
+// protection return the indexed image rather than an ad or placeholder.
+type ddgCandidate struct {
+	image   string
+	referer string
+}
+
 // duckduckgo is the port of plugins/duckduckgo_images.py (R5.4) restricted
-// to its direct-scrape path (D9/DV9).
+// to its direct-scrape path (D9/DV9), at the 2.9.9 behaviour.
 type duckduckgo struct {
 	deps    Deps
 	baseURL string // overridable by tests to point at an httptest.Server
@@ -183,19 +204,19 @@ func (p *duckduckgo) processBatch(ctx context.Context, queries []string, downloa
 func (p *duckduckgo) downloadImagesForTerm(ctx context.Context, query, downloadDir string,
 	limit, progressBase, totalTerms int, ev events.Events,
 ) int {
-	urls := p.scrapeImageURLs(ctx, query, ev)
-	ev.Infof("%s Found %d potential images for '%s'", ddgLog, len(urls), query)
+	candidates := p.scrapeImageURLs(ctx, query, ev)
+	ev.Infof("%s Found %d potential images for '%s'", ddgLog, len(candidates), query)
 
 	count := 0
-	for j, u := range urls {
+	for j, c := range candidates {
 		if count >= limit {
 			break
 		}
 		termSlice := 90 / float64(totalTerms)
-		pct := int(float64(progressBase) + float64(j)/float64(max(len(urls), 1))*termSlice)
+		pct := int(float64(progressBase) + float64(j)/float64(max(len(candidates), 1))*termSlice)
 		ev.Progress(pct, fmt.Sprintf("Checking candidate %d for image %d/%d...", j+1, count+1, limit))
 
-		if p.processImage(ctx, u, downloadDir, ev) {
+		if p.processImage(ctx, c, downloadDir, ev) {
 			count++
 		} else {
 			ev.Progress(pct, "Skipped low-quality/duplicate image...")
@@ -217,19 +238,20 @@ func sessionHeaders(extra map[string]string) map[string]string {
 	return h
 }
 
-// scrapeImageURLs is _scrape_via_direct (D9): fetch the landing page for
+// scrapeImageURLs is _scrape_image_urls (D9): fetch the landing page for
 // the vqd token, then the i.js results. Every failure is logged and yields
-// no URLs; neither request checks the status code, as Python did not.
-func (p *duckduckgo) scrapeImageURLs(ctx context.Context, query string, ev events.Events) []string {
-	urls, err := p.scrapeDirect(ctx, query, ev)
+// no candidates. The landing request's status is not checked, as in the
+// Python; i.js's is, since 2.9.9 (a 403 there is the TLS-block symptom).
+func (p *duckduckgo) scrapeImageURLs(ctx context.Context, query string, ev events.Events) []ddgCandidate {
+	out, err := p.scrapeDirect(ctx, query, ev)
 	if err != nil {
 		ev.Errorf("%s Scraping failed for '%s': %v", ddgLog, query, err)
 		return nil
 	}
-	return urls
+	return out
 }
 
-func (p *duckduckgo) scrapeDirect(ctx context.Context, query string, ev events.Events) ([]string, error) {
+func (p *duckduckgo) scrapeDirect(ctx context.Context, query string, ev events.Events) ([]ddgCandidate, error) {
 	_, landing, err := httpGet(ctx, p.deps.HTTP, p.baseURL+"/",
 		url.Values{"q": {query}, "iax": {"images"}, "ia": {"images"}},
 		ddgLandingTimeout, sessionHeaders(nil))
@@ -242,18 +264,22 @@ func (p *duckduckgo) scrapeDirect(ctx context.Context, query string, ev events.E
 		return nil, nil
 	}
 
-	_, body, err := httpGet(ctx, p.deps.HTTP, p.baseURL+"/i.js",
+	status, body, err := httpGet(ctx, p.deps.HTTP, p.baseURL+"/i.js",
 		url.Values{
 			"l":   {"us-en"},
 			"o":   {"json"},
 			"q":   {query},
 			"vqd": {vqd},
-			"f":   {",,,size:Large,,"},
+			"f":   {ddgResultFilter},
 			"p":   {"1"},
 		},
 		ddgResultsTimeout, sessionHeaders(map[string]string{"Referer": ddgBaseURL + "/"}))
 	if err != nil {
 		return nil, err
+	}
+	if status != 200 {
+		ev.Errorf("%s i.js returned HTTP %d for '%s'", ddgLog, status, query)
+		return nil, nil
 	}
 	var payload struct {
 		Results []map[string]any `json:"results"`
@@ -261,6 +287,9 @@ func (p *duckduckgo) scrapeDirect(ctx context.Context, query string, ev events.E
 	if err := json.Unmarshal(body, &payload); err != nil {
 		ev.Errorf("%s Non-JSON response for '%s': %v", ddgLog, query, err)
 		return nil, nil
+	}
+	if len(payload.Results) > ddgMaxResults {
+		payload.Results = payload.Results[:ddgMaxResults]
 	}
 	return filterResults(payload.Results), nil
 }
@@ -276,11 +305,12 @@ func extractVqd(page []byte) string {
 	return ""
 }
 
-// filterResults is _filter_results: unique image URLs, dropping any whose
-// reported width and height are both present and below 1920×1080. Missing
-// or unparsable dimensions pass.
-func filterResults(results []map[string]any) []string {
-	urls := []string{}
+// filterResults is _filter_results (2.9.9): unique image URLs with their
+// source page, dropping any whose reported width and height are both present
+// and either below 1920×1080 or outside the wallpaper aspect band. Missing
+// or unparsable dimensions pass and are checked after download.
+func filterResults(results []map[string]any) []ddgCandidate {
+	out := []ddgCandidate{}
 	seen := map[string]bool{}
 	for _, r := range results {
 		u, _ := r["image"].(string)
@@ -292,13 +322,28 @@ func filterResults(results []map[string]any) []string {
 			// int() raised on one of them: Python zeroed both.
 			w, h = 0, 0
 		}
-		if w != 0 && h != 0 && (w < ddgMinWidth || h < ddgMinHeight) {
-			continue
+		if w != 0 && h != 0 {
+			if w < ddgMinWidth || h < ddgMinHeight {
+				continue
+			}
+			if !isWallpaperShaped(w, h) {
+				continue
+			}
 		}
-		urls = append(urls, u)
+		referer, _ := r["url"].(string)
+		out = append(out, ddgCandidate{image: u, referer: referer})
 		seen[u] = true
 	}
-	return urls
+	return out
+}
+
+// isWallpaperShaped is _is_wallpaper_shaped: landscape, within the band.
+func isWallpaperShaped(w, h int) bool {
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	ratio := float64(w) / float64(h)
+	return ratio >= ddgMinAspect && ratio <= ddgMaxAspect
 }
 
 // dimension is int(value or 0): -1 signals a value int() would have raised on.
@@ -338,8 +383,10 @@ processImage is _process_image (R5.4). It returns true only when a new file
 was saved and recorded:
 
   - URL already in history, or file already present → false;
-  - download (10 s); non-200 → false;
-  - decode; flatten to RGB; reject below 1920×1080;
+  - download (10 s) with the source page as Referer; non-200 → false;
+  - decode; flatten to RGB; reject below 1920×1080; reject a non-landscape
+    shape (the authoritative check: it catches placeholders and lied-about
+    dimensions before they are force-cropped into a wallpaper);
   - cover-resize-and-crop to 3840×2160, save as JPEG q90;
   - SHA-256 blacklisted → delete, false;
   - content already in history → delete, add the URL to history, false;
@@ -347,8 +394,8 @@ was saved and recorded:
 
 Any error is logged as "Failed to process image" and yields false.
 */
-func (p *duckduckgo) processImage(ctx context.Context, rawURL, downloadDir string, ev events.Events) bool {
-	saved, err := p.processImageErr(ctx, rawURL, downloadDir, ev)
+func (p *duckduckgo) processImage(ctx context.Context, c ddgCandidate, downloadDir string, ev events.Events) bool {
+	saved, err := p.processImageErr(ctx, c, downloadDir, ev)
 	if err != nil {
 		ev.Errorf("%s Failed to process image: %v", ddgLog, err)
 		return false
@@ -356,7 +403,8 @@ func (p *duckduckgo) processImage(ctx context.Context, rawURL, downloadDir strin
 	return saved
 }
 
-func (p *duckduckgo) processImageErr(ctx context.Context, rawURL, downloadDir string, ev events.Events) (bool, error) {
+func (p *duckduckgo) processImageErr(ctx context.Context, c ddgCandidate, downloadDir string, ev events.Events) (bool, error) {
+	rawURL := c.image
 	seen, err := p.deps.History.SeenURL(rawURL)
 	if err != nil {
 		return false, err
@@ -371,7 +419,11 @@ func (p *duckduckgo) processImageErr(ctx context.Context, rawURL, downloadDir st
 	}
 
 	ev.Infof("%s Downloading %s...", ddgLog, rawURL)
-	status, body, err := httpGet(ctx, p.deps.HTTP, rawURL, nil, ddgDownloadTimeout, sessionHeaders(nil))
+	var extra map[string]string
+	if c.referer != "" {
+		extra = map[string]string{"Referer": c.referer}
+	}
+	status, body, err := httpGet(ctx, p.deps.HTTP, rawURL, nil, ddgDownloadTimeout, sessionHeaders(extra))
 	if err != nil {
 		return false, err
 	}
@@ -387,6 +439,10 @@ func (p *duckduckgo) processImageErr(ctx context.Context, rawURL, downloadDir st
 	w, h := rgb.Bounds().Dx(), rgb.Bounds().Dy()
 	if w < ddgMinWidth || h < ddgMinHeight {
 		ev.Infof("%s Rejected low-res image: %dx%d (needs %dx%d)", ddgLog, w, h, ddgMinWidth, ddgMinHeight)
+		return false, nil
+	}
+	if !isWallpaperShaped(w, h) {
+		ev.Infof("%s Rejected non-landscape image: %dx%d (aspect must be %g-%g)", ddgLog, w, h, ddgMinAspect, ddgMaxAspect)
 		return false, nil
 	}
 	ev.Infof("%s Processing image: %dx%d", ddgLog, w, h)

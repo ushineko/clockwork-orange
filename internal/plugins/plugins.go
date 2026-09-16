@@ -14,6 +14,7 @@ package plugins
 import (
 	"context"
 	"net/http"
+	"net/http/cookiejar"
 	"time"
 
 	"github.com/ushineko/clockwork-orange/internal/events"
@@ -86,7 +87,11 @@ type Deps struct {
 // withDefaults returns d with nil HTTP and Now replaced.
 func (d Deps) withDefaults() Deps {
 	if d.HTTP == nil {
-		d.HTTP = &http.Client{}
+		// A cookie jar, because the Python used one requests.Session for the
+		// DuckDuckGo landing page and i.js and i.js wants the landing page's
+		// cookie. cookiejar.New only errors on a bad options pointer.
+		jar, _ := cookiejar.New(nil)
+		d.HTTP = &http.Client{Jar: jar}
 	}
 	if d.Now == nil {
 		d.Now = time.Now

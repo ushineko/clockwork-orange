@@ -198,7 +198,9 @@ jobs:
     - name: Zip
       run: |
         cd dist
-        zip -r "Clockwork-Orange-macOS.zip" "Clockwork Orange.app"
+        # -y keeps symlinks as symlinks; a Fyne bundle has none today, but a
+        # dereferenced framework link is what broke the 2.9.8 release.
+        zip -r -y "Clockwork-Orange-macOS.zip" "Clockwork Orange.app"
     - uses: actions/upload-artifact@v4
       with:
         name: macos-zip
