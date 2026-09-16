@@ -444,7 +444,6 @@ func Run(o Options) {
 	u.win.Canvas().SetOnTypedKey(u.onTypedKey)
 
 	u.win.Resize(windowSize(u.doc, u.docExists))
-	u.lastSize = windowSize(u.doc, u.docExists)
 	u.nav.Select(sectionIndex(secs, o.Section))
 	u.setupTray()
 	u.stopListen = u.listenShow()

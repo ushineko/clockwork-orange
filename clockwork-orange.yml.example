@@ -1,20 +1,45 @@
-# Example configuration file for clockwork-orange.py
-# Place this file at ~/.config/clockwork-orange.yml
+# Example configuration for clockwork-orange (v4). Place it at
+# ~/.config/clockwork-orange.yml. The window writes this file for you; this
+# copy is for a hand-made start or for the daemon on a machine without a
+# window. Keys are written sorted; unknown keys are kept.
 
-# Enable dual wallpaper mode (both desktop and lock screen with different images)
+# Which surfaces to change: dual (different images on desktop and lock
+# screen), or desktop / lockscreen alone.
 dual_wallpapers: true
-
-# Default wait interval for cycling (in seconds)
-default_wait: 300
-
-# Alternative: Enable only desktop mode
 # desktop: true
-
-# Alternative: Enable only lock screen mode  
 # lockscreen: true
 
-# Plugin Configuration
-# plugins:
-#   local:
-#     path: "/path/to/wallpapers"
-#     recursive: true
+# Seconds between changes for the window's timer and `--wait`; the service
+# uses 900 when this is absent.
+default_wait: 300
+
+plugins:
+  local:
+    enabled: true
+    path: ~/Pictures/Wallpapers
+  wallhaven:
+    enabled: false
+    api_key: ""
+    query:
+      - {term: landscape, enabled: true}
+    sorting: relevance        # relevance, random, views, favorites, toplist, date_added
+    top_range: 1M             # for toplist: 1d 3d 1w 1M 3M 6M 1y
+    category_general: true
+    category_anime: false
+    category_people: false
+    purity_sfw: true
+    purity_sketchy: false
+    purity_nsfw: false
+    atleast: 2560x1440
+    ratios: 16x9
+    download_dir: ~/Pictures/Wallpapers/Wallhaven
+    interval: Daily           # Hourly, Daily, Weekly, always
+    limit: 10                 # downloads per query per run
+    max_files: 100            # oldest files beyond this are deleted
+  duckduckgo_images:
+    enabled: false
+    query: 4k nature wallpapers
+    download_dir: ~/Pictures/Wallpapers/DuckDuckGo
+    interval: Daily
+    limit: 10
+    max_files: 50

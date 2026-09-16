@@ -1,9 +1,8 @@
 # Project-Specific Guidelines: clockwork-orange (v4, Go)
 
 This file extends the global Ralph methodology (`~/.claude/CLAUDE.md`).
-It describes the **Go rewrite on branch `v4-go-rewrite`** (spec 010). `main`
-still carries the Python 2.9.x line until cutover; its rules live in the
-`main` copy of this file.
+It describes the **Go program (v4, spec 010)**. The Python 2.9.x line it
+replaced lives in the `v2.9.5` tag; specs 001–009 document it.
 
 ---
 
@@ -96,8 +95,7 @@ ticket IDs.
 
 ## Git
 
-- Work happens on `v4-go-rewrite` until the rewrite is stabilised; `main`
-  is not touched until the cutover merge.
+- Feature work happens on branches and lands on `main` through a PR.
 - Never add `Co-Authored-By` trailers or AI attribution footers. No
   exceptions.
 - Commit subjects: lowercase conventional prefix, imperative

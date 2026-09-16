@@ -327,6 +327,7 @@ func TestWindowSizeRestoresFromTheConfigAndPersistsAfterAResize(t *testing.T) {
 
 	saved := make(chan struct{}, 4)
 	u.saved = func() { saved <- struct{}{} }
+	u.noteSize(fyne.NewSize(1025, 701)) // the first reading is the baseline: no save
 	u.noteSize(fyne.NewSize(1300, 800))
 	u.noteSize(fyne.NewSize(1300, 800)) // the poll sees the same size again: no second save
 	<-saved

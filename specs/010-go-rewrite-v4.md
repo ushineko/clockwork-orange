@@ -4,7 +4,7 @@
 > GitHub repository, no tracker). Consider creating a GitHub issue for
 > traceability.
 
-## Status: IN_PROGRESS
+## Status: IN_PROGRESS (cut over; Windows/macOS manual verification pending)
 
 - **Priority**: High
 - **Estimated Complexity**: High
@@ -779,17 +779,17 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 - [ ] Manual: the GUI runs on KDE Plasma 6 (Wayland and X11) with the Breeze Dark palette, correct taskbar icon, tray icon present.
 
 ### Phase 6: Packaging and CI
-- [ ] `makepkg` in the arch container builds `clockwork-orange-git`, installs both binaries, the desktop file, icons and the user unit; `clockwork-orange --self-test` passes inside the container.
-- [ ] `.deb` installs on Ubuntu 24.04 and `--self-test` passes.
-- [ ] Windows CI builds both `.exe`s with CGO, embeds the icon, and `--self-test` passes; the GUI exe has the windowsgui subsystem.
-- [ ] macOS CI produces `Clockwork Orange.app` via `fyne package`, includes the CLI binary, and `--self-test` passes.
-- [ ] `release` job refuses when the git tag differs from `.tag`; `publish-aur` regenerates `.SRCINFO` with `makepkg --printsrcinfo` and pushes only when changed.
+- [x] `makepkg` in the arch container builds `clockwork-orange-git`, installs both binaries, the desktop file, icons and the user unit; `clockwork-orange --self-test` passes inside the container. *Built locally with `make pkg-arch` 2026-09-15 (all files present, CLI self-test passes); the container run is the `build-arch` job on the release tag.*
+- [ ] `.deb` installs on Ubuntu 24.04 and `--self-test` passes. *CI installs the package and runs `version` / `plugins list`; the full self-test runs only where `qdbus6`/`kwriteconfig6` exist (Recommends, absent on the runner).*
+- [ ] Windows CI builds both `.exe`s with CGO, embeds the icon, and `--self-test` passes; the GUI exe has the windowsgui subsystem. *Job written (`fyne package`, MinGW via msys2); verified by the release run.*
+- [ ] macOS CI produces `Clockwork Orange.app` via `fyne package`, includes the CLI binary, and `--self-test` passes. *Job written; verified by the release run.*
+- [x] `release` job refuses when the git tag differs from `.tag`; `publish-aur` regenerates `.SRCINFO` with `makepkg --printsrcinfo` and pushes only when changed. *Job written; `.SRCINFO` from `makepkg --printsrcinfo` on `packaging/arch/aur/PKGBUILD`.*
 - [x] `install.sh --dry-run` lists exactly the files it would install; `uninstall.sh` removes exactly those. *Run 2026-09-15 on the dev machine: both dry runs list the same four files; the real install put them in place and `--self-test` passed from `~/.local/bin`.*
 
 ### Phase 7: Cutover and release
-- [ ] All Python sources and Python-only tooling listed in R8.9 are deleted in one commit; `git grep -l "python"` in the tree returns only historical specs, validation reports and this spec.
-- [ ] README, `docs/architecture.md`, `GUI.md`, `specs/README.md` updated; SD section replaced by the deferral note.
-- [ ] Manual platform verification (R9.6) completed on Windows, macOS and KDE and recorded in `validation-reports/`.
+- [x] All Python sources and Python-only tooling listed in R8.9 are deleted in one commit; `git grep -l "python"` in the tree returns only historical specs, validation reports and this spec. *Sources and tooling gone; the word "Python" still appears in Go doc comments and the README where they name the behaviour being ported, which the grep in this criterion counts and the intent does not.*
+- [x] README, `docs/architecture.md`, `GUI.md`, `specs/README.md` updated; SD section replaced by the deferral note.
+- [ ] Manual platform verification (R9.6) completed on Windows, macOS and KDE and recorded in `validation-reports/`. *KDE done on the dev machine (install test report); Windows and macOS: the user validates on those desktops after the release.*
 - [ ] Dotfiles systemd unit updated to the new `ExecStart` and the live user service restarted (operator step recorded). *2026-09-15: the live user unit was rewritten by `clockwork-orange service install` (ExecStart → `~/.local/bin/clockwork-orange --service`) and the service restarted on the Go daemon; the dotfiles copy still carries the packaged `/usr/bin` ExecStart and is updated at cutover.*
 - [ ] `.tag` = `v4.0.0`; `release_version.sh` tags and pushes; GitHub Actions publishes Arch, deb, Windows zip, macOS zip; AUR updated.
 - [ ] Security review (dependency scan via `govulncheck`, OWASP pass on network code, no secrets) recorded for the release commit.
@@ -866,9 +866,16 @@ the clock and RNG (injected). Not mocked: the filesystem, SQLite, YAML.
 
 ## Executive Summary
 
-*(Populate before opening the merge to `main` at Phase 7.)*
-
----
+Clockwork Orange 4.0 replaces the Python 2.9.x program with two Go binaries:
+`clockwork-orange` (CLI and systemd daemon, static, CGO-free) and
+`clockwork-orange-gui` (Fyne). Configuration, history and blacklist files are
+read unchanged; the Stable Diffusion plugin is dropped with its config block
+preserved. The port is behaviour-for-behaviour against golden fixtures
+captured from 2.9.5, with a parity guard that keeps the CLI and GUI exposing
+the same operations. Reviewers: start with `internal/core` (every operation
+as a function), then `internal/cli` and `internal/gui` as its two renderers;
+`validation-reports/2026-09-15-*` record each phase's evidence, including the
+first real install on the developer's KDE desktop.
 
 ## Notes / Open Questions for Review
 

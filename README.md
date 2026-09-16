@@ -11,6 +11,11 @@ the daemon, and one desktop window built with Fyne. No Python, no Qt, no
 interpreter to install. Configuration files and databases from the 2.9.x
 releases are read as they are.
 
+![The Service section](img/co_gui_example.png)
+
+[GUI.md](GUI.md) is a tour of the window with screenshots;
+[WALKTHROUGH.md](WALKTHROUGH.md) covers Windows and macOS.
+
 ## What it does
 
 - Sets a random wallpaper from one or more directories, one image per monitor,

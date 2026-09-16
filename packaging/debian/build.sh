@@ -41,9 +41,10 @@ install -Dm644 LICENSE "$STAGE/usr/share/doc/clockwork-orange/copyright"
 install -Dm644 README.md "$STAGE/usr/share/doc/clockwork-orange/README.md"
 
 mkdir -p "$STAGE/DEBIAN"
-# qdbus6 and kwriteconfig6 come from qt6-tools / kconfig on Debian and Ubuntu
-# (package names verified for Ubuntu 24.04: qt6-tools-dev-tools ships qdbus6,
-# kconfig ships kwriteconfig6). The Fyne runtime set matches nmsbonker's.
+# qdbus6 is in qdbus-qt6 and kwriteconfig6 in libkf6config-bin (Debian
+# contents search, 2026-09). They are Recommends rather than Depends: a Plasma 6
+# desktop has them already, and Ubuntu 24.04, which CI installs the package on,
+# has no KF6 packages at all. The Fyne runtime set matches nmsbonker's.
 cat > "$STAGE/DEBIAN/control" <<CTRL
 Package: clockwork-orange
 Version: ${VERSION}
@@ -51,7 +52,8 @@ Section: graphics
 Priority: optional
 Architecture: ${ARCH}
 Maintainer: ushineko <ushineko@users.noreply.github.com>
-Depends: libgl1, libx11-6, libxcursor1, libxrandr2, libxinerama1, libxi6, libxxf86vm1, libxkbcommon0, qt6-tools-dev-tools, kconfig
+Depends: libgl1, libx11-6, libxcursor1, libxrandr2, libxinerama1, libxi6, libxxf86vm1, libxkbcommon0
+Recommends: qdbus-qt6, libkf6config-bin
 Homepage: https://github.com/ushineko/clockwork-orange
 Description: Wallpaper manager for KDE Plasma 6 with plugin sources
  Sets desktop and lock-screen wallpapers from local folders, Wallhaven and

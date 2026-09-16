@@ -1,139 +1,55 @@
-# Clockwork Orange - Windows Support Walkthrough
+# Clockwork Orange on Windows and macOS
 
-This document outlines how to build, run, and manage **Clockwork Orange** on Windows.
+Version 4 ships one zip per platform from the
+[releases page](https://github.com/ushineko/clockwork-orange/releases). No
+runtime to install: the programs are native binaries.
 
-> **Status**: Beta — tested on multiple Windows 10/11 installations. Feedback welcome!
+## Windows 10 and 11
 
-## Quick Start (Recommended)
+`clockwork-orange-windows-amd64.zip` holds `clockwork-orange.exe` (the command
+line and the timer engine) and `clockwork-orange-gui.exe` (the window). Unzip
+them anywhere together; double-click either one to open the window.
 
-1. **Download** `clockwork-orange.exe` from [GitHub Releases](https://github.com/ushineko/clockwork-orange/releases)
-2. **Run** the executable — double-click to launch the GUI
-3. **Configure** your plugins and settings, then minimize to tray
+The executables are not code-signed, so SmartScreen warns on first run: choose
+**More info**, then **Run anyway**. Once per download.
 
-### Windows SmartScreen Warning
+The window changes the wallpaper on the interval in Settings while it is open
+or in the tray. To start it with Windows, put a shortcut to
+`clockwork-orange-gui.exe` in the Startup folder (`shell:startup`). There is no
+service on Windows; the timer lives in the window.
 
-The executable is **not code-signed**, so Windows SmartScreen will show a warning on first run:
+Multi-monitor: one image per monitor, stitched into a single spanned wallpaper
+that matches your monitor layout, set through the registry and
+`SystemParametersInfo`. The lock screen is not changed on Windows.
 
-> "Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting."
+Command line, from a terminal in the unzipped folder:
 
-This is expected. To proceed:
-1. Click **"More info"**
-2. Click **"Run anyway"**
+    .\clockwork-orange.exe -d C:\Wallpapers            # a random image once
+    .\clockwork-orange.exe -d C:\Wallpapers -w 600     # every ten minutes
+    .\clockwork-orange.exe --desktop                   # from the enabled plugins
+    .\clockwork-orange.exe --self-test                 # check the environment
 
-This only happens once per download.
+## macOS 13 and later
 
----
+`Clockwork-Orange-macOS.zip` holds `Clockwork Orange.app`. Move it to
+Applications. It is not notarised, so the first launch is right-click, **Open**,
+then confirm.
 
-## 1. Building the Executable (For Developers)
+The command line is inside the bundle at
+`Clockwork Orange.app/Contents/MacOS/clockwork-orange`; the same flags as
+above apply. Wallpapers are set per screen. The lock screen is not changed on
+macOS.
 
-We use **PyInstaller** to package the application into a single executable `clockwork-orange.exe`.
+## Configuration
 
-### Prerequisites
-- Python 3.10+ (Anaconda/Miniforge recommended)
-- `pip install -r requirements.txt` (ensure `pywin32` is installed)
+`~/.config/clockwork-orange.yml` on both platforms (the same file the Linux
+version uses), written by the window. The download history and blacklist are
+in `~/.config/clockwork-orange/`. See the README for the keys.
 
-### Build Command
-Run the provided PowerShell script:
-```powershell
-.\scripts\build_windows.ps1
-```
-This will create `dist\clockwork-orange.exe`.
+## Building
 
-### GitHub Actions (Cloud Build)
-We also support automated cloud builds via GitHub Actions.
-1.  **Releases**: Tagged versions (e.g., `v2.7.0`) automatically build and publish to [GitHub Releases](https://github.com/ushineko/clockwork-orange/releases) — this is the easiest way to get the latest stable build.
-2.  **Manual/Dev Builds**: Check the **Actions** tab for build artifacts from specific commits.
+    go build ./cmd/clockwork-orange           # no CGO needed
+    go build ./cmd/clockwork-orange-gui       # needs a C compiler (MinGW on Windows, Xcode tools on macOS)
 
-## 2. CLI Usage
-
-You can use the executable just like the Python script.
-
-**Set wallpaper from file:**
-```powershell
-.\dist\clockwork-orange.exe --desktop -f "C:\Path\To\Image.jpg"
-```
-
-**Set random wallpaper from directory:**
-```powershell
-.\dist\clockwork-orange.exe --desktop -d "C:\Wallpapers"
-```
-
-**Run GUI:**
-```powershell
-.\dist\clockwork-orange.exe --gui
-```
-
-## 3. Recommended Usage on Windows
-
-### GUI with Autostart (Recommended)
-The best way to use Clockwork Orange on Windows:
-
-1. **Launch GUI**: Double-click `clockwork-orange.exe`
-2. **Configure Plugins**: Enable desired plugins (DuckDuckGo Images, Wallhaven, Local, etc.)
-3. **Set Interval**: Configure `default_wait` in Settings (seconds between wallpaper changes)
-4. **Enable Autostart**: Check "Autostart" in Settings → Basic
-5. **Minimize to Tray**: The GUI runs in background and changes wallpapers automatically
-
-### Desktop Mode (Alternative)
-For command-line usage without GUI:
-
-```powershell
-# Single wallpaper change
-.\dist\clockwork-orange.exe --desktop
-
-# Continuous mode (change every 600 seconds)
-.\dist\clockwork-orange.exe --desktop --wait 600
-```
-
-Add to Startup folder (`shell:startup`) for automatic launch.
-
-
-
-## 4. GUI Launch & Performance
-**Issues Resolved**:
-1.  **Direct Launch**: Double-clicking `clockwork-orange.exe` now opens the GUI by default (programmatically appends `--gui` if no args).
-2.  **Invisible Window**: Fixed by bundling missing icons (`gui/icons`) and forcing window activation (`raise_()`).
-3.  **Slow Startup**: Reduced startup time from >30s to <1s by removing slow `psutil` iteration and using a named mutex lock (Windows) / file lock (Linux) for single-instance checks.
-
-**Verification**:
-```powershell
-# 1. Double-click dist/clockwork-orange.exe
-# Result: GUI appears instantly.
-
-# 2. Check logs (if debugging)
-# [DEBUG] Instance check took 0.000s
-```
-
-
-To verify the installation and dependencies (including SSL and Plugins), run the self-test:
-```powershell
-.\dist\clockwork-orange.exe --self-test
-```
-A successful run will output `[OK]` for all checks and exit with code 0.
-
-## 5. Troubleshooting
-
-### Plugins Not Appearing/Working
-
-- Ensure `plugins/` directory is correctly bundled.
-- If running from source, ensure you have dependencies installed (`pip install -r requirements.txt`).
-- In the frozen build, plugins are loaded internally. Check the GUI logs or console output for "Plugin execution failed" errors.
-
-## 6. Multi-Monitor Support
-Clockwork Orange supports setting different wallpapers on each connected monitor on Windows.
-
-**The Solution:**
-To avoid Windows security restrictions (RPC errors) that occur when running as Administrator, we use a custom **Spanned Wallpaper** engine:
-1.  **Monitor Detection**: Switched from custom PowerShell/ctypes code to the `screeninfo` library for robust, cross-platform monitor geometry detection.
-2.  **Image Stitching**: Uses `Pillow` to create a single composite image covering the entire virtual desktop.
-3.  **Pixel-Perfect Placement**: Wallpapers are "stitched" onto this canvas to match your monitor layout perfectly.
-4.  **System Application**: Sets the composite image as the system wallpaper in "Span" mode.
-
-**Verification:**
-Look for these messages in the Activity Log:
-- `✓ Wallpapers set for 2 monitor(s)`
-- `[DEBUG] Stitching wallpapers for 2 monitor(s)`
-- `[DEBUG] Applying spanned wallpaper: ...\clockwork_spanned.jpg`
-
-> [!TIP]
-> This approach handles complex monitor layouts (mixed portrait/landscape, different resolutions, and offsets) automatically!
+CI builds the release artifacts with `fyne package`, which embeds the icon and,
+on Windows, sets the GUI subsystem so no console window opens.

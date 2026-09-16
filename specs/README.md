@@ -44,9 +44,11 @@ These specs document features that have been implemented:
 - **008**: Replace Google Images with DuckDuckGo - image source plugin swap with config migration
 - **009**: Config Watcher Debounce - coalesce config-write bursts, unbuffered service logging
 
+- **010**: Clockwork Orange v4.0 - native Go rewrite (CLI + daemon, Fyne GUI), drops the Stable Diffusion plugin, converts build/packaging/CI. Specs 001–009 describe the Python 2.9.x line that v4 ports; the Python sources were deleted at the v4 cutover and live in the `v2.9.5` tag.
+
 ## Pending Specs
 
-- **010**: Clockwork Orange v4.0 - native Go rewrite (CLI + Fyne GUI), drops Stable Diffusion plugin, converts build/packaging/CI. Branch `v4-go-rewrite`.
+None. Spec 010's remaining acceptance criteria are the manual Windows and macOS verification (R9.6).
 
 ## Using Specs with Ralph Loop Mode
 

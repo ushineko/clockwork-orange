@@ -1,5 +1,9 @@
 name: Build
 
+# Spec 010 R8.6. Every job builds from this checkout; the version is .tag.
+# Windows and macOS binaries are stamped through a generated file in
+# internal/buildinfo because `fyne package` drives the Go build itself.
+
 on:
   push:
     branches: [ master, main ]
@@ -9,34 +13,29 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+env:
+  FYNE_TOOL: fyne.io/tools/cmd/fyne@latest
+
 jobs:
   test-go:
     name: Go Test + Lint
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
       with:
         go-version-file: go.mod
         check-latest: true
-
     - name: Install Fyne build dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev wayland-protocols
-
     - name: Test
       run: make test
-
     - name: Lint
       run: make lint
-
     - name: Build daemon (no CGO)
       run: CGO_ENABLED=0 make build
-
     - name: Build GUI
       run: make build-gui
 
@@ -44,222 +43,187 @@ jobs:
     name: Build Arch Package
     runs-on: ubuntu-latest
     container: archlinux:latest
-    permissions:
-      contents: write
-
     steps:
-    - name: Install Build Dependencies
+    - name: Install build dependencies
       run: |
-        # Initialize keyring and update system first
         pacman -Sy --noconfirm archlinux-keyring
         pacman -Su --noconfirm
-        
-        # Install dependencies including Node.js (required for GitHub Actions)
-        pacman -S --noconfirm base-devel git python python-requests python-yaml qt6-tools kconfig nodejs
-        
-        # Create a build user since makepkg cannot run as root
+        pacman -S --noconfirm base-devel git go gcc pkgconf mesa libgl libx11 libxcursor libxrandr \
+          libxinerama libxi libxxf86vm libxkbcommon wayland wayland-protocols qt6-tools kconfig nodejs
         useradd -m builder
         echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-        
-    - name: Checkout Code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
       with:
         path: src_repo
-        fetch-depth: 0 # Required for git describe/versioning
-
-    - name: Fix Permissions
+        fetch-depth: 0
+    - name: Build package
       run: |
         chown -R builder:builder src_repo
-        
-    - name: Build Package
+        su builder -c "git config --global --add safe.directory $(pwd)/src_repo"
+        su builder -c "cd src_repo/packaging/arch && BUILDDIR=/tmp/mkpkg makepkg -s --noconfirm"
+    - name: Install and self-test
       run: |
-        cd src_repo
-        # Mark directory as safe for git since ownership changed
-        su builder -c "git config --global --add safe.directory $(pwd)"
-        su builder -c "makepkg -s --noconfirm"
-        
-    - name: Upload Arch Artifact
-      uses: actions/upload-artifact@v4
+        pacman -U --noconfirm src_repo/packaging/arch/*.pkg.tar.zst
+        clockwork-orange version
+        clockwork-orange --self-test
+        clockwork-orange-gui --version
+    - uses: actions/upload-artifact@v4
       with:
         name: arch-package
-        path: src_repo/*.pkg.tar.zst
+        path: src_repo/packaging/arch/*.pkg.tar.zst
 
   build-deb:
     name: Build Debian Package
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0 # Required for dynamic versioning
-
-    - name: Install Build Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y dpkg-dev debhelper
-
-    - name: Build Package
-      run: |
-        ./build_deb.sh
-        echo "Listing current directory:"
-        ls -la
-
-    - name: Upload Debian Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: debian-package
-        path: "*.deb"
-
-  build-windows:
-    name: Build Windows Executable
-    runs-on: windows-latest
-    permissions:
-      contents: write
-
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - uses: actions/setup-go@v5
       with:
-        python-version: '3.12'
-        cache: 'pip'
-
-    - name: Install Dependencies
+        go-version-file: go.mod
+        check-latest: true
+    - name: Install build dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install PyInstaller
-
-    - name: Build Windows Executable
-      shell: pwsh
+        sudo apt-get update
+        sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev wayland-protocols dpkg-dev
+    - name: Build package
       run: |
-        .\scripts\build_windows_production.ps1
-
-    - name: Verify Build (Self-Test)
-      shell: pwsh
+        make build build-gui
+        ./packaging/debian/build.sh
+    - name: Install and smoke-test
       run: |
-        Write-Host "Running self-test on built executable..."
+        sudo apt-get install -y ./dist/*.deb
+        clockwork-orange version
+        clockwork-orange plugins list
+        clockwork-orange-gui --version
+        # The KDE tools the self-test probes are Recommends; the runner has no
+        # Plasma. Run the full self-test only where they installed.
+        if command -v qdbus6 >/dev/null && command -v kwriteconfig6 >/dev/null; then
+          clockwork-orange --self-test
+        else
+          echo "qdbus6/kwriteconfig6 not on this runner; self-test gated on Arch instead"
+        fi
+    - uses: actions/upload-artifact@v4
+      with:
+        name: debian-package
+        path: dist/*.deb
+
+  build-windows:
+    name: Build Windows Executables
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        check-latest: true
+    - name: Install MinGW (CGO for the GUI)
+      id: msys2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: UCRT64
+        update: false
+        install: mingw-w64-ucrt-x86_64-gcc
+    - name: Stamp version and install the fyne tool
+      run: |
+        $ver = (Get-Content .tag -Raw).Trim().TrimStart('v')
+        $sha = (git rev-parse --short HEAD).Trim()
+        "package buildinfo`n`nfunc init() { Version = `"$ver`"; Commit = `"$sha`" }`n" | Set-Content internal/buildinfo/version_ci.go
+        "APP_VERSION=$ver" | Add-Content $env:GITHUB_ENV
+        go install $env:FYNE_TOOL
+    - name: Build the CLI (no CGO)
+      run: |
+        $env:CGO_ENABLED = "0"
+        New-Item -ItemType Directory -Force dist | Out-Null
+        go build -trimpath -ldflags "-s -w" -o dist/clockwork-orange.exe ./cmd/clockwork-orange
+    - name: Build the GUI (fyne package, windowsgui subsystem, embedded icon)
+      run: |
+        $env:PATH = "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin;$env:PATH"
+        $env:CGO_ENABLED = "1"
+        fyne package --os windows --name clockwork-orange-gui --icon packaging/icons/clockwork-orange-512x512.png `
+          --app-id io.ushineko.clockwork-orange --app-version $env:APP_VERSION --release --src ./cmd/clockwork-orange-gui
+        $exe = Get-ChildItem -Recurse -Filter clockwork-orange-gui.exe | Select-Object -First 1
+        if (-not $exe) { throw "fyne package produced no clockwork-orange-gui.exe" }
+        Move-Item $exe.FullName dist/clockwork-orange-gui.exe
+    - name: Self-test
+      run: |
         $proc = Start-Process -FilePath ".\dist\clockwork-orange.exe" -ArgumentList "--self-test" -Wait -PassThru -NoNewWindow
-        Write-Host "Process exit code: $($proc.ExitCode)"
-        if ($proc.ExitCode -ne 0) {
-          Write-Host "Self-test FAILED with exit code $($proc.ExitCode)!"
-          exit 1
-        }
-        Write-Host "Self-test PASSED!"
-
-    - name: Upload Windows Artifact
-      uses: actions/upload-artifact@v4
+        if ($proc.ExitCode -ne 0) { throw "self-test failed with exit code $($proc.ExitCode)" }
+        .\dist\clockwork-orange.exe version
+    - name: Zip
+      run: Compress-Archive -Path dist\clockwork-orange.exe, dist\clockwork-orange-gui.exe, README.md, LICENSE -DestinationPath dist\clockwork-orange-windows-amd64.zip
+    - uses: actions/upload-artifact@v4
       with:
-        name: windows-executable
-        path: dist/clockwork-orange.exe
+        name: windows-zip
+        path: dist/clockwork-orange-windows-amd64.zip
 
   build-macos:
     name: Build macOS App
     runs-on: macos-latest
-    permissions:
-      contents: write
-
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    # NOTE: We do NOT use actions/setup-python here.
-    # setup-python does not provide a framework build on macOS,
-    # which PyInstaller requires for .app bundles.
-    # See: https://github.com/actions/setup-python/issues/58
-    - name: Install Python via Homebrew
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        check-latest: true
+    - name: Stamp version and install the fyne tool
       run: |
-        brew install python@3.13
-
-    - name: Create venv
+        VER=$(tr -d 'v[:space:]' < .tag)
+        SHA=$(git rev-parse --short HEAD)
+        printf 'package buildinfo\n\nfunc init() { Version = "%s"; Commit = "%s" }\n' "$VER" "$SHA" > internal/buildinfo/version_ci.go
+        echo "APP_VERSION=$VER" >> "$GITHUB_ENV"
+        go install "$FYNE_TOOL"
+    - name: Build the CLI (no CGO) and the app bundle
       run: |
-        /opt/homebrew/bin/python3.13 -m venv .venv
-        source .venv/bin/activate
-        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
-
-    - name: Verify Framework Build
+        mkdir -p dist
+        CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o dist/clockwork-orange ./cmd/clockwork-orange
+        CGO_ENABLED=1 fyne package --os darwin --name "Clockwork Orange" --icon packaging/icons/clockwork-orange-512x512.png \
+          --app-id io.ushineko.clockwork-orange --app-version "$APP_VERSION" --release --src ./cmd/clockwork-orange-gui
+        APP=$(find . -maxdepth 3 -name "Clockwork Orange.app" -type d | head -1)
+        [ -n "$APP" ] || { echo "fyne package produced no .app"; exit 1; }
+        mv "$APP" dist/
+        cp dist/clockwork-orange "dist/Clockwork Orange.app/Contents/MacOS/clockwork-orange"
+    - name: Self-test
       run: |
-        source .venv/bin/activate
-        FRAMEWORK=$(python3 -c "import sysconfig; print(sysconfig.get_config_var('PYTHONFRAMEWORK'))")
-        echo "PYTHONFRAMEWORK=$FRAMEWORK"
-        if [ -z "$FRAMEWORK" ]; then
-          echo "::error::Python is not a framework build. Cannot produce .app bundles."
-          exit 1
-        fi
-        python3 --version
-
-    - name: Install Dependencies
-      run: |
-        source .venv/bin/activate
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install PyInstaller
-
-    - name: Build macOS App
-      run: |
-        source .venv/bin/activate
-        bash scripts/build_macos.sh
-
-    - name: Verify Build (Self-Test)
-      run: |
-        echo "Running self-test on built .app..."
-        "dist/Clockwork Orange.app/Contents/MacOS/Clockwork Orange" --self-test
-
-    - name: Package App as ZIP
+        "dist/Clockwork Orange.app/Contents/MacOS/clockwork-orange" --self-test
+        "dist/Clockwork Orange.app/Contents/MacOS/clockwork-orange" version
+    - name: Zip
       run: |
         cd dist
         zip -r "Clockwork-Orange-macOS.zip" "Clockwork Orange.app"
-
-    - name: Upload macOS Artifact
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
-        name: macos-app
+        name: macos-zip
         path: dist/Clockwork-Orange-macOS.zip
 
   release:
     name: Create Release
-    needs: [build-arch, build-deb, build-windows, build-macos]
+    needs: [test-go, build-arch, build-deb, build-windows, build-macos]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-    - name: Download Arch Artifacts
-      uses: actions/download-artifact@v4
+    - uses: actions/checkout@v4
+    - name: Refuse a tag that does not match .tag
+      run: |
+        WANT=$(tr -d '[:space:]' < .tag)
+        GOT="${GITHUB_REF#refs/tags/}"
+        [ "$WANT" = "$GOT" ] || { echo "::error::tag $GOT does not match .tag $WANT"; exit 1; }
+    - uses: actions/download-artifact@v4
       with:
-        name: arch-package
         path: dist
-
-    - name: Download Debian Artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: debian-package
-        path: dist
-
-    - name: Download Windows Artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: windows-executable
-        path: dist
-
-    - name: Download macOS Artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: macos-app
-        path: dist
-
+        merge-multiple: true
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: dist/*
       env:
@@ -267,14 +231,17 @@ jobs:
 
   publish-aur:
     name: Publish to AUR
-    needs: [build-arch]
+    needs: [build-arch, release]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
-
+    container: archlinux:latest
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-
+    - name: Install tools
+      run: |
+        pacman -Sy --noconfirm archlinux-keyring
+        pacman -S --noconfirm base-devel git openssh nodejs
+        useradd -m builder
+    - uses: actions/checkout@v4
     - name: Configure SSH for AUR
       run: |
         mkdir -p ~/.ssh
@@ -282,58 +249,18 @@ jobs:
         chmod 600 ~/.ssh/aur_deploy
         printf '%s\n' "Host aur.archlinux.org" "  IdentityFile ~/.ssh/aur_deploy" "  User aur" "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
         chmod 600 ~/.ssh/config
-
-    - name: Clone AUR Repo
+    - name: Clone AUR repo
       run: git clone ssh://aur@aur.archlinux.org/clockwork-orange-git.git aur-pkg
-
-    - name: Update AUR Package
+    - name: Update PKGBUILD and regenerate .SRCINFO
       run: |
-        # Read version from .tag and strip 'v' prefix
-        VERSION=$(cat .tag | tr -d '[:space:]')
-        PKGVER=${VERSION#v}
-
-        # Update pkgver in PKGBUILD before copying
-        sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" PKGBUILD
-
-        cp PKGBUILD clockwork-orange.install aur-pkg/
-        cd aur-pkg
-
-        # Generate .SRCINFO with tabs (AUR requires tab-indented fields)
-        PKGREL=$(grep -oP '(?<=^pkgrel=).*' PKGBUILD)
-        T=$(printf '\t')
-        {
-          echo "pkgbase = clockwork-orange-git"
-          echo "${T}pkgdesc = Advanced wallpaper manager and downloader with plugin support for KDE Plasma 6"
-          echo "${T}pkgver = ${PKGVER}"
-          echo "${T}pkgrel = ${PKGREL}"
-          echo "${T}url = https://github.com/ushineko/clockwork-orange"
-          echo "${T}install = clockwork-orange.install"
-          echo "${T}arch = any"
-          echo "${T}license = MIT"
-          echo "${T}makedepends = git"
-          echo "${T}depends = python"
-          echo "${T}depends = python-requests"
-          echo "${T}depends = python-yaml"
-          echo "${T}depends = python-pillow"
-          echo "${T}depends = python-watchdog"
-          echo "${T}depends = python-pyqt6"
-          echo "${T}depends = qt6-tools"
-          echo "${T}depends = kconfig"
-          echo "${T}depends = python-psutil"
-          echo "${T}optdepends = python-pytorch: Required for Stable Diffusion AI wallpaper generation"
-          echo "${T}optdepends = python-pytorch-cuda: CUDA acceleration for Stable Diffusion (NVIDIA GPUs)"
-          echo "${T}optdepends = python-diffusers: Required for Stable Diffusion AI wallpaper generation"
-          echo "${T}optdepends = python-transformers: Required for Stable Diffusion AI wallpaper generation"
-          echo "${T}optdepends = python-accelerate: Optimized inference for Stable Diffusion"
-          echo "${T}provides = clockwork-orange"
-          echo "${T}conflicts = clockwork-orange"
-          echo "${T}source = clockwork-orange::git+https://github.com/ushineko/clockwork-orange.git"
-          echo "${T}sha256sums = SKIP"
-          echo ""
-          echo "pkgname = clockwork-orange-git"
-        } > .SRCINFO
-
-    - name: Commit and Push to AUR
+        PKGVER=$(tr -d 'v[:space:]' < .tag)
+        cp packaging/arch/aur/PKGBUILD packaging/arch/clockwork-orange.install aur-pkg/
+        sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" aur-pkg/PKGBUILD
+        chown -R builder:builder aur-pkg
+        # makepkg refuses to run as root; --printsrcinfo needs no network and no build.
+        su builder -c "cd aur-pkg && makepkg --printsrcinfo > .SRCINFO"
+        chown -R root:root aur-pkg
+    - name: Commit and push
       run: |
         cd aur-pkg
         git config user.name "ushineko"
@@ -342,7 +269,6 @@ jobs:
         if git diff --cached --quiet; then
           echo "No changes to publish"
         else
-          VERSION=$(cat ../.tag | tr -d '[:space:]')
-          git commit -m "Update to ${VERSION}"
+          git commit -m "Update to $(tr -d '[:space:]' < ../.tag)"
           git push
         fi

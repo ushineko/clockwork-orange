@@ -1,11 +1,10 @@
 # Golden fixtures (spec 010 R9.2)
 
-Captured from the Python 2.9.5 implementation at commit `67ad8d2` by running,
-from the repository root while the Python sources are still present:
-
-```
-python3 tests/golden/capture.py
-```
+Captured from the Python 2.9.5 implementation at commit `67ad8d2` by running
+`python3 tests/golden/capture.py` from the repository root while the Python
+sources were still present. The capture script and the sources it imported
+were deleted at the v4 cutover; to regenerate, check out `67ad8d2` (or the
+`v2.9.5` tag), copy `capture.py` from that tree, and run it there.
 
 The Go tests read these files; they never regenerate them. Contents:
 
@@ -21,6 +20,4 @@ The Go tests read these files; they never regenerate them. Contents:
 | `plugins/wallhaven_parse_queries.json` | `_parse_queries` output for comma strings, dict lists and empties. |
 | `plugins/ddg_filenames.json` | DuckDuckGo `md5(url).jpg` filename derivation. |
 
-`capture.py` is the last Python in the repository allowed to survive until the
-Phase 7 cutover, when it is deleted along with the sources it imports; the
-fixtures it produced stay.
+The fixtures are the oracle for the Go tests and are never regenerated from Go.

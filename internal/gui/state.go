@@ -301,6 +301,13 @@ func (u *ui) noteSize(s fyne.Size) {
 	if s.Width <= 0 || s.Height <= 0 || s == u.lastSize {
 		return
 	}
+	if u.lastSize.IsZero() {
+		// The first reading is the baseline, not a resize: the canvas comes
+		// up a pixel or two off the requested size, and saving that on every
+		// start flashed "Saved" at a user who had changed nothing.
+		u.lastSize = s
+		return
+	}
 	u.lastSize = s
 	u.doc.WindowWidth, u.doc.WindowHeight = int(s.Width), int(s.Height)
 	u.scheduleSave()
