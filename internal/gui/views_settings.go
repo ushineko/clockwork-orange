@@ -29,8 +29,6 @@ type settingsForm struct {
 	body                      fyne.CanvasObject
 	dual, desktop, lockscreen *widget.Check
 	wait                      *widget.Entry
-	font                      *widget.Select
-	fontSize                  *widget.Entry
 	extensions                *widget.Entry
 	debug                     *widget.Check
 	// Linux and macOS only; nil on Windows (settings_widgets.py).
@@ -98,14 +96,6 @@ func (u *ui) newSettingsForm() *settingsForm {
 	})
 
 	f.wait = numericEntry(1, 86400, func(n int) { u.doc.DefaultWait = n; u.scheduleSave(); u.redrawStatus() })
-	f.font = widget.NewSelect(consoleFontNames(), func(name string) {
-		if setting {
-			return
-		}
-		u.doc.ConsoleFontFamily = name
-		u.scheduleSave()
-	})
-	f.fontSize = numericEntry(6, 48, func(n int) { u.doc.ConsoleFontSize = n; u.scheduleSave() })
 	f.extensions = widget.NewEntry()
 	f.extensions.SetPlaceHolder("Comma-separated extensions")
 	f.extensions.OnChanged = func(s string) {
@@ -148,8 +138,6 @@ func (u *ui) newSettingsForm() *settingsForm {
 	basic := widget.NewForm(
 		widget.NewFormItem("Wallpaper mode", container.NewVBox(f.dual, f.desktop, f.lockscreen)),
 		widget.NewFormItem("Wait interval (s)", fixedWidth(f.wait, 120)),
-		widget.NewFormItem("Console font", f.font),
-		widget.NewFormItem("Console font size", fixedWidth(f.fontSize, 120)),
 	)
 	advanced := widget.NewForm(
 		widget.NewFormItem("Image extensions", f.extensions),
@@ -161,7 +149,8 @@ func (u *ui) newSettingsForm() *settingsForm {
 		advanced.Append("Logs refresh interval (s)", fixedWidth(f.logsRefresh, 120))
 		advanced.Append("Auto-update logs", f.autoUpdateLogs)
 	}
-	f.body = container.NewVBox(card("Basic", basic), card("Advanced", advanced))
+	f.body = container.NewVBox(card("Basic", basic), card("Advanced", advanced),
+		note("How the window looks, including the console font of the log panes, is in Appearance.", StatusInfo))
 	return f
 }
 
@@ -176,8 +165,6 @@ func (f *settingsForm) set(doc, d config.Document) {
 		f.lockscreen.SetChecked(true)
 	}
 	f.wait.SetText(strconv.Itoa(d.DefaultWait))
-	f.font.SetSelected(orNone(d.ConsoleFontFamily, consoleFontDefault))
-	f.fontSize.SetText(strconv.Itoa(d.ConsoleFontSize))
 	f.extensions.SetText(d.ImageExtensions)
 	f.debug.SetChecked(doc.Debug)
 	if f.autostart != nil {

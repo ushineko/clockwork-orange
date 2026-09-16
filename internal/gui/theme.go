@@ -1,4 +1,4 @@
-// Copied from angou (same author) — keep in sync by hand.
+// Copied from angou (same author) — keep in sync by hand; the mono face is this project's.
 
 package gui
 
@@ -167,17 +167,22 @@ func paletteByName(name string) palette {
 type kdeTheme struct {
 	p    palette
 	font *loadedFont // nil means the font Fyne ships with
+	mono *loadedFont // the console font for Monospace text; nil means Fyne's monospace face
 	text float32     // text size in points; 0 means the default
 }
 
 var _ fyne.Theme = kdeTheme{}
 
 func (t kdeTheme) Font(s fyne.TextStyle) fyne.Resource {
-	// Monospace is left to the default face on purpose. A proportional family
-	// chosen for the interface will not have a monospace face, and substituting
-	// one silently would misalign the places that asked for monospace precisely
-	// because alignment mattered.
+	// Monospace is never taken from the interface family: a proportional
+	// family will not have a monospace face, and substituting one silently
+	// would misalign the places that asked for monospace precisely because
+	// alignment mattered. It comes from the console font (clockwork-orange.yml
+	// console_font_family, set in Appearance) when one is chosen, else Fyne's.
 	if s.Monospace {
+		if r := t.mono.face(s); r != nil {
+			return r
+		}
 		return theme.DefaultTheme().Font(s)
 	}
 	if r := t.font.face(s); r != nil {

@@ -5,12 +5,14 @@ package gui
 
 import (
 	"fmt"
+	"image/color"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -209,23 +211,31 @@ func (p *logPane) events() events.Events {
 // content comes from the journal rather than from this process.
 func (p *logPane) widget(u *ui, title string, onClear func()) fyne.CanvasObject {
 	log := p.log
+	// Rows are canvas.Text rather than Labels so the console font size
+	// (console_font_size, set in Appearance) applies: a Label draws at the
+	// theme's one text size. The monospace face is the theme's, which is the
+	// console family when one is chosen.
+	size := consoleSize(u.doc)
 	list := widget.NewList(
 		func() int { return log.len() },
 		func() fyne.CanvasObject {
-			l := widget.NewLabel("")
-			l.TextStyle = fyne.TextStyle{Monospace: true}
-			l.Truncation = fyne.TextTruncateEllipsis
-			return l
+			t := canvas.NewText("", theme.Color(theme.ColorNameForeground))
+			t.TextStyle = fyne.TextStyle{Monospace: true}
+			t.TextSize = size
+			return t
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			line := log.at(i)
-			l := o.(*widget.Label)
-			// Importance first: SetText refreshes, and the refresh is what
-			// applies it. See the note in views_table.go.
-			l.Importance = importanceFor(levelStatus(line.level))
-			l.SetText(line.text)
+			t := o.(*canvas.Text)
+			t.Color = statusColor(levelStatus(line.level))
+			t.TextSize = size
+			t.Text = line.text
+			t.Refresh()
 		},
 	)
+	// A canvas.Text row is one text line high; tell the list, which would
+	// otherwise size rows for a Label with padding at the theme size.
+	list.HideSeparators = true
 	p.list = list
 
 	p.counter = widget.NewLabel("")
@@ -330,4 +340,19 @@ func (p *logPane) pump() (stop func()) {
 			fyne.Do(func() { p.touch(); p.draw() })
 		})
 	}
+}
+
+// statusColor is the theme colour for a ranked line, the canvas.Text
+// counterpart of importanceFor.
+func statusColor(st Status) color.Color {
+	switch st {
+	case StatusGood:
+		return theme.Color(theme.ColorNameSuccess)
+	case StatusWarn:
+		return theme.Color(theme.ColorNameWarning)
+	case StatusBad:
+		return theme.Color(theme.ColorNameError)
+	case StatusInfo:
+	}
+	return theme.Color(theme.ColorNameForeground)
 }

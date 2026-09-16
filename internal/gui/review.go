@@ -55,8 +55,9 @@ type reviewModel struct {
 	info     *widget.Label
 	applyBtn *widget.Button
 
-	// loading guards one decode at a time; seq drops a decode that finished
-	// after the user moved on.
+	// cache holds the scaled previews; seq drops a load that finished after
+	// the user moved on.
+	cache   *previewCache
 	mu      sync.Mutex
 	seq     int
 	watcher *fsnotify.Watcher
@@ -72,7 +73,7 @@ func (u *ui) reviewFor(name string, info core.PluginInfo, block map[string]any) 
 		if u.review != nil {
 			u.review.detach()
 		}
-		u.review = &reviewModel{plugin: name, dir: dir, marked: map[int]bool{}}
+		u.review = &reviewModel{plugin: name, dir: dir, marked: map[int]bool{}, cache: newPreviewCache()}
 		u.review.scan()
 	}
 	return u.review
@@ -85,6 +86,13 @@ func (r *reviewModel) scan() {
 	r.images, r.err = scanReviewDir(r.dir)
 	r.index = 0
 	r.marked = map[int]bool{}
+	if r.cache != nil {
+		keep := make(map[string]bool, len(r.images))
+		for _, p := range r.images {
+			keep[p] = true
+		}
+		r.cache.forget(keep)
+	}
 }
 
 // scanReviewDir lists the reviewable images in dir, newest first.
@@ -228,14 +236,18 @@ func markOverlay(src image.Image) *image.RGBA {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 	pen := max(5, min(w, h)*2/100)
-	// border
-	for y := range h {
-		for x := range w {
-			if x < pen || y < pen || x >= w-pen || y >= h-pen {
-				img.SetRGBA(b.Min.X+x, b.Min.Y+y, markColor)
+	// The border is four strips, not a test of every pixel.
+	fill := func(r image.Rectangle) {
+		for y := r.Min.Y; y < r.Max.Y; y++ {
+			for x := r.Min.X; x < r.Max.X; x++ {
+				img.SetRGBA(x, y, markColor)
 			}
 		}
 	}
+	fill(image.Rect(b.Min.X, b.Min.Y, b.Max.X, b.Min.Y+pen))
+	fill(image.Rect(b.Min.X, b.Max.Y-pen, b.Max.X, b.Max.Y))
+	fill(image.Rect(b.Min.X, b.Min.Y, b.Min.X+pen, b.Max.Y))
+	fill(image.Rect(b.Max.X-pen, b.Min.Y, b.Max.X, b.Max.Y))
 	drawThickLine(img, 0, 0, w-1, h-1, pen)
 	drawThickLine(img, w-1, 0, 0, h-1, pen)
 	return img
@@ -330,8 +342,14 @@ func (r *reviewModel) draw(u *ui) {
 	seq := r.seq
 	r.mu.Unlock()
 	marked := r.marked[r.index]
+	if r.cache == nil {
+		r.cache = newPreviewCache()
+	}
+	cache := r.cache
+	// Captured on the UI thread: the goroutine must not read the model.
+	idx, images := r.index, r.images
 	load := func() {
-		img, _, err := imaging.DecodeFile(path)
+		img, err := cache.get(path)
 		var shown image.Image
 		if err == nil {
 			shown = img
@@ -356,12 +374,26 @@ func (r *reviewModel) draw(u *ui) {
 			}
 			r.preview.Refresh()
 		})
+		cache.prefetch(idx, images)
 	}
 	if !u.onScreen() {
 		load()
 		return
 	}
 	go load()
+}
+
+// prefetch scales the neighbours of image idx so the next arrow key lands on
+// a cached frame. Off the UI thread; takes copies, never the model.
+func (c *previewCache) prefetch(idx int, images []string) {
+	for d := 1; d <= prefetchEach; d++ {
+		for _, i := range []int{idx + d, idx - d} {
+			if i < 0 || i >= len(images) || c.has(images[i]) {
+				continue
+			}
+			_, _ = c.get(images[i])
+		}
+	}
 }
 
 // handleKey applies ←/→/Space; true when the key was one of ours.

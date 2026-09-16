@@ -52,16 +52,47 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 		u.applyAppearance()
 	})
 
+	// The console font is the monospace face of the log panes (Service,
+	// Activity, plugin runs). It lives in clockwork-orange.yml as
+	// console_font_family / console_font_size, where the Python GUI kept it,
+	// and is set here so every look-and-feel choice is in one section.
+	consoleFont := widget.NewSelect(consoleFontNames(), nil)
+	consoleFont.SetSelected(orNone(u.doc.ConsoleFontFamily, consoleFontDefault))
+	consoleFont.OnChanged = func(name string) {
+		u.doc.ConsoleFontFamily = name
+		u.scheduleSave()
+		u.applyAppearance()
+		u.refresh()
+	}
+	consoleSizes := make([]string, 0, 12)
+	for _, n := range []int{8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24} {
+		consoleSizes = append(consoleSizes, fmt.Sprintf("%d", n))
+	}
+	consoleSizeSel := widget.NewSelect(consoleSizes, nil)
+	consoleSizeSel.SetSelected(fmt.Sprintf("%d", int(consoleSize(u.doc))))
+	consoleSizeSel.OnChanged = func(v string) {
+		var n int
+		if _, err := fmt.Sscanf(v, "%d", &n); err == nil && n >= 6 && n <= 48 {
+			u.doc.ConsoleFontSize = n
+			u.scheduleSave()
+			u.refresh()
+		}
+	}
+
 	form := widget.NewForm(
 		widget.NewFormItem("Color scheme", scheme),
 		widget.NewFormItem("Font", font),
 		widget.NewFormItem("Text size", size),
+		widget.NewFormItem("Console font", consoleFont),
+		widget.NewFormItem("Console text size", consoleSizeSel),
 	)
 
 	noteText := widget.NewLabel(
-		"These are saved and restored the next time the window opens. They are the only thing " +
-			"this application keeps in Fyne's own preference store; everything else lives in " +
-			"clockwork-orange.yml, which the command line and the service read too.")
+		"Every setting about how this window looks is here. The colour scheme, font and text " +
+			"size are kept in Fyne's own preference store; the console font and its size are " +
+			"written to clockwork-orange.yml as console_font_family and console_font_size, the " +
+			"keys the previous versions used, and apply to the log panes in Service, Activity " +
+			"and plugin runs.")
 	noteText.Wrapping = fyne.TextWrapWord
 	noteText.Importance = widget.LowImportance
 

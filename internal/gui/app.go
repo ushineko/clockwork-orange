@@ -166,11 +166,34 @@ func (u *ui) applyAppearance() {
 	p.SetString(prefFont, u.fontName)
 	p.SetFloat(prefSize, float64(u.textSize))
 
-	u.app.Settings().SetTheme(kdeTheme{
+	u.app.Settings().SetTheme(u.theme())
+}
+
+// theme is the current theme: scheme, interface font and text size from the
+// preference store, console font from the document.
+func (u *ui) theme() kdeTheme {
+	return kdeTheme{
 		p:    paletteByName(u.scheme),
 		font: loadFont(u.fontName),
+		mono: loadFont(consoleFamily(u.doc)),
 		text: u.textSize,
-	})
+	}
+}
+
+// consoleFamily is the document's console font family; the Python default
+// "Monospace" is not an installed family, so it (and empty) mean Fyne's face.
+func consoleFamily(doc config.Document) string {
+	if doc.ConsoleFontFamily == "" || doc.ConsoleFontFamily == consoleFontDefault {
+		return ""
+	}
+	return doc.ConsoleFontFamily
+}
+
+// consoleSize is the log panes' text size (console_font_size, default 10),
+// clamped to the range the Python spin box allowed.
+func consoleSize(doc config.Document) float32 {
+	n := docDefaultsFor(doc).ConsoleFontSize
+	return float32(min(48, max(6, n)))
 }
 
 // The fixed section titles (R7.3). The first is Service on Linux and Activity
@@ -332,17 +355,16 @@ func Run(o Options) {
 		// Forced for this run only, so a capture does not overwrite whatever
 		// the user had chosen.
 		u.scheme = paletteByName(o.Scheme).name
-		u.app.Settings().SetTheme(kdeTheme{
-			p: paletteByName(u.scheme), font: loadFont(u.fontName), text: u.textSize,
-		})
+	}
+	// The document is read before the theme is applied and the window sized:
+	// the console font, the window's size and every form come out of it.
+	u.loadConfigNow()
+	u.plugins = core.AvailablePlugins()
+	if o.Scheme != "" {
+		u.app.Settings().SetTheme(u.theme())
 	} else {
 		u.applyAppearance()
 	}
-
-	// The document is read before the window is sized, synchronously: the
-	// window's size comes out of it, and everything else waits on it too.
-	u.loadConfigNow()
-	u.plugins = core.AvailablePlugins()
 
 	u.content = container.NewScroll(widget.NewLabel(""))
 	u.flashes = container.NewVBox()
@@ -841,13 +863,18 @@ func (u *ui) flashTint(st Status) color.NRGBA {
 	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0x4d} //nolint:gosec // 16-bit channels; >>8 fits a byte
 }
 
-// notify sends a desktop notification (R7.11). Fyne's is a no-op where the
-// platform has none, so there is nothing to guard.
+// notify sends a desktop notification (R7.11) that goes away on its own.
+// Under the test driver nothing is sent: the test app has no notification
+// centre and the D-Bus call would reach the developer's desktop.
 func (u *ui) notify(title, body string) {
-	if u.app == nil {
+	if u.app == nil || !u.onScreen() {
 		return
 	}
-	u.app.SendNotification(fyne.NewNotification(title, body))
+	sendNotification(u, title, body)
+}
+
+func fyneNotification(title, body string) *fyne.Notification {
+	return fyne.NewNotification(title, body)
 }
 
 // --- small shared widgets -------------------------------------------------

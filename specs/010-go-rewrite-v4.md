@@ -537,6 +537,18 @@ Design system (copy from nmsbonker unless noted):
   the status bar says "timer idle" while the daemon holds the cycling lock
   (DV10). `golang.org/x/net` is bumped to v0.56.0 (indirect, via Fyne) to
   clear GO-2026-4918 through GO-2026-5942 from the GUI binary.
+- R7.16 After the first day of use on the dev machine: the console font and
+  its size moved from Settings to Appearance, so every look-and-feel choice
+  is in one section (the keys stay `console_font_family` /
+  `console_font_size` in the YAML); the theme's Monospace face is that family
+  and the log panes draw at that size. Review previews are decoded once,
+  scaled to fit 1600×900, cached (16 entries) with the neighbours prefetched,
+  and the mark overlay is drawn on the scaled copy. Desktop notifications go
+  to `org.freedesktop.Notifications` directly with a 3 s expiry
+  (`github.com/godbus/dbus/v5` becomes a direct dependency; Fyne's own call
+  passes 0, which KDE shows until dismissed). The README is rewritten for v4
+  ahead of Phase 7 so the About section stops describing the Python program;
+  it avoids emoji, which Fyne's font does not have glyphs for.
 - R7.14 Headless tests with `test.NewApp()` and the `testUI(t)` helper for:
   schema→form generation for all four field types, searchTerms round-trip
   incl. legacy string, review-mode keyboard marking, auto-save coalescing,
