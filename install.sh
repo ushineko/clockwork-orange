@@ -13,7 +13,12 @@ set -euo pipefail
 
 BIN_DIR="${HOME}/.local/bin"
 APP_DIR="${HOME}/.local/share/applications"
-ICON_DIR="${HOME}/.local/share/icons/hicolor/512x512/apps"
+ICON_ROOT="${HOME}/.local/share/icons/hicolor"
+# Every size the packages ship. One 512 px file alone is enough for GTK but
+# KDE's icon loader picks the theme directory matching the requested size and
+# only falls back to scaling within the sizes hicolor declares, so a menu asking
+# for 48 px against a lone 512 px file came up with the placeholder icon.
+ICON_SIZES="16 32 48 64 128 256 512"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 APP_ID="io.ushineko.clockwork-orange"
@@ -36,7 +41,7 @@ Installs:
   ~/.local/bin/clockwork-orange                                       the command line and daemon
   ~/.local/bin/clockwork-orange-gui                                   the window
   ~/.local/share/applications/io.ushineko.clockwork-orange.desktop    the launcher entry
-  ~/.local/share/icons/hicolor/512x512/apps/clockwork-orange.png      its icon
+  ~/.local/share/icons/hicolor/<size>/apps/clockwork-orange.png       its icon, at 16–512 px
 
 The window is installed by default. It needs CGO and a C toolchain; if it will
 not build, the command line is still installed and the window is skipped with a
@@ -84,7 +89,10 @@ if [ "$WITH_GUI" -eq 1 ]; then
     if [ "$DRY_RUN" -eq 1 ] || make -C "$REPO_DIR" build-gui; then
         run install -Dm755 "${REPO_DIR}/bin/clockwork-orange-gui" "${BIN_DIR}/clockwork-orange-gui"
         run install -Dm644 "${REPO_DIR}/packaging/${APP_ID}.desktop" "${APP_DIR}/${APP_ID}.desktop"
-        run install -Dm644 "${REPO_DIR}/packaging/clockwork-orange.png" "${ICON_DIR}/clockwork-orange.png"
+        for res in $ICON_SIZES; do
+            run install -Dm644 "${REPO_DIR}/packaging/icons/clockwork-orange-${res}x${res}.png" \
+                "${ICON_ROOT}/${res}x${res}/apps/clockwork-orange.png"
+        done
     else
         WITH_GUI=0
         echo
@@ -112,6 +120,15 @@ fi
 
 if [ "$WITH_GUI" -eq 1 ] && command -v update-desktop-database >/dev/null 2>&1; then
     run update-desktop-database "${APP_DIR}"
+fi
+# KDE keeps its own application and icon caches; without a rebuild the menu can
+# show the new entry with the placeholder icon until the next login.
+if [ "$WITH_GUI" -eq 1 ] && command -v kbuildsycoca6 >/dev/null 2>&1; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "  would run: kbuildsycoca6 --noincremental"
+    else
+        kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
+    fi
 fi
 # The icon cache is per theme directory and only some desktops need it poked;
 # a failure here costs nothing but a stale icon until the next login.

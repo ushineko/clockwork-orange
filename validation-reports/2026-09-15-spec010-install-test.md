@@ -28,7 +28,7 @@ install. `Install` now writes `ExecStart` for the binary that ran it
 
 | Step | Result |
 |------|--------|
-| `install.sh --dry-run` | lists the four files (AC R8.7) |
+| `install.sh --dry-run` | lists every file it installs (AC R8.7); after the icon fix below that is two binaries, the entry and seven icon sizes |
 | `install.sh` | built CLI (`CGO_ENABLED=0`) and GUI, installed to `~/.local/bin`, `~/.local/share/applications`, `~/.local/share/icons/hicolor/512x512/apps` |
 | `desktop-file-validate io.ushineko.clockwork-orange.desktop` | valid |
 | `clockwork-orange --self-test` (installed binary) | all 9 probes OK, exit 0 |
@@ -38,7 +38,7 @@ install. `Install` now writes `ExecStart` for the binary that ran it
 | `~/.config/kscreenlockerrc` | `Image=file:///…/GoogleImages/eb3ffb8b….jpg`, the file the log named |
 | `clockwork-orange-gui` (installed, 8 s) | ran and exited cleanly on timeout |
 | `gtk-launch io.ushineko.clockwork-orange` | started `~/.local/bin/clockwork-orange-gui`; killed after 6 s |
-| `uninstall.sh --dry-run` | lists exactly the four installed files (AC R8.7); not run for real |
+| `uninstall.sh --dry-run` | lists exactly the installed files (AC R8.7); not run for real |
 | `make pkg-arch` | see the Arch package section below |
 
 Backups taken before the switch, in `~/clockwork-orange-v4-backup-20260915-2225/`:
@@ -55,6 +55,18 @@ systemctl --user daemon-reload && systemctl --user restart clockwork-orange
 The databases and config were not modified by the switch itself; the Go
 daemon writes the same schema the Python reads, so no restore is needed to
 go back.
+
+### Launcher fixes found after the switch
+
+- The Python `install-desktop-entry.sh` had left `clockwork-orange.desktop`
+  with the same display name; the menu showed two "Clockwork Orange" entries
+  and the old one started the Python GUI. Removed (backed up); `install.sh`
+  now removes it when it still points at `clockwork-orange.py`.
+- The new entry showed the placeholder icon: only a 512 px file was
+  installed and KDE's loader wanted a 48 px theme directory. `install.sh`
+  now installs the seven hicolor sizes the package ships and runs
+  `kbuildsycoca6 --noincremental`; `kiconfinder6 clockwork-orange` resolves
+  to the 48 px file.
 
 ### Arch package (`make pkg-arch`, local makepkg)
 

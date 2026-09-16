@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 #
 # Removes exactly what install.sh puts in place: two binaries, a launcher entry
-# and an icon. Everything clockwork-orange has made for you stays, and this prints
+# and the icon at each size. Everything clockwork-orange has made for you stays, and this prints
 # where it is. Idempotent.
 
 set -euo pipefail
 
 BIN_DIR="${HOME}/.local/bin"
 APP_DIR="${HOME}/.local/share/applications"
-ICON_DIR="${HOME}/.local/share/icons/hicolor/512x512/apps"
+ICON_ROOT="${HOME}/.local/share/icons/hicolor"
+ICON_SIZES="16 32 48 64 128 256 512"
 
 APP_ID="io.ushineko.clockwork-orange"
 
@@ -22,7 +23,7 @@ Usage: uninstall.sh [--dry-run]
 
   --dry-run   List what would be removed, change nothing
 
-Removes only the four files install.sh placed. Your config, your downloaded
+Removes only the files install.sh placed. Your config, your downloaded
 wallpapers and the history and blacklist databases are left alone, and their
 locations are printed so you can remove them by hand if you want to. The
 systemd user unit, if installed, is removed with `clockwork-orange service
@@ -37,9 +38,11 @@ done
 echo "Removing clockwork-orange ..."
 
 removed=0
-for f in "${BIN_DIR}/clockwork-orange" "${BIN_DIR}/clockwork-orange-gui" \
-         "${APP_DIR}/${APP_ID}.desktop" \
-         "${ICON_DIR}/clockwork-orange.png"; do
+files=("${BIN_DIR}/clockwork-orange" "${BIN_DIR}/clockwork-orange-gui" "${APP_DIR}/${APP_ID}.desktop")
+for res in $ICON_SIZES; do
+    files+=("${ICON_ROOT}/${res}x${res}/apps/clockwork-orange.png")
+done
+for f in "${files[@]}"; do
     if [ -e "$f" ]; then
         removed=$((removed + 1))
         if [ "$DRY_RUN" -eq 1 ]; then
@@ -59,6 +62,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
         update-desktop-database "${APP_DIR}" >/dev/null 2>&1 || true
     command -v gtk-update-icon-cache >/dev/null 2>&1 && \
         gtk-update-icon-cache -f -t "${HOME}/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+    command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 fi
 
 CONFIG_HOME="${HOME}/.config"
