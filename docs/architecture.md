@@ -202,6 +202,23 @@ prints `[LEVEL] msg`; plugin progress renders as the `::PROGRESS::` and
 `clockwork-orange-gui` binary found beside the CLI, on PATH, or at
 `$CLOCKWORK_ORANGE_GUI`.
 
+### `internal/gui`
+
+Fyne front end over `core`, design system copied from nmsbonker (`theme.go`,
+`fonts.go`, `cursor_*.go`, `views_table.go`, `views_appearance.go`,
+`dialogs.go`). `Run(Options)` opens the window; `SectionNames()`,
+`SchemeNames()` and `Actions()` are computable before an app exists.
+Sections: Service (Linux) or Activity, one per registered plugin, History,
+Blacklist, Settings, Appearance, About. State lives on `*ui`, written only on
+the UI thread; every core call runs through `perform`/a loader with the busy
+popup up and hops back with `fyne.Do`. Edits write into `ui.doc` and
+`scheduleSave` coalesces them into one `core.SaveConfig` 1 s after the last
+change. `wallpaperTimer` runs `core.Cycle` on `default_wait` and idles while
+`core.DaemonRunning()` (DV10). `reviewModel` is the plugin section's image
+review (scan, ←/→/Space, red overlay, fsnotify rescans, `process_blacklist`
+on Apply). `logPane` is the fixed-height follow-the-tail list shared by the
+Service/Activity sections and the plugin run dialog.
+
 ## Testing conventions
 
 - Unit tests beside the code; goldens under `tests/golden/` (read via a

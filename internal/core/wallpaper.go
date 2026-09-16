@@ -26,6 +26,20 @@ var (
 // systemd daemon and a GUI timer do not both rotate wallpapers.
 const daemonLockID = "clockwork_orange_service_lock"
 
+// guiLockID is the GUI's single-instance id (R7.11), the one the Python GUI
+// took so a second launch exits quietly.
+const guiLockID = "clockwork_orange_gui_lock"
+
+// TryGUILock takes the GUI single-instance lock. false means another window
+// is already open; the caller exits 0 without a message, as the Python did.
+func TryGUILock() (release func(), ok bool) {
+	lock, ok := platform.TryLock(guiLockID)
+	if !ok {
+		return func() {}, false
+	}
+	return lock.Release, true
+}
+
 // SetRequest sets from an explicit local source.
 type SetRequest struct {
 	Request

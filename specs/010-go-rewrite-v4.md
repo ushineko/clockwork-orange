@@ -524,6 +524,19 @@ Design system (copy from nmsbonker unless noted):
 - R7.13 Every core call runs in a goroutine inside `u.busy(what)` /
   `u.perform`, hops back with `fyne.Do`; `fyne.DoAndWait` is not used; all
   state on `*ui`; `…OK` loaded flags; sections rebuilt on refresh.
+- R7.15 Choices made in Phase 5, all within R7: the window opens at
+  1180×760 when the config file is absent or carries no size (the Python
+  restored 800×600 from `Defaults()`); the plugin section title follows the
+  stated rule literally (`Duckduckgo Images`); the Blacklist table's
+  multi-select is a click-to-toggle check column, since Fyne's table selects
+  one cell; the string_list editor removes a term with a per-row button;
+  integer settings are validated Entries (Fyne has no spin box); the window
+  size is polled every 500 ms and persisted through the auto-save (Fyne has
+  no resize callback); Apply Blacklist runs the plugin's `process_blacklist`
+  action (R7.6), which is the `blacklist add` operation in `gui.Actions()`;
+  the status bar says "timer idle" while the daemon holds the cycling lock
+  (DV10). `golang.org/x/net` is bumped to v0.56.0 (indirect, via Fyne) to
+  clear GO-2026-4918 through GO-2026-5942 from the GUI binary.
 - R7.14 Headless tests with `test.NewApp()` and the `testUI(t)` helper for:
   schema→form generation for all four field types, searchTerms round-trip
   incl. legacy string, review-mode keyboard marking, auto-save coalescing,
@@ -719,14 +732,14 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 - [x] Parity test passes with the documented allow-list. *Phase 4 shape: every leaf maps to one core operation and every exception carries a reason; the `gui.Actions()` comparison lands with the GUI in Phase 5.*
 
 ### Phase 5: GUI
-- [ ] Design-system files carry the "Copied from nmsbonker" header; `theme.go`/`fonts.go`/`cursor_*.go`/`views_table.go` diff against nmsbonker only in the header comment and module path.
-- [ ] All sections in R7.3 render headlessly; `--section` opens each by name; `gui.Actions()` covers every core operation.
-- [ ] Plugin form generation is tested for the four field types, `enum` vs `suggestions`, `group` row packing, and both `widget` kinds; `searchTerms` round-trips legacy comma strings.
-- [ ] Review mode: ←/→/Space behave as specified in a headless test; marked images produce a red border + diagonals overlay; Apply sends `action=process_blacklist` with the marked paths.
-- [ ] Auto-save coalesces rapid edits into one write ≥1 s after the last change and preserves unknown plugin blocks (D6).
-- [ ] Service section enablement matrix matches `service_manager.py:230-299` (table test); log pane keeps scroll position unless following the tail.
-- [ ] Window size restores from `window_width/height` and persists after a resize (headless test with `test.NewWindow`).
-- [ ] Tray: close intercept hides the window and sends a notification when a tray is available; quits when not (fake `desktop.App`).
+- [x] Design-system files carry the "Copied from nmsbonker" header; `theme.go`/`fonts.go`/`cursor_*.go`/`views_table.go` diff against nmsbonker only in the header comment and module path. *Verified with `diff` modulo the module path; the copied files keep their original "Copied from angou" header line, as R1.6 asks. `views_table.go` additionally carries the optional thumbnail column (R7.8).*
+- [x] All sections in R7.3 render headlessly; `--section` opens each by name; `gui.Actions()` covers every core operation.
+- [x] Plugin form generation is tested for the four field types, `enum` vs `suggestions`, `group` row packing, and both `widget` kinds; `searchTerms` round-trips legacy comma strings.
+- [x] Review mode: ←/→/Space behave as specified in a headless test; marked images produce a red border + diagonals overlay; Apply sends `action=process_blacklist` with the marked paths.
+- [x] Auto-save coalesces rapid edits into one write ≥1 s after the last change and preserves unknown plugin blocks (D6).
+- [x] Service section enablement matrix matches `service_manager.py:230-299` (table test); log pane keeps scroll position unless following the tail.
+- [x] Window size restores from `window_width/height` and persists after a resize (headless test with `test.NewWindow`).
+- [x] Tray: close intercept hides the window and sends a notification when a tray is available; quits when not (fake `desktop.App`).
 - [ ] Manual: the GUI runs on KDE Plasma 6 (Wayland and X11) with the Breeze Dark palette, correct taskbar icon, tray icon present.
 
 ### Phase 6: Packaging and CI

@@ -12,9 +12,9 @@ not link the GUI at all — and `make test` passes the tag deliberately, so the
 guard runs on every test run rather than when someone remembers to ask for
 it. It needs no display: nothing here constructs a window.
 
-Phase 4 (this file) pins the CLI half: every leaf command maps to exactly one
-core operation, and the exceptions carry reasons. Phase 5 adds gui.Actions()
-and the two-way comparison; until then the GUI side is the table below.
+Two guards: every leaf command maps to exactly one core operation, and the
+CLI's leaves and gui.Actions() are the same set once the documented exceptions
+are taken out.
 
 If this fails, the fix is to implement the missing side, not to edit the
 allow-list.
@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ushineko/clockwork-orange/internal/cli"
+	"github.com/ushineko/clockwork-orange/internal/gui"
 )
 
 /*
@@ -94,6 +95,53 @@ func TestEveryLeafCommandMapsToOneCoreOperation(t *testing.T) {
 	}
 	sort.Strings(missing)
 	require.Emptyf(t, missing, "operations in the table with no command: %v", missing)
+}
+
+/*
+TestTheCLIAndTheGUIExposeTheSameOperations walks the cobra tree and gui.Actions()
+and fails when either holds an operation the other does not.
+
+Leaf commands, not top-level groups: `service` is a heading, `service start` is
+an operation, and comparing at the group level would let a whole subcommand land
+with no GUI surface as long as its siblings had one.
+*/
+func TestTheCLIAndTheGUIExposeTheSameOperations(t *testing.T) {
+	inCLI := map[string]bool{}
+	for _, name := range leaves(cli.Root(), "") {
+		if _, skip := notInTheGUI[name]; skip {
+			continue
+		}
+		inCLI[name] = true
+	}
+	require.NotEmpty(t, inCLI, "the command tree came back empty, so this proves nothing")
+
+	inGUI := map[string]bool{}
+	for _, a := range gui.Actions() {
+		inGUI[a] = true
+	}
+
+	var missingFromGUI, missingFromCLI []string
+	for name := range inCLI {
+		if !inGUI[name] {
+			missingFromGUI = append(missingFromGUI, name)
+		}
+	}
+	for name := range inGUI {
+		if !inCLI[name] {
+			missingFromCLI = append(missingFromCLI, name)
+		}
+	}
+	sort.Strings(missingFromGUI)
+	sort.Strings(missingFromCLI)
+
+	require.Emptyf(t, missingFromGUI,
+		"these commands have no GUI affordance: %v\n"+
+			"Implement them in internal/gui and add them to gui.Actions(), or declare the "+
+			"exception in notInTheGUI with a reason.", missingFromGUI)
+	require.Emptyf(t, missingFromCLI,
+		"the GUI claims operations the CLI does not have: %v\n"+
+			"Either the name is wrong, or a feature landed in the GUI first, which the "+
+			"project rule forbids.", missingFromCLI)
 }
 
 // The root command keeps every v2.9.5 flag (R6.1) and no --run-plugin (DV8).

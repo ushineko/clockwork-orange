@@ -101,3 +101,24 @@ func PluginNames(req Request) ([]string, error) {
 func AvailablePluginNames() []string {
 	return plugins.Names(plugins.Registry(plugins.Deps{}))
 }
+
+// AvailablePlugins describes every plugin compiled into this build without
+// opening any store: name, description and schema, with Enabled and Config
+// left empty. The GUI builds its per-plugin sections from this and fills the
+// enablement from the loaded document.
+func AvailablePlugins() []PluginInfo {
+	reg := plugins.Registry(plugins.Deps{})
+	out := make([]PluginInfo, 0, len(reg))
+	for _, p := range reg {
+		out = append(out, PluginInfo{Name: p.Name(), Description: p.Description(), Schema: p.Schema()})
+	}
+	return out
+}
+
+// PluginResultPath is a plugin's outcome as the front ends render it: the
+// path it produced and its message. It mirrors plugins.Result so the GUI need
+// not import the plugins package for one struct.
+type PluginResultPath struct {
+	Path    string
+	Message string
+}
