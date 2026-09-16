@@ -178,7 +178,9 @@ func (r *reviewModel) current() string {
 	return r.images[r.index]
 }
 
-// infoText is the panel beside the preview: position, file, age, mark.
+// infoText is the line above the preview: position, file, age, mark. One
+// line with separators rather than a panel: the image is the point of the
+// tab and the panel was taking a third of its width.
 func (r *reviewModel) infoText(now time.Time) string {
 	if r.err != "" {
 		return r.err
@@ -191,11 +193,11 @@ func (r *reviewModel) infoText(now time.Time) string {
 	if fi, err := os.Stat(path); err == nil {
 		when = fmt.Sprintf("%s (%s)", relativeTime(fi.ModTime(), now), fi.ModTime().Format("2006-01-02 15:04"))
 	}
-	text := fmt.Sprintf("Image %d of %d\nFile: %s\nDate: %s", r.index+1, len(r.images), filepath.Base(path), when)
+	text := fmt.Sprintf("Image %d of %d  ·  %s  ·  %s", r.index+1, len(r.images), filepath.Base(path), when)
 	if r.marked[r.index] {
-		text += "\n[MARKED FOR DELETION]"
+		text += "  ·  [MARKED FOR DELETION]"
 	}
-	return text + "\n\n←/→: navigate · Space: mark/unmark"
+	return text
 }
 
 // relativeTime is get_relative_time from plugins_tab.py.
@@ -300,25 +302,31 @@ func abs(n int) int {
 
 // --- widgets -------------------------------------------------------------------
 
-// previewHeight is the preview pane's fixed height. It has a tab to itself,
-// so it can be tall.
-const previewHeight = 640
+// previewMinHeight keeps the preview from collapsing when the window is
+// short; otherwise it takes whatever height the section has.
+const previewMinHeight = 320
 
-// widget builds the review pane: the preview and the info panel side by side.
+// widget builds the review pane: the info line over the preview, which fills
+// the rest of the tab.
 func (r *reviewModel) widget(u *ui) fyne.CanvasObject {
 	r.preview = canvas.NewImageFromResource(nil)
 	r.preview.FillMode = canvas.ImageFillContain
+	r.preview.SetMinSize(fyne.NewSize(0, previewMinHeight))
 	r.info = widget.NewLabel("")
-	r.info.Wrapping = fyne.TextWrapWord
+	r.info.Truncation = fyne.TextTruncateEllipsis
 	r.draw(u)
 	r.watch(u)
-	body := container.NewBorder(nil, nil, nil, fixedWidth(r.info, 260), r.preview)
-	return card("Review", fixedHeight(body, previewHeight))
+	return container.NewBorder(r.info, nil, nil, nil, r.preview)
 }
 
 // draw shows the current image (decoded off the UI thread) and the panel.
 func (r *reviewModel) draw(u *ui) {
 	if r.info != nil {
+		if r.marked[r.index] {
+			r.info.Importance = widget.DangerImportance
+		} else {
+			r.info.Importance = widget.MediumImportance
+		}
 		r.info.SetText(r.infoText(time.Now()))
 	}
 	if r.applyBtn != nil {

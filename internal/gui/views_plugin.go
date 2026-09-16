@@ -484,11 +484,11 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 		card("Configuration", form.body),
 		card("Actions", container.NewHBox(download, reset)),
 	)
-	reviewTab := container.NewBorder(
-		container.NewHBox(apply, rescan, dim(fmt.Sprintf("%d image(s) in %s", len(rv.images), rv.dir))),
-		nil, nil, nil,
-		rv.widget(u),
-	)
+	hint := dim("←/→ navigate  ·  Space mark/unmark")
+	toolbar := container.NewBorder(nil, nil,
+		container.NewHBox(apply, rescan), hint,
+		dim(fmt.Sprintf("  %d image(s) in %s", len(rv.images), rv.dir)))
+	reviewTab := container.NewBorder(toolbar, nil, nil, nil, rv.widget(u))
 	tabs := container.NewAppTabs(
 		container.NewTabItemWithIcon("Configuration", theme.SettingsIcon(), configTab),
 		container.NewTabItemWithIcon("Review", theme.FileImageIcon(), reviewTab),
@@ -501,10 +501,10 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 		}
 	}
 
-	return container.NewVBox(
-		heading(pluginTitle(name), info.Description),
-		tabs,
-	)
+	// Border, not VBox: the content pane is a Scroll, which sizes its content
+	// to at least the viewport, so the tabs (and the preview inside them)
+	// take the section's full height instead of their minimum.
+	return container.NewBorder(heading(pluginTitle(name), info.Description), nil, nil, nil, tabs)
 }
 
 // pluginDir is the directory a plugin's review scans: `path` for local,
