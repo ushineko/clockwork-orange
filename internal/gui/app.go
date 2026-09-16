@@ -132,8 +132,12 @@ type ui struct {
 	running bool
 	// hiddenToTray says the window is hidden rather than closed.
 	hiddenToTray bool
-	// release frees the single-instance lock on quit.
-	release func()
+	// release frees the single-instance lock on quit; stopListen closes the
+	// second-launch socket.
+	release    func()
+	stopListen func()
+	// showHook replaces showWindow for the second-launch listener in tests.
+	showHook func()
 	// tick drives the 5 s status polls while the window is open.
 	tickStop func()
 	// lastSize is the window size last persisted, so the poll writes only on
@@ -364,13 +368,14 @@ const (
 /*
 Run opens the window and blocks until it is closed.
 
-A second instance exits at once, silently (R7.11): the tray icon of the first
-is the way back to it, and a second window would start a second wallpaper
-timer.
+A second instance asks the first to show its window and exits (R7.11, R7.19):
+a second window would start a second wallpaper timer, and a launch that does
+nothing because the first window is hidden in the tray is a dead end.
 */
 func Run(o Options) {
 	release, ok := core.TryGUILock()
 	if !ok {
+		requestShow()
 		return
 	}
 	// Before the toolkit starts: GLFW reads the cursor theme from the
@@ -442,6 +447,7 @@ func Run(o Options) {
 	u.lastSize = windowSize(u.doc, u.docExists)
 	u.nav.Select(sectionIndex(secs, o.Section))
 	u.setupTray()
+	u.stopListen = u.listenShow()
 	u.win.SetCloseIntercept(u.onClose)
 	u.loadService()
 	u.startPolling()

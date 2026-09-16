@@ -560,6 +560,13 @@ Design system (copy from nmsbonker unless noted):
   Reset & Run) and Review (preview, Apply Blacklist, Rescan); the selected
   tab persists across rebuilds and the review keys act only while its tab is
   showing. In one column the review sat below the fold.
+- R7.19 A second launch shows the running instance's window instead of
+  exiting silently (a refinement of R7.11's "second instance exits 0"): the
+  first instance listens on a Unix socket next to the lock
+  (`clockwork_orange_gui_show.sock` in `$XDG_RUNTIME_DIR`), the second
+  connects and exits 0. Without it, closing to the tray made every later
+  click on the menu or a taskbar pin do nothing. Windows keeps the silent
+  exit until Phase 6 exercises that build.
 - R7.14 Headless tests with `test.NewApp()` and the `testUI(t)` helper for:
   schema→form generation for all four field types, searchTerms round-trip
   incl. legacy string, review-mode keyboard marking, auto-save coalescing,

@@ -206,6 +206,10 @@ func (u *ui) shutdown() {
 		u.review.detach()
 	}
 	u.flushSave()
+	if u.stopListen != nil {
+		u.stopListen()
+		u.stopListen = nil
+	}
 	if u.release != nil {
 		u.release()
 		u.release = nil
