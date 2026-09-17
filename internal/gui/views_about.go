@@ -44,10 +44,14 @@ func (u *ui) buildAbout() fyne.CanvasObject {
 	head := container.NewBorder(nil, nil, container.NewPadded(logo), nil,
 		container.NewVBox(name, motto, ver, aboutLink()))
 
-	readme := widget.NewRichTextFromMarkdown(string(assets.README()))
-	readme.Wrapping = fyne.TextWrapWord
+	// The README is longer than the window, so it goes in a markdown pane
+	// rather than one RichText: the pane renders the blocks near the viewport
+	// and leaves the rest out of the widget tree, which is what makes the
+	// section scroll smoothly (spec 011).
+	u.readme = newMarkdownPane(string(assets.README()))
+	u.readme.follow(u.content)
 
-	return container.NewVBox(head, widget.NewSeparator(), readme)
+	return container.NewVBox(head, widget.NewSeparator(), u.readme)
 }
 
 // aboutLink points at the repository.

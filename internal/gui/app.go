@@ -121,6 +121,9 @@ type ui struct {
 	// review is the plugin section's image review, kept across rebuilds of
 	// the section on screen.
 	review *reviewModel
+	// readme is the About section's document pane while that section is on
+	// screen. It watches the content scroll, so detach forgets it.
+	readme *markdownPane
 	// blState is the Blacklist section's filter and selection.
 	blState blacklistState
 	// pluginTab is the plugin sections' selected tab (0 configuration, 1
@@ -552,6 +555,10 @@ func (u *ui) detach() {
 	u.activity.detach()
 	if u.review != nil {
 		u.review.detach()
+	}
+	if u.readme != nil {
+		u.readme.detach()
+		u.readme = nil
 	}
 }
 
