@@ -38,7 +38,7 @@ func (u *ui) buildAbout() fyne.CanvasObject {
 	name := widget.NewLabelWithStyle("Clockwork Orange", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	motto := widget.NewLabel("“" + tagline + "”")
 	motto.Importance = widget.LowImportance
-	ver := widget.NewLabel(u.version + "  •  © 2025 github.com/ushineko")
+	ver := widget.NewLabel(u.version + "  •  © 2025-2026 github.com/ushineko")
 	ver.Importance = widget.LowImportance
 
 	head := container.NewBorder(nil, nil, container.NewPadded(logo), nil,
