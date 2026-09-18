@@ -515,7 +515,7 @@ Design system (copy from nmsbonker unless noted):
   plugin form) followed by flash "Saved" and a re-arm of the wallpaper
   timer.
 - R7.10 About section: 72 px logo, "Clockwork Orange", tagline "My choice
-  is your imperative", version (R7.12), "© 2025 github.com/ushineko",
+  is your imperative", version (R7.12), "© 2025-2026 github.com/ushineko",
   `aboutLink` to the repo, and README rendered with
   `widget.RichTextFromMarkdown` from an embedded copy (no anchor injection;
   DV5).

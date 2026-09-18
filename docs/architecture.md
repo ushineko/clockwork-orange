@@ -216,8 +216,49 @@ popup up and hops back with `fyne.Do`. Edits write into `ui.doc` and
 change. `wallpaperTimer` runs `core.Cycle` on `default_wait` and idles while
 `core.DaemonRunning()` (DV10). `reviewModel` is the plugin section's image
 review (scan, ←/→/Space, red overlay, fsnotify rescans, `process_blacklist`
-on Apply). `logPane` is the fixed-height follow-the-tail list shared by the
-Service/Activity sections and the plugin run dialog.
+on Apply).
+
+#### Design language
+
+Sections are assembled from a fixed vocabulary rather than from raw Fyne
+widgets, so that every section states the same kind of thing the same way.
+Reach for the component before writing a new arrangement of labels; a shape
+that appears in a second section belongs here.
+
+| Component | Where | Use it for |
+|-----------|-------|------------|
+| `heading(title, blurb)` | `app.go` | The sentence at the top of a section saying what it is |
+| `card(title, body…)` | `app.go` | A titled block of facts with a rule under the title |
+| `note(text, Status)` | `app.go` | A marked, wrapped caveat inside a section |
+| `wrapped(text)` | `app.go` | A paragraph that must reflow rather than run off the edge |
+| `statusText` / `marker` | `app.go` | Ranking a value or a row from the active scheme's roles, never a hard-coded colour |
+| `detailTable` | `views_table.go` | Anything the CLI would print as a fixed-width table, with an optional thumbnail column |
+| `logPane` | `logpane.go` | A stream of lines arriving while the window is open: fixed height, follows the tail unless the reader scrolled up |
+| `markdownPane` | `markdownpane.go` | A Markdown document that can outgrow the window |
+| `codePanel` | `markdownpane.go` | A block of commands or code inside such a document |
+
+Two rules bind the vocabulary. Colour comes from the scheme through `Status`,
+so every component stays legible in all five schemes. And nothing transient
+reflows the interface: results and progress float over the content as popups,
+`logPane` is a fixed height, and `markdownPane` reserves each block's measured
+height whether or not that block is currently rendered.
+
+`markdownPane` exists because the About README scrolled in fits and bursts
+(spec 011). Two causes: Fyne's RichText lays out and repaints every segment it
+holds on each refresh, and Fyne draws a Markdown code block inside a
+horizontal scroll, which takes the wheel from the section and spends it
+sideways. The pane splits the document on blank lines, measures each block
+once per width, keeps only the blocks within half a viewport of the screen in
+the widget tree, and draws code with `codePanel`, which wraps rather than
+scrolls. It is not scrollable itself: a section puts it inside its own scroll
+and hands that scroll to `follow`, and `ui.detach` releases it when the
+section is replaced.
+
+That is the rule the vocabulary adds here: one scroll per section. A widget
+that scrolls inside a scrolling section stops the page wherever the pointer
+happens to rest, so a component either fills the space it is given
+(`markdownPane`, `codePanel`) or is a fixed height with its own scrollbar the
+reader can aim at (`logPane`, the Service section's details pane).
 
 ## Testing conventions
 

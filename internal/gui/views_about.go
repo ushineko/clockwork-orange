@@ -38,16 +38,20 @@ func (u *ui) buildAbout() fyne.CanvasObject {
 	name := widget.NewLabelWithStyle("Clockwork Orange", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	motto := widget.NewLabel("“" + tagline + "”")
 	motto.Importance = widget.LowImportance
-	ver := widget.NewLabel(u.version + "  •  © 2025 github.com/ushineko")
+	ver := widget.NewLabel(u.version + "  •  © 2025-2026 github.com/ushineko")
 	ver.Importance = widget.LowImportance
 
 	head := container.NewBorder(nil, nil, container.NewPadded(logo), nil,
 		container.NewVBox(name, motto, ver, aboutLink()))
 
-	readme := widget.NewRichTextFromMarkdown(string(assets.README()))
-	readme.Wrapping = fyne.TextWrapWord
+	// The README is longer than the window, so it goes in a markdown pane
+	// rather than one RichText: the pane renders the blocks near the viewport
+	// and leaves the rest out of the widget tree, which is what makes the
+	// section scroll smoothly (spec 011).
+	u.readme = newMarkdownPane(string(assets.README()))
+	u.readme.follow(u.content)
 
-	return container.NewVBox(head, widget.NewSeparator(), readme)
+	return container.NewVBox(head, widget.NewSeparator(), u.readme)
 }
 
 // aboutLink points at the repository.
