@@ -204,61 +204,65 @@ prints `[LEVEL] msg`; plugin progress renders as the `::PROGRESS::` and
 
 ### `internal/gui`
 
-Fyne front end over `core`, design system copied from nmsbonker (`theme.go`,
-`fonts.go`, `cursor_*.go`, `views_table.go`, `views_appearance.go`,
-`dialogs.go`). `Run(Options)` opens the window; `SectionNames()`,
-`SchemeNames()` and `Actions()` are computable before an app exists.
+Fyne front end over `core`, built on the design system in
+`github.com/ushineko/fynedesygn` (spec 012). The window skeleton is
+`shell.Shell`: navigation, header, one content scroller, status bar, busy
+indicator, banners and the runner (`Perform`, `Busy`, `Report`, `OK`,
+`Invalidate`). This package supplies what is this program's: the sections
+(`shell.Section`s built from the `buildX` methods), the status bar's
+segments, the wallpaper timer, the tray, the second-launch handshake and the
+auto-save. `Run(Options)` loads the document, builds the shell and shows the
+window; `SectionNames()`, `SchemeNames()` and `Actions()` are computable
+before an app exists.
 Sections: Service (Linux) or Activity, one per registered plugin, History,
 Blacklist, Settings, Appearance, About. State lives on `*ui`, written only on
-the UI thread; every core call runs through `perform`/a loader with the busy
-popup up and hops back with `fyne.Do`. Edits write into `ui.doc` and
+the UI thread; every core call runs through `shell.Perform` or a loader with
+the busy popup up and hops back with `fyne.Do`. Edits write into `ui.doc` and
 `scheduleSave` coalesces them into one `core.SaveConfig` 1 s after the last
 change. `wallpaperTimer` runs `core.Cycle` on `default_wait` and idles while
 `core.DaemonRunning()` (DV10). `reviewModel` is the plugin section's image
 review (scan, ←/→/Space, red overlay, fsnotify rescans, `process_blacklist`
 on Apply).
 
+The appearance (scheme, interface font, text size, scale) is the shell's,
+persisted under the library's `appearance.*` preference keys. The console
+font and size stay in `clockwork-orange.yml` (`console_font_family`,
+`console_font_size`), where the Python GUI kept them: `ui.theme()` builds the
+library theme with `Options.Mono` from the document and applies it over the
+shell's, and `paneOptions` hands the size to every log pane.
+
 #### Design language
 
-Sections are assembled from a fixed vocabulary rather than from raw Fyne
-widgets, so that every section states the same kind of thing the same way.
-Reach for the component before writing a new arrangement of labels; a shape
-that appears in a second section belongs here.
+The rules are the library's, written down in fynedesygn's
+`docs/design-system.md`; this section says which packages the sections reach
+for. Sections are assembled from that vocabulary rather than from raw Fyne
+widgets, so that every section states the same kind of thing the same way. A
+shape that appears in a second section belongs in the library, not here.
 
-| Component | Where | Use it for |
-|-----------|-------|------------|
-| `heading(title, blurb)` | `app.go` | The sentence at the top of a section saying what it is |
-| `card(title, body…)` | `app.go` | A titled block of facts with a rule under the title |
-| `note(text, Status)` | `app.go` | A marked, wrapped caveat inside a section |
-| `wrapped(text)` | `app.go` | A paragraph that must reflow rather than run off the edge |
-| `statusText` / `marker` | `app.go` | Ranking a value or a row from the active scheme's roles, never a hard-coded colour |
-| `detailTable` | `views_table.go` | Anything the CLI would print as a fixed-width table, with an optional thumbnail column |
-| `logPane` | `logpane.go` | A stream of lines arriving while the window is open: fixed height, follows the tail unless the reader scrolled up |
-| `markdownPane` | `markdownpane.go` | A Markdown document that can outgrow the window |
-| `codePanel` | `markdownpane.go` | A block of commands or code inside such a document |
+| Component | Package | Use it for |
+|-----------|---------|------------|
+| `widgets.Heading(title, blurb)` | `fynedesygn/widgets` | The sentence at the top of a section saying what it is |
+| `widgets.Card(title, body…)` | `fynedesygn/widgets` | A titled block of facts with a rule under the title |
+| `widgets.Note(text, Status)` | `fynedesygn/widgets` | A wrapped caveat under a row inside a section |
+| `widgets.Wrapped(text)` | `fynedesygn/widgets` | A paragraph that must reflow rather than run off the edge |
+| `widgets.StatusText` / `widgets.Marker` | `fynedesygn/widgets` | Ranking a value or a row from the active scheme's roles, never a hard-coded colour |
+| `widgets.FixedHeight` / `widgets.FixedWidth` | `fynedesygn/widgets` | Keeping a list, table or field a fixed size so the section holds its shape |
+| `table.Detail` | `fynedesygn/table` | Anything the CLI would print as a fixed-width table, with an optional thumbnail column (`SetThumbnails`) |
+| `logpane.Pane` | `fynedesygn/logpane` | A stream of lines arriving while the window is open: fixed height, follows the tail unless the reader scrolled up |
+| `markdown.Pane` | `fynedesygn/markdown` | A Markdown document that can outgrow the window; code blocks render in its `CodePanel` |
+| `dialogs.ConfirmDestructive`, `WithBrowse`, `OpenPath` | `fynedesygn/dialogs` | The destructive confirmation whose detail says what is not touched, path fields with a chooser, handing a path to the desktop |
+| `fynedesygn.Status` | `fynedesygn` | The one presentation type: `model.go` maps the domain's levels and states onto it |
 
-Two rules bind the vocabulary. Colour comes from the scheme through `Status`,
-so every component stays legible in all five schemes. And nothing transient
-reflows the interface: results and progress float over the content as popups,
-`logPane` is a fixed height, and `markdownPane` reserves each block's measured
-height whether or not that block is currently rendered.
-
-`markdownPane` exists because the About README scrolled in fits and bursts
-(spec 011). Two causes: Fyne's RichText lays out and repaints every segment it
-holds on each refresh, and Fyne draws a Markdown code block inside a
-horizontal scroll, which takes the wheel from the section and spends it
-sideways. The pane splits the document on blank lines, measures each block
-once per width, keeps only the blocks within half a viewport of the screen in
-the widget tree, and draws code with `codePanel`, which wraps rather than
-scrolls. It is not scrollable itself: a section puts it inside its own scroll
-and hands that scroll to `follow`, and `ui.detach` releases it when the
-section is replaced.
-
-That is the rule the vocabulary adds here: one scroll per section. A widget
-that scrolls inside a scrolling section stops the page wherever the pointer
-happens to rest, so a component either fills the space it is given
-(`markdownPane`, `codePanel`) or is a fixed height with its own scrollbar the
-reader can aim at (`logPane`, the Service section's details pane).
+Two rules bind the vocabulary. Colour comes from the scheme through
+`fynedesygn.Status`, so every component stays legible in all nine schemes. And
+nothing transient reflows the interface: results and progress float over the
+content as popups, the log pane is a fixed height, and the document pane
+reserves each block's measured height whether or not that block is currently
+rendered. One scroll per section: the shell owns the content scroller, the
+About README follows it through `markdown.Pane.Follow`, and the section's
+`OnDetach` releases it when the section is replaced. The reasons behind each
+rule, and the Fyne quirks they work around, are in the library's
+`docs/design-system.md` and `docs/fyne-quirks.md`.
 
 ## Testing conventions
 

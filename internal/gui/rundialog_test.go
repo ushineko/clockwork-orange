@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/ushineko/fynedesygn/logpane"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/plugins"
@@ -30,15 +31,15 @@ func TestRunDialogStreamsProgressAndOverridesTheQueryWithCheckedTerms(t *testing
 	u.openRunDialog("wallhaven", "Download now", form, false)
 	// Headless: openRunDialog built nothing to show and started nothing; a
 	// dialog is driven through startRun directly.
-	d := &runDialog{name: "wallhaven", override: map[string]any{"force": true}, pane: newLogPane(), termsKey: "query"}
+	d := &runDialog{name: "wallhaven", override: map[string]any{"force": true}, pane: logpane.New(nil), termsKey: "query"}
 	d.terms = nil
 	require.NotPanics(t, func() { u.startRunHeadless(d) })
 	got := rec.last()
 	require.NotNil(t, got)
 	require.Equal(t, true, got["force"])
 	require.False(t, u.running, "the run released the one-at-a-time gate")
-	require.Greater(t, d.pane.log.len(), 1)
-	require.Contains(t, d.pane.log.text(), "running wallhaven")
-	require.Contains(t, d.pane.log.text(), "Done.")
+	require.Greater(t, d.pane.Model().Len(), 1)
+	require.Contains(t, d.pane.Model().Text(), "running wallhaven")
+	require.Contains(t, d.pane.Model().Text(), "Done.")
 	require.InDelta(t, 1.0, d.progress.Value, 0.001)
 }

@@ -1,8 +1,6 @@
 /*
 Package assets holds the files the desktop front end embeds.
 
-Copied from nmsbonker (same author) — keep in sync by hand; the files differ.
-
 The icon is a copy of packaging/icons/clockwork-orange-256x256.png. It is
 duplicated rather than referenced because go:embed cannot reach outside the
 package directory, and the packaging copy has to stay on disk for the desktop

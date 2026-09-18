@@ -9,6 +9,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	fdtheme "github.com/ushineko/fynedesygn/theme"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 )
@@ -62,7 +65,7 @@ func (u *ui) newSettingsForm() *settingsForm {
 			setting = false
 		}
 		u.scheduleSave()
-		u.redrawStatus()
+		u.sh.RedrawStatus()
 	})
 	f.desktop = widget.NewCheck("Desktop wallpaper only", func(b bool) {
 		if setting {
@@ -77,7 +80,7 @@ func (u *ui) newSettingsForm() *settingsForm {
 			setting = false
 		}
 		u.scheduleSave()
-		u.redrawStatus()
+		u.sh.RedrawStatus()
 	})
 	f.lockscreen = widget.NewCheck("Lock screen wallpaper only", func(b bool) {
 		if setting {
@@ -92,10 +95,10 @@ func (u *ui) newSettingsForm() *settingsForm {
 			setting = false
 		}
 		u.scheduleSave()
-		u.redrawStatus()
+		u.sh.RedrawStatus()
 	})
 
-	f.wait = numericEntry(1, 86400, func(n int) { u.doc.DefaultWait = n; u.scheduleSave(); u.redrawStatus() })
+	f.wait = numericEntry(1, 86400, func(n int) { u.doc.DefaultWait = n; u.scheduleSave(); u.sh.RedrawStatus() })
 	f.extensions = widget.NewEntry()
 	f.extensions.SetPlaceHolder("Comma-separated extensions")
 	f.extensions.OnChanged = func(s string) {
@@ -137,7 +140,7 @@ func (u *ui) newSettingsForm() *settingsForm {
 
 	basic := widget.NewForm(
 		widget.NewFormItem("Wallpaper mode", container.NewVBox(f.dual, f.desktop, f.lockscreen)),
-		widget.NewFormItem("Wait interval (s)", fixedWidth(f.wait, 120)),
+		widget.NewFormItem("Wait interval (s)", widgets.FixedWidth(f.wait, 120)),
 	)
 	advanced := widget.NewForm(
 		widget.NewFormItem("Image extensions", f.extensions),
@@ -145,12 +148,12 @@ func (u *ui) newSettingsForm() *settingsForm {
 	)
 	if f.autostart != nil {
 		advanced.Append("Auto-start", f.autostart)
-		advanced.Append("Restart delay (s)", fixedWidth(f.restartDelay, 120))
-		advanced.Append("Logs refresh interval (s)", fixedWidth(f.logsRefresh, 120))
+		advanced.Append("Restart delay (s)", widgets.FixedWidth(f.restartDelay, 120))
+		advanced.Append("Logs refresh interval (s)", widgets.FixedWidth(f.logsRefresh, 120))
 		advanced.Append("Auto-update logs", f.autoUpdateLogs)
 	}
-	f.body = container.NewVBox(card("Basic", basic), card("Advanced", advanced),
-		note("How the window looks, including the console font of the log panes, is in Appearance.", StatusInfo))
+	f.body = container.NewVBox(widgets.Card("Basic", basic), widgets.Card("Advanced", advanced),
+		widgets.Note("How the window looks, including the console font of the log panes, is in Appearance.", fd.StatusInfo))
 	return f
 }
 
@@ -196,7 +199,7 @@ func numericEntry(lo, hi int, onChange func(int)) *widget.Entry {
 // families the Appearance section found, with the Python default present
 // whether or not a family of that name is installed.
 func consoleFontNames() []string {
-	names := fontNames()
+	names := fdtheme.FontNames()
 	for _, n := range names {
 		if n == consoleFontDefault {
 			return names
@@ -225,14 +228,14 @@ func (u *ui) buildSettings() fyne.CanvasObject {
 
 	validate := widget.NewButtonWithIcon("Validate", theme.ConfirmIcon(), func() {
 		if _, err := config.Parse(yaml); err != nil {
-			u.flash("Invalid YAML syntax: "+err.Error(), StatusBad)
+			u.sh.Flash("Invalid YAML syntax: "+err.Error(), fd.StatusBad)
 			return
 		}
-		u.flash("YAML syntax is valid.", StatusGood)
+		u.sh.Flash("YAML syntax is valid.", fd.StatusGood)
 	})
 	copyBtn := widget.NewButtonWithIcon("Copy", theme.ContentCopyIcon(), func() {
-		u.app.Clipboard().SetContent(text)
-		u.flash("Copied the configuration to the clipboard.", StatusGood)
+		u.sh.App.Clipboard().SetContent(text)
+		u.sh.Flash("Copied the configuration to the clipboard.", fd.StatusGood)
 	})
 
 	where := u.docPath
@@ -240,13 +243,13 @@ func (u *ui) buildSettings() fyne.CanvasObject {
 		where += " (not written yet; the first change creates it)"
 	}
 	return container.NewVBox(
-		heading("Settings", "Changes are saved a second after you make them, to "+where+
+		widgets.Heading("Settings", "Changes are saved a second after you make them, to "+where+
 			". The service and the command line read the same file."),
 		f.body,
-		card("Raw YAML",
+		widgets.Card("Raw YAML",
 			container.NewHBox(validate, copyBtn),
-			fixedHeight(raw, 320),
-			note("Read-only: this is the document as it will be written. Edit it above, or in a text "+
-				"editor while the window is closed.", StatusInfo)),
+			widgets.FixedHeight(raw, 320),
+			widgets.Note("Read-only: this is the document as it will be written. Edit it above, or in a text "+
+				"editor while the window is closed.", fd.StatusInfo)),
 	)
 }

@@ -155,9 +155,8 @@ func TestReviewKeysAreIgnoredOnTheConfigurationTab(t *testing.T) {
 	doc.Plugins["local"] = map[string]any{"enabled": true, "path": dir}
 	writeDoc(t, doc)
 	u.loadConfigNow()
-	u.content = nil
 	_ = u.buildPlugin("local")
-	u.current = 1 // the Local section
+	u.sh.Select("Local")
 	u.pluginTab = 0
 	u.onTypedKey(&fyne.KeyEvent{Name: fyne.KeyRight})
 	require.Equal(t, 0, u.review.index)

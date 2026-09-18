@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -9,6 +10,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/clockwork-orange/internal/core"
 	"github.com/ushineko/clockwork-orange/internal/plugins"
@@ -143,7 +147,7 @@ func (u *ui) fieldWidget(f *pluginForm, field plugins.Field, block map[string]an
 			}
 		}
 		f.fields[field.Key] = intField{e}
-		return fixedWidth(e, 120)
+		return widgets.FixedWidth(e, 120)
 	case plugins.TypeStringList:
 		st := newSearchTerms(field.Suggestions, func(v []map[string]any) { f.changed(field.Key, v) })
 		st.set(current)
@@ -175,13 +179,40 @@ func (u *ui) fieldWidget(f *pluginForm, field plugins.Field, block map[string]an
 	f.fields[field.Key] = entryField{e}
 	switch field.Widget {
 	case plugins.WidgetFilePath:
-		return u.withBrowse(e, false)
+		return dialogs.WithBrowse(u.sh.Window, e, false)
 	case plugins.WidgetDirectoryPath:
 		open := widget.NewButtonWithIcon("Open", theme.FolderIcon(), func() { u.openPath(e.Text) })
-		return container.NewBorder(nil, nil, nil, container.NewHBox(u.browseButton(e, true), open), e)
+		return container.NewBorder(nil, nil, nil, container.NewHBox(dialogs.BrowseButton(u.sh.Window, e, true), open), e)
 	case plugins.WidgetNone:
 	}
 	return e
+}
+
+/*
+openPath hands a file or directory to the desktop.
+
+This is the one place the window starts a process of its own, and the
+desktop's opener decides what shows a directory of wallpapers, because the
+desktop already knows and this program has no business having an opinion
+(plugins_tab.py open_file_manager). A machine without an opener, a bare window
+manager or a container, gets a warning banner naming the path, which is still
+enough to open it by hand.
+*/
+func (u *ui) openPath(path string) {
+	if path == "" {
+		u.sh.Flash("There is nothing to open yet.", fd.StatusWarn)
+		return
+	}
+	go func() {
+		done := u.sh.Busy("Opening " + filepath.Base(path) + "…")
+		defer done()
+		if err := dialogs.OpenPath(path); err != nil {
+			fyne.Do(func() {
+				u.sh.Flash(fmt.Sprintf("Could not ask the desktop to open %s: %v. "+
+					"Open it by hand; nothing else was affected.", path, err), fd.StatusWarn)
+			})
+		}
+	}()
 }
 
 // changed records one field's new value and reports the block.
@@ -435,12 +466,12 @@ its directory (R7.5, R7.6).
 func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 	info, ok := u.pluginInfo(name)
 	if !ok {
-		return heading(pluginTitle(name), "This build has no plugin of that name.")
+		return widgets.Heading(pluginTitle(name), "This build has no plugin of that name.")
 	}
 	form := u.newPluginForm(info, u.doc.Plugins[name], func(block map[string]any) {
 		u.doc.SetPlugin(name, block)
 		u.scheduleSave()
-		u.redrawStatus()
+		u.sh.RedrawStatus()
 	})
 
 	runnable := name != "local"
@@ -449,7 +480,7 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 	})
 	download.Importance = widget.HighImportance
 	reset := widget.NewButtonWithIcon("Reset & run", theme.ViewRefreshIcon(), func() {
-		u.confirmDestructive("Delete all downloaded files and run fresh?",
+		dialogs.ConfirmDestructive(u.sh.Window, "Delete all downloaded files and run fresh?",
 			"Every file in "+pluginDir(info, form.values())+" is deleted, then the plugin downloads "+
 				"again. The history and the blacklist are not touched, so images already seen are "+
 				"not fetched a second time.", "Delete and run", func() {
@@ -460,14 +491,14 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 		download.Disable()
 		reset.Disable()
 	}
-	u.gate(download, reset)
+	u.sh.Gate(download, reset)
 
 	rv := u.reviewFor(name, info, form.values())
 	apply := widget.NewButtonWithIcon(fmt.Sprintf("Apply blacklist (%d)", rv.markedCount()), theme.DeleteIcon(), func() {
 		u.applyBlacklist(name, rv)
 	})
 	apply.Importance = widget.DangerImportance
-	if rv.markedCount() == 0 || u.working() {
+	if rv.markedCount() == 0 || u.sh.Working() {
 		apply.Disable()
 	}
 	rv.applyBtn = apply
@@ -481,15 +512,15 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 	// few settings, and the keys it listens for went to a pane nobody could
 	// see. The selected tab survives the rebuilds every operation causes.
 	configTab := container.NewVBox(
-		card("Configuration", form.body),
-		card("Actions", container.NewHBox(download, reset)),
+		widgets.Card("Configuration", form.body),
+		widgets.Card("Actions", container.NewHBox(download, reset)),
 	)
 	// Plain words, no arrow glyphs: the arrows come from a fallback font and
 	// Fyne's shaper drew the run boundary after them as a missing glyph.
-	hint := dim("Arrow keys: previous/next  ·  Space: mark/unmark")
+	hint := widgets.Dim("Arrow keys: previous/next  ·  Space: mark/unmark")
 	toolbar := container.NewBorder(nil, nil,
 		container.NewHBox(apply, rescan), hint,
-		dim(fmt.Sprintf("  %d image(s) in %s", len(rv.images), rv.dir)))
+		widgets.Dim(fmt.Sprintf("  %d image(s) in %s", len(rv.images), rv.dir)))
 	reviewTab := container.NewBorder(toolbar, nil, nil, nil, rv.widget(u))
 	// Only the selected tab carries its real content; the other holds an
 	// empty box. AppTabs sizes itself to its tallest item, so with both
@@ -513,13 +544,13 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 			return
 		}
 		u.pluginTab = tabs.SelectedIndex()
-		u.refresh()
+		u.sh.Refresh()
 	}
 
 	// Border, not VBox: the content pane is a Scroll, which sizes its content
 	// to at least the viewport, so the tabs (and the preview inside them)
 	// take the section's full height instead of their minimum.
-	return container.NewBorder(heading(pluginTitle(name), info.Description), nil, nil, nil, tabs)
+	return container.NewBorder(widgets.Heading(pluginTitle(name), info.Description), nil, nil, nil, tabs)
 }
 
 // pluginDir is the directory a plugin's review scans: `path` for local,

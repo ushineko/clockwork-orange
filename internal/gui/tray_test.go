@@ -25,17 +25,17 @@ func (a *trayApp) SetSystemTrayWindow(fyne.Window)      {}
 // the user cannot see and cannot stop (R7.11).
 func TestCloseInterceptHidesToTrayOrQuits(t *testing.T) {
 	u, _, _ := testUI(t)
-	require.False(t, hasTray(u.app), "the test driver has no tray")
+	require.False(t, hasTray(u.sh.App), "the test driver has no tray")
 	quit := false
-	u.app = &quitRecorder{App: u.app, onQuit: func() { quit = true }}
+	u.sh.App = &quitRecorder{App: u.sh.App, onQuit: func() { quit = true }}
 	u.onClose()
 	require.True(t, quit, "no tray: close quits")
 	require.False(t, u.hiddenToTray)
 
 	u2, _, _ := testUI(t)
 	tray := &trayApp{App: test.NewApp()}
-	u2.app = tray
-	require.True(t, hasTray(u2.app))
+	u2.sh.App = tray
+	require.True(t, hasTray(u2.sh.App))
 	u2.setupTray()
 	require.NotNil(t, tray.menu)
 	require.NotNil(t, tray.icon)

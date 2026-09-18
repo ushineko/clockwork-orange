@@ -1,5 +1,3 @@
-// Copied from nmsbonker (same author) — keep in sync by hand.
-
 package gui
 
 import (

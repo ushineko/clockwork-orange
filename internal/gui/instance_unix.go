@@ -46,7 +46,7 @@ func (u *ui) listenShow() func() {
 	var lc net.ListenConfig
 	l, err := lc.Listen(context.Background(), "unix", path)
 	if err != nil {
-		u.activity.events().Warnf("Second-launch listener unavailable: %v", err)
+		paneEvents(u.activity).Warnf("Second-launch listener unavailable: %v", err)
 		return func() {}
 	}
 	go func() {

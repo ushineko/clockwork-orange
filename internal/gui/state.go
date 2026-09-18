@@ -1,15 +1,11 @@
-// Copied from nmsbonker (same author) — keep in sync by hand. request, report,
-// ok, invalidate, onScreen and perform are nmsbonker's; the loaders and the
-// auto-save are this project's.
-
 package gui
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"fyne.io/fyne/v2"
+	fd "github.com/ushineko/fynedesygn"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/core"
@@ -21,9 +17,9 @@ Talking to the core from a window.
 
 internal/core is synchronous: an operation takes a request struct, does the work
 on the calling goroutine, and returns a result. A plugin run is a minute of
-that. So every call in this file runs on a goroutine of its own and hops back to
-the UI thread with fyne.Do, and nothing here may be called from a widget handler
-without the `go`.
+that. So every call runs on a goroutine of its own, through the shell's
+Perform or one of the loaders below, and hops back to the UI thread with
+fyne.Do; nothing here may be called from a widget handler without the `go`.
 
 The busy indicator has to be started before the goroutine can fail, or a
 failure leaves the popup up for the life of the window -- hence the deferred
@@ -48,92 +44,6 @@ func (u *ui) requestWithEvents(ev events.Events) core.Request {
 	return r
 }
 
-// report puts a failed operation on screen. Cancellation is not a failure: the
-// user asked for it.
-func (u *ui) report(what string, err error) {
-	if errors.Is(err, context.Canceled) {
-		return
-	}
-	fyne.Do(func() { u.flash(what+": "+err.Error(), StatusBad) })
-}
-
-// ok reports a completed operation and treats what is on screen as stale.
-func (u *ui) ok(msg string) {
-	fyne.Do(func() {
-		u.flash(msg, StatusGood)
-		u.invalidate()
-	})
-}
-
-// invalidate discards everything loaded from the core and rebuilds, which makes
-// the sections fetch again. Called on the UI thread.
-//
-// The activity log is deliberately not part of this: F5 while a plugin runs
-// must not throw away the output it has produced so far.
-func (u *ui) invalidate() {
-	u.docOK = false
-	u.serviceOK = false
-	u.blOK = false
-	u.histOK = false
-	if !u.onScreen() {
-		// No window to redraw. Clearing the flags is the whole of the work:
-		// whatever builds the sections next will fetch.
-		return
-	}
-	u.loadConfigNow()
-	u.loadService()
-	u.rebuild()
-}
-
-// onScreen reports whether there is a window to draw into. False in a headless
-// test, and in the window between a load finishing and the application exiting.
-func (u *ui) onScreen() bool { return u.content != nil }
-
-/*
-perform runs one core operation off the UI thread with the busy indicator up.
-
-The name is what the popup shows, so it is a phrase in the present participle:
-"Clearing the history…", not "clear". Every core call from this window goes
-through here or through a loader; a raw `go func()` reaching into core would be
-a window that sits still with no explanation.
-
-cancellable adds a Cancel button to the busy popup; the context it hands the
-operation is cancelled by it.
-*/
-func (u *ui) perform(what string, fn func(ctx context.Context) error) {
-	u.performCancellable(what, false, fn)
-}
-
-func (u *ui) performCancellable(what string, cancellable bool, fn func(ctx context.Context) error) {
-	if u.working() {
-		u.flash("Something is already running. Wait for it to finish, or cancel it.", StatusWarn)
-		return
-	}
-	if !u.onScreen() {
-		// No window, so there is no render thread to keep free and the
-		// goroutine buys nothing. A headless test gets a finished operation
-		// when the button returns instead of one that lands "soon": Fyne's
-		// test driver runs fyne.Do inline on the calling goroutine, so a
-		// worker refreshing a widget genuinely does race the test driving it.
-		if err := fn(context.Background()); err != nil {
-			u.report(what, err)
-		}
-		return
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	if cancellable {
-		u.busyCancel = cancel
-	}
-	go func() {
-		defer cancel()
-		done := u.busy(what)
-		defer done()
-		if err := fn(ctx); err != nil {
-			u.report(what, err)
-		}
-	}()
-}
-
 // --- loaders ---------------------------------------------------------------
 
 /*
@@ -148,10 +58,15 @@ func (u *ui) loadConfigNow() {
 	res, err := core.LoadConfig(context.Background(), u.request())
 	if err != nil {
 		u.docOK = true // do not retry on every rebuild
-		u.flash("Read the configuration: "+err.Error(), StatusBad)
+		u.docErr = "Read the configuration: " + err.Error()
+		if u.sh != nil {
+			// Before the shell exists (the first read, in Run) the banner
+			// waits for onStart.
+			u.sh.Flash(u.docErr, fd.StatusBad)
+		}
 		return
 	}
-	u.doc, u.docPath, u.docExists, u.docOK = res.Doc, res.Path, res.Exists, true
+	u.doc, u.docPath, u.docExists, u.docOK, u.docErr = res.Doc, res.Path, res.Exists, true, ""
 }
 
 // loadService fills the service state for the status bar and the Service
@@ -168,11 +83,11 @@ func (u *ui) loadService() {
 		fyne.Do(func() {
 			previous := u.service.State
 			u.service = res
-			u.rebuild()
+			u.sh.Rebuild()
 			u.announceService(previous, res.State)
 		})
 	}
-	if !u.onScreen() {
+	if !u.sh.OnScreen() {
 		run()
 		return
 	}
@@ -190,9 +105,9 @@ func (u *ui) pollService() {
 			}
 			previous := u.service.State
 			u.service = res
-			u.redrawStatus()
-			if u.currentTitle() == sectionService {
-				u.refresh()
+			u.sh.RedrawStatus()
+			if u.sh.Current().Title() == sectionService {
+				u.sh.Refresh()
 			}
 			u.announceService(previous, res.State)
 		})
@@ -208,20 +123,20 @@ func (u *ui) loadBlacklist() {
 	run := func() {
 		items, err := core.BlacklistList(context.Background(), u.request())
 		if err != nil {
-			u.report("Read the blacklist", err)
+			fyne.Do(func() { u.sh.Report("Read the blacklist", err) })
 			return
 		}
 		fyne.Do(func() {
 			u.blacklist = items
-			u.refresh()
+			u.sh.Refresh()
 		})
 	}
-	if !u.onScreen() {
+	if !u.sh.OnScreen() {
 		run()
 		return
 	}
 	go func() {
-		done := u.busy("Reading the blacklist…")
+		done := u.sh.Busy("Reading the blacklist…")
 		defer done()
 		run()
 	}()
@@ -237,15 +152,15 @@ func (u *ui) loadHistory() {
 	run := func() {
 		stats, err := core.HistoryStats(context.Background(), u.request())
 		if err != nil {
-			u.report("Read the history", err)
+			fyne.Do(func() { u.sh.Report("Read the history", err) })
 			return
 		}
 		fyne.Do(func() {
 			u.history = stats
-			u.refresh()
+			u.sh.Refresh()
 		})
 	}
-	if !u.onScreen() {
+	if !u.sh.OnScreen() {
 		run()
 		return
 	}
@@ -270,21 +185,21 @@ func (u *ui) startPolling() {
 				return
 			case <-status.C:
 				fyne.Do(func() {
-					if u.win == nil || u.hiddenToTray {
+					if u.sh.Window == nil || u.hiddenToTray {
 						return
 					}
 					u.pollService()
-					if u.currentTitle() == sectionHistory {
+					if u.sh.Current().Title() == sectionHistory {
 						u.histOK = false
 						u.loadHistory()
 					}
 				})
 			case <-size.C:
 				fyne.Do(func() {
-					if u.win == nil || u.hiddenToTray {
+					if u.sh.Window == nil || u.hiddenToTray {
 						return
 					}
-					u.noteSize(u.win.Canvas().Size())
+					u.noteSize(u.sh.Window.Canvas().Size())
 				})
 			}
 		}
@@ -351,18 +266,18 @@ func (u *ui) scheduleSave() {
 func (u *ui) performSave() {
 	path, err := core.SaveConfig(context.Background(), core.SaveConfigRequest{Request: u.request(), Doc: u.doc})
 	if err != nil {
-		u.flash("Save the configuration: "+err.Error(), StatusBad)
+		u.sh.Flash("Save the configuration: "+err.Error(), fd.StatusBad)
 		return
 	}
 	u.docPath, u.docExists = path, true
-	if u.onScreen() {
+	if u.sh.OnScreen() {
 		// Headless there is no banner to show and no timer to re-arm, and
 		// touching widgets from the save timer's goroutine would race the
 		// test driving them: the test driver runs fyne.Do inline.
-		u.flash("Saved", StatusGood)
+		u.sh.Flash("Saved", fd.StatusGood)
 		u.notify("Saved", "Configuration saved")
 		u.timer.rearm(u)
-		u.redrawStatus()
+		u.sh.RedrawStatus()
 	}
 	if u.saved != nil {
 		u.saved()

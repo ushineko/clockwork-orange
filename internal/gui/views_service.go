@@ -10,6 +10,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/clockwork-orange/internal/core"
 )
@@ -23,36 +26,36 @@ tail in the activity pane.
 */
 func (u *ui) buildService() fyne.CanvasObject {
 	u.loadService()
-	head := heading("Service",
+	head := widgets.Heading("Service",
 		"The background service changes the wallpaper on the interval in Settings, using the "+
 			"enabled plugins. It runs as a systemd user unit; the window's own timer stays idle "+
 			"while the service holds the cycling lock.")
 
 	st := u.service.State
-	status := container.NewHBox(marker(serviceStatus(st)),
+	status := container.NewHBox(widgets.Marker(serviceStatus(st)),
 		widget.NewLabelWithStyle(serviceStateText(st), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 	if !u.serviceOK {
-		status = container.NewHBox(marker(StatusInfo), widget.NewLabel("Checking status…"))
+		status = container.NewHBox(widgets.Marker(fd.StatusInfo), widget.NewLabel("Checking status…"))
 	}
 
-	details := widget.NewLabel(orNone(u.service.Details, "No details."))
+	details := widget.NewLabel(widgets.OrNone(u.service.Details, "No details."))
 	details.TextStyle = fyne.TextStyle{Monospace: true}
 	details.Wrapping = fyne.TextWrapOff
-	detailsPane := fixedHeight(container.NewScroll(details), 150)
+	detailsPane := widgets.FixedHeight(container.NewScroll(details), 150)
 
 	en := serviceEnablement(st)
 	verb := func(label string, icon fyne.Resource, enabled bool, what string, op func(context.Context, core.Request) error, done string) *widget.Button {
 		b := widget.NewButtonWithIcon(label, icon, func() {
-			u.perform(what, func(ctx context.Context) error {
+			u.sh.Perform(what, func(ctx context.Context) error {
 				if err := op(ctx, u.request()); err != nil {
 					return err
 				}
 				fyne.Do(func() { u.serviceOK = false; u.loadService() })
-				u.ok(done)
+				fyne.Do(func() { u.sh.OK(done) })
 				return nil
 			})
 		})
-		if !enabled || u.working() {
+		if !enabled || u.sh.Working() {
 			b.Disable()
 		}
 		return b
@@ -63,30 +66,30 @@ func (u *ui) buildService() fyne.CanvasObject {
 	install := verb("Install", theme.DownloadIcon(), en.install, "Installing the service…", core.ServiceInstall,
 		"Service installed and enabled. It starts at login and runs now.")
 	uninstall := widget.NewButtonWithIcon("Uninstall", theme.DeleteIcon(), func() {
-		u.confirmDestructive("Uninstall the service?",
+		dialogs.ConfirmDestructive(u.sh.Window, "Uninstall the service?",
 			"The systemd user unit is stopped, disabled and its file removed. Your configuration, "+
 				"downloaded images, history and blacklist are not touched; the window's own timer "+
 				"keeps changing wallpapers while it is open.", "Uninstall", func() {
-				u.perform("Uninstalling the service…", func(ctx context.Context) error {
+				u.sh.Perform("Uninstalling the service…", func(ctx context.Context) error {
 					if err := core.ServiceUninstall(ctx, u.request()); err != nil {
 						return err
 					}
 					fyne.Do(func() { u.serviceOK = false; u.loadService() })
-					u.ok("Service uninstalled.")
+					fyne.Do(func() { u.sh.OK("Service uninstalled.") })
 					return nil
 				})
 			})
 	})
 	uninstall.Importance = widget.DangerImportance
-	if !en.uninstall || u.working() {
+	if !en.uninstall || u.sh.Working() {
 		uninstall.Disable()
 	}
 	toolbar := container.NewHBox(start, stop, restart, install, uninstall)
 
 	return container.NewVBox(
 		head,
-		card("Status", status, detailsPane),
-		card("Control", toolbar),
+		widgets.Card("Status", status, detailsPane),
+		widgets.Card("Control", toolbar),
 		u.journalPane(),
 	)
 }
@@ -118,9 +121,9 @@ func (u *ui) journalPane() fyne.CanvasObject {
 			u.armJournalRefresh()
 		}
 	}
-	controls := container.NewHBox(auto, dim("every"), fixedWidth(interval, 60), dim("s"), refresh)
-	pane := u.activity.widget(u, "Service log", nil)
-	if u.activity.log.len() == 0 {
+	controls := container.NewHBox(auto, widgets.Dim("every"), widgets.FixedWidth(interval, 60), widgets.Dim("s"), refresh)
+	pane := u.activity.Widget(u.paneOptions("Service log", nil))
+	if u.activity.Model().Len() == 0 {
 		u.refreshJournal()
 	}
 	u.armJournalRefresh()
@@ -132,12 +135,12 @@ func (u *ui) refreshJournal() {
 	run := func() {
 		text := core.ServiceLogs(context.Background(), core.ServiceLogsRequest{Request: u.request(), Lines: 50})
 		fyne.Do(func() {
-			u.activity.log.replace(orNone(text, "No logs found."))
-			u.activity.touch()
-			u.activity.draw()
+			u.activity.Model().Replace(widgets.OrNone(text, "No logs found."))
+			u.activity.Touch()
+			u.activity.Draw()
 		})
 	}
-	if !u.onScreen() {
+	if !u.sh.OnScreen() {
 		run()
 		return
 	}
@@ -150,7 +153,7 @@ func (u *ui) armJournalRefresh() {
 		u.journalStop()
 		u.journalStop = nil
 	}
-	if !u.doc.AutoUpdateLogs || !u.onScreen() {
+	if !u.doc.AutoUpdateLogs || !u.sh.OnScreen() {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -165,7 +168,7 @@ func (u *ui) armJournalRefresh() {
 				return
 			case <-t.C:
 				fyne.Do(func() {
-					if u.currentTitle() == sectionService && !u.hiddenToTray {
+					if u.sh.Current().Title() == sectionService && !u.hiddenToTray {
 						u.refreshJournal()
 					}
 				})
@@ -198,11 +201,11 @@ func intRange(lo, hi int) fyne.StringValidator {
 // buildActivity is the in-process log where there is no service to manage: the
 // wallpaper timer's cycles and plugin runs, with a Clear button.
 func (u *ui) buildActivity() fyne.CanvasObject {
-	head := heading("Activity",
+	head := widgets.Heading("Activity",
 		"What this window has done since it opened: every wallpaper change the timer made and "+
 			"every plugin run. The timer fires on the interval in Settings while the window is "+
 			"open or in the tray.")
-	return container.NewVBox(head, u.activity.widget(u, "Application activity", func() {
-		u.activity.events().Infof("Activity log cleared by user")
-	}))
+	return container.NewVBox(head, u.activity.Widget(u.paneOptions("Application activity", func() {
+		paneEvents(u.activity).Infof("Activity log cleared by user")
+	})))
 }
