@@ -25,9 +25,13 @@ replaced lives in the `v2.9.5` tag; specs 001–009 document it.
   folder, Wallhaven, DuckDuckGo Images), shared blacklist/history, systemd
   daemon on KDE Plasma 6, tray app on Windows 10/11 and macOS 13+.
 - **Module**: `github.com/ushineko/clockwork-orange`
-- **Design reference**: `~/git/nmsbonker` (Fyne design system, build layout,
-  CI). `~/git/angou` is the older sibling. When this file and their
-  conventions disagree, this file wins; otherwise copy nmsbonker.
+- **Design reference**: `github.com/ushineko/fynedesygn` (checkout at
+  `~/git/fynedesygn`): the Fyne design system `internal/gui` is built on. Its
+  `docs/design-system.md` is the rulebook; a shape a second section needs
+  belongs in the library, not copied here. Anything the library lacks is
+  recorded in the spec's "Gaps found" for a library spec, never worked around
+  with a copy. `~/git/nmsbonker` remains the reference for build layout and
+  CI. When this file and their conventions disagree, this file wins.
 - **Spec of record**: `specs/010-go-rewrite-v4.md`. Requirement IDs (`R2.6`,
   `DV1`) are referenced from code comments and tests.
 

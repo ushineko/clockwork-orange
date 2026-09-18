@@ -120,8 +120,9 @@ sections, top to bottom:
   interval, image extensions, debug logging, and on Linux the service's
   auto-start, restart delay and log refresh. Changes are saved a second after
   you make them. A read-only view of the YAML is at the bottom.
-- **Appearance**: colour scheme, font, text size, and the console font used
-  by the log panes.
+- **Appearance**: colour scheme (Breeze, Oxygen and Adwaita, plus Windows
+  and macOS light and dark schemes for those desktops), font, text size,
+  interface scale, and the console font and size used by the log panes.
 - **About**: this document.
 
 Closing the window hides it to the tray; the timer keeps changing wallpapers.
