@@ -187,7 +187,7 @@ func testUI(t *testing.T) (*ui, *fakePlatform, *platform.FakeRunner) {
 	// tests that drive them get this one. OnScreen stays false.
 	win := test.NewWindow(widget.NewLabel(""))
 	u.sh.Window = win
-	u.sh.App.Settings().SetTheme(u.theme())
+	// The shell applied themeFor through Options.Theme already; nothing to redo.
 	t.Cleanup(func() { u.shutdown(); win.Close() })
 	return u, fp, runner
 }
@@ -247,7 +247,8 @@ func TestASavedAppearanceFromThePreviousBuildIsReadUnchanged(t *testing.T) {
 
 	// The next launch: a shell built over the same preference store.
 	u.sh = shell.Headless(u.sh.App, u.shellOptions(Options{}))
-	th := u.theme()
+	th, ok := u.themeFor(u.sh.Appearance()).(fdtheme.Theme)
+	require.True(t, ok)
 	require.Equal(t, "Oxygen Dark", th.Palette().Name)
 	require.Equal(t, float32(14), th.TextSize())
 	require.Equal(t, fdtheme.DefaultFontName, u.sh.Appearance().Font)
@@ -270,7 +271,8 @@ func TestConsoleFontAndSizeFromTheDocumentReachTheThemeAndThePanes(t *testing.T)
 
 	u.doc.ConsoleFontFamily = "Console Probe"
 	u.doc.ConsoleFontSize = 13
-	th := u.theme()
+	th, ok := u.themeFor(u.sh.Appearance()).(fdtheme.Theme)
+	require.True(t, ok)
 	require.Equal(t, "ConsoleProbe-Regular.ttf", th.Font(fyne.TextStyle{Monospace: true}).Name(),
 		"the console family is the theme's monospace face")
 	require.NotEqual(t, "ConsoleProbe-Regular.ttf", th.Font(fyne.TextStyle{}).Name(),

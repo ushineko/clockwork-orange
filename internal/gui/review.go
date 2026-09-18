@@ -427,10 +427,6 @@ func (r *reviewModel) handleKey(u *ui, key fyne.KeyName) bool {
 // onTypedKey is the window's key handler: F5 reloads; the arrows and Space go
 // to the review when a plugin section is on screen.
 func (u *ui) onTypedKey(e *fyne.KeyEvent) {
-	if e.Name == fyne.KeyF5 {
-		u.sh.Invalidate()
-		return
-	}
 	if u.review == nil || u.review.preview == nil {
 		return
 	}

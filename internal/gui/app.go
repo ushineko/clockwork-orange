@@ -120,12 +120,11 @@ type ui struct {
 	lastSize fyne.Size
 }
 
-// theme is the current theme: scheme, interface font and text size from the
-// shell's appearance (the preference store), console font from the document.
-// Built here rather than by Appearance.Theme because the monospace face comes
-// from the YAML, not from the preference store.
-func (u *ui) theme() fdtheme.Theme {
-	a := u.sh.Appearance()
+// themeFor is the shell's Theme hook: scheme, interface font and text size
+// from the appearance (the preference store), console font from the document.
+// The shell calls it at start and on every SetAppearance; a console font
+// change re-applies the current appearance to reach it.
+func (u *ui) themeFor(a fdtheme.Appearance) fyne.Theme {
 	return fdtheme.New(fdtheme.SchemeByName(a.Scheme), fdtheme.Options{
 		Font:     fdtheme.LoadFont(a.Font),
 		Mono:     fdtheme.LoadFont(consoleFamily(u.doc)),
@@ -133,13 +132,9 @@ func (u *ui) theme() fdtheme.Theme {
 	})
 }
 
-// setAppearance saves and applies the appearance through the shell, then
-// applies this program's theme over it: the shell's theme is built from the
-// preference store alone and does not know the console font.
-func (u *ui) setAppearance(a fdtheme.Appearance) {
-	u.sh.SetAppearance(a)
-	u.sh.App.Settings().SetTheme(u.theme())
-}
+// setAppearance saves and applies the appearance through the shell, which
+// builds the theme with themeFor.
+func (u *ui) setAppearance(a fdtheme.Appearance) { u.sh.SetAppearance(a) }
 
 // consoleFamily is the document's console font family; the Python default
 // "Monospace" is not an installed family, so it (and empty) mean Fyne's face.
@@ -286,10 +281,7 @@ func sections(u *ui) []shell.Section {
 		if !ok {
 			continue // a title with no builder draws nothing; see SectionNames
 		}
-		sec := shell.NewSection(title, b.icon, func(s *shell.Shell) fyne.CanvasObject {
-			u.sh = s
-			return b.build(u)
-		})
+		sec := shell.NewSection(title, b.icon, func(*shell.Shell) fyne.CanvasObject { return b.build(u) })
 		if b.detach != nil {
 			sec.OnDetach(func() { b.detach(u) })
 		}
@@ -345,10 +337,7 @@ func Run(o Options) {
 	// console font and every form come out of it.
 	u.loadConfigNow()
 	u.plugins = core.AvailablePlugins()
-	u.sh = shell.New(u.shellOptions(o))
-	// The shell applied the theme the preference store describes; this
-	// program's adds the console font from the document.
-	u.sh.App.Settings().SetTheme(u.theme())
+	shell.New(u.shellOptions(o))
 	u.sh.Window.ShowAndRun()
 	u.shutdown()
 }
@@ -360,18 +349,18 @@ func Run(o Options) {
 // clockwork-orange.yml, so that the daemon and this window agree.
 func (u *ui) shellOptions(o Options) shell.Options {
 	return shell.Options{
-		AppID:    appID,
-		Name:     "Clockwork Orange",
-		Version:  u.version,
-		Icon:     appIcon(),
-		Sections: sections(u),
-		Section:  o.Section,
-		Scheme:   o.Scheme,
-		Size:     windowSize(u.doc, u.docExists),
-		StatusBar: func(s *shell.Shell) []fyne.CanvasObject {
-			u.sh = s
-			return u.statusSegments()
-		},
+		AppID:        appID,
+		Name:         "Clockwork Orange",
+		Version:      u.version,
+		Icon:         appIcon(),
+		Sections:     sections(u),
+		Section:      o.Section,
+		Scheme:       o.Scheme,
+		Size:         windowSize(u.doc, u.docExists),
+		StatusBar:    func(*shell.Shell) []fyne.CanvasObject { return u.statusSegments() },
+		OnCreate:     func(s *shell.Shell) { u.sh = s },
+		Theme:        u.themeFor,
+		OnTypedKey:   u.onTypedKey,
 		OnStart:      u.onStart,
 		OnInvalidate: u.onInvalidate,
 		OnStop:       func(*shell.Shell) { u.shutdown() },
@@ -383,10 +372,6 @@ func (u *ui) shellOptions(o Options) shell.Options {
 // second-launch listener, the close intercept, the loads every section shows,
 // the polls and the wallpaper timer.
 func (u *ui) onStart(s *shell.Shell) {
-	u.sh = s
-	// The shell binds F5 itself; this handler takes the key over so that the
-	// review's arrows and Space reach it too, and keeps F5 (review.go).
-	s.Window.Canvas().SetOnTypedKey(u.onTypedKey)
 	u.setupTray()
 	u.stopListen = u.listenShow()
 	s.Window.SetCloseIntercept(u.onClose)
@@ -407,7 +392,6 @@ func (u *ui) onStart(s *shell.Shell) {
 // The activity log is deliberately not part of this: F5 while a plugin runs
 // must not throw away the output it has produced so far.
 func (u *ui) onInvalidate(s *shell.Shell) {
-	u.sh = s
 	u.docOK, u.serviceOK, u.blOK, u.histOK = false, false, false, false
 	if !s.OnScreen() {
 		return

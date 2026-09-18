@@ -74,7 +74,7 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 	consoleFont.OnChanged = func(name string) {
 		u.doc.ConsoleFontFamily = name
 		u.scheduleSave()
-		u.sh.App.Settings().SetTheme(u.theme())
+		u.sh.SetAppearance(u.sh.Appearance()) // same appearance, new console font through themeFor
 		u.sh.Refresh()
 	}
 	consoleSizes := make([]string, 0, 12)
