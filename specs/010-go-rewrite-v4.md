@@ -4,7 +4,7 @@
 > GitHub repository, no tracker). Consider creating a GitHub issue for
 > traceability.
 
-## Status: IN_PROGRESS (cut over; Windows/macOS manual verification pending)
+## Status: IN_PROGRESS (shipped and cut over as of v4.1.1; 4 criteria remain, all manual-verification or host-environment gated — see the unchecked boxes under Phases 4, 5, 6 and 7)
 
 - **Priority**: High
 - **Estimated Complexity**: High
@@ -790,9 +790,9 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 
 ### Phase 6: Packaging and CI
 - [x] `makepkg` in the arch container builds `clockwork-orange-git`, installs both binaries, the desktop file, icons and the user unit; `clockwork-orange --self-test` passes inside the container. *Built locally with `make pkg-arch` 2026-09-15 (all files present, CLI self-test passes); the container run is the `build-arch` job on the release tag.*
-- [ ] `.deb` installs on Ubuntu 24.04 and `--self-test` passes. *CI installs the package and runs `version` / `plugins list`; the full self-test runs only where `qdbus6`/`kwriteconfig6` exist (Recommends, absent on the runner).*
-- [ ] Windows CI builds both `.exe`s with CGO, embeds the icon, and `--self-test` passes; the GUI exe has the windowsgui subsystem. *Job written (`fyne package`, MinGW via msys2); verified by the release run.*
-- [ ] macOS CI produces `Clockwork Orange.app` via `fyne package`, includes the CLI binary, and `--self-test` passes. *Job written; verified by the release run.*
+- [ ] `.deb` installs on Ubuntu 24.04 and `--self-test` passes. *Install half verified: `Build Debian Package` green on the `v4.0.0`, `v4.1.0` and `v4.1.1` release runs, with `apt-get install ./dist/*.deb` followed by `version`, `plugins list` and `clockwork-orange-gui --version`. The `--self-test` half is structurally unreachable on the runner: the KDE probes need `qdbus6`/`kwriteconfig6`, which are Recommends and absent, so the workflow gates the call and defers full self-test coverage to the Arch job. Closing this needs one run on a real Ubuntu 24.04 desktop with Plasma, or an accepted deviation.*
+- [x] Windows CI builds both `.exe`s with CGO, embeds the icon, and `--self-test` passes; the GUI exe has the windowsgui subsystem. *`Build Windows Executables` green on the `v4.0.0`, `v4.1.0` and `v4.1.1` release runs; the job asserts `clockwork-orange.exe --self-test` exits 0 (`.github/workflows/build.yml`).*
+- [x] macOS CI produces `Clockwork Orange.app` via `fyne package`, includes the CLI binary, and `--self-test` passes. *`Build macOS App` green on the `v4.0.0`, `v4.1.0` and `v4.1.1` release runs; the job runs `--self-test` from inside the bundle (`.github/workflows/build.yml`).*
 - [x] `release` job refuses when the git tag differs from `.tag`; `publish-aur` regenerates `.SRCINFO` with `makepkg --printsrcinfo` and pushes only when changed. *Job written; `.SRCINFO` from `makepkg --printsrcinfo` on `packaging/arch/aur/PKGBUILD`.*
 - [x] `install.sh --dry-run` lists exactly the files it would install; `uninstall.sh` removes exactly those. *Run 2026-09-15 on the dev machine: both dry runs list the same four files; the real install put them in place and `--self-test` passed from `~/.local/bin`.*
 
@@ -800,9 +800,9 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 - [x] All Python sources and Python-only tooling listed in R8.9 are deleted in one commit; `git grep -l "python"` in the tree returns only historical specs, validation reports and this spec. *Sources and tooling gone; the word "Python" still appears in Go doc comments and the README where they name the behaviour being ported, which the grep in this criterion counts and the intent does not.*
 - [x] README, `docs/architecture.md`, `GUI.md`, `specs/README.md` updated; SD section replaced by the deferral note.
 - [ ] Manual platform verification (R9.6) completed on Windows, macOS and KDE and recorded in `validation-reports/`. *KDE done on the dev machine (install test report); Windows and macOS: the user validates on those desktops after the release.*
-- [ ] Dotfiles systemd unit updated to the new `ExecStart` and the live user service restarted (operator step recorded). *2026-09-15: the live user unit was rewritten by `clockwork-orange service install` (ExecStart → `~/.local/bin/clockwork-orange --service`) and the service restarted on the Go daemon; the dotfiles copy still carries the packaged `/usr/bin` ExecStart and is updated at cutover.*
-- [ ] `.tag` = `v4.0.0`; `release_version.sh` tags and pushes; GitHub Actions publishes Arch, deb, Windows zip, macOS zip; AUR updated.
-- [ ] Security review (dependency scan via `govulncheck`, OWASP pass on network code, no secrets) recorded for the release commit.
+- [x] Dotfiles systemd unit updated to the new `ExecStart` and the live user service restarted (operator step recorded). *Verified 2026-09-18 on `njv-cachyos`: `~/.config/systemd/user/clockwork-orange.service` is a symlink into `dotfiles/hosts/njv-cachyos/...` and carries `ExecStart=/home/nverenin/.local/bin/clockwork-orange --service`; the unit is active (started 2026-09-17 10:21 PDT) on the Go daemon. `hosts/gamerson-cachyos` carries the packaged `/usr/bin/clockwork-orange --service`. `hosts/cachyos` still carries the 2.9.x Python `ExecStart` and is a legacy host directory, not a live target.*
+- [x] `.tag` = `v4.0.0`; `release_version.sh` tags and pushes; GitHub Actions publishes Arch, deb, Windows zip, macOS zip; AUR updated. *Released 2026-09-16: tag `v4.0.0`, GitHub release published, Arch / deb / Windows / macOS jobs all green. `Publish to AUR` failed on that run (SSH host-key verification) and was fixed by PR #6; AUR publishing is verified green on the `v4.1.0` and `v4.1.1` release runs (2026-09-18). `.tag` has since advanced to `v4.1.1`.*
+- [x] Security review (dependency scan via `govulncheck`, OWASP pass on network code, no secrets) recorded for the release commit. *Recorded in `validation-reports/2026-09-15-spec010-phase6-7-cutover.md` § "Phase 5: Security Review": `govulncheck -mode binary` clean on both binaries, `AUR_SSH_KEY` handling reviewed, no secrets in changed files.*
 
 ---
 
