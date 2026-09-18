@@ -126,3 +126,20 @@ excluding `_test.go`.
     it if a bad config is tried.
   - `go.mod` names the pseudo-version of a7673fa; AC2's `v0.1.0` is the tag
     that commit is to receive, and the bump is a one-line follow-up.
+
+## Addendum 2026-09-17: manual run (AC9, partial)
+
+The adopted GUI (`make build-gui`, pinned to fynedesygn v0.1.1) was run on
+this KDE Plasma 6 Wayland machine through fynedesygn's `tools/screenshot.sh`
+with `--home` (throwaway HOME and XDG directories) and `CLOCKWORK_LOCK_DIR`
+pointed at a temporary directory, so the run could not touch the real
+configuration or collide with the running instance. Sections captured and
+checked by eye: Service (live systemd status, journal log pane with Follow
+and Copy, control buttons), Settings (form, auto-save "Saved" banner floating
+over the content), Appearance, Blacklist, About (README pane). The status bar
+showed mode, interval, plugins and service state. Not exercised: a plugin run
+streaming into a pane, hide-to-tray and return. AC9 stays open for those.
+
+The first attempt photographed the developer's own running instance: a
+class-only window search found it first. The harness now matches the pid of
+the process it launched (fynedesygn commit after v0.1.1).

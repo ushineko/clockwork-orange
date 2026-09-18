@@ -153,6 +153,13 @@ Replace, keeping behaviour:
   plugin, History, Blacklist, Settings, Appearance and About sections are
   opened; a plugin run streams into the Activity pane; a banner shows; the
   window hides to the tray and comes back (manual, recorded in the report).
+  _Partly verified 2026-09-17 with fynedesygn's screenshot harness under a
+  throwaway HOME and lock directory: Service (live unit status and journal
+  pane following the tail), Settings (with the auto-save "Saved" banner
+  floating over the form), Appearance, Blacklist and About rendered as
+  before; the status bar carried the program's segments. Not exercised: a
+  plugin run streaming into a pane, and hide-to-tray and return. Activity
+  does not exist on Linux (it is the Windows and macOS section)._
 - [x] AC10 `docs/architecture.md`, `.claude/CLAUDE.md` and README updated;
   "Gaps found" filled in (R5).
 - [x] AC11 Line count of `internal/gui` (non-test) is reported before and
