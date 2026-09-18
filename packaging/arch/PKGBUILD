@@ -7,7 +7,7 @@
 # stamps into the binaries. The AUR job publishes a copy with `source=` pointing
 # at the GitHub repository (see .github/workflows/build.yml).
 pkgname=clockwork-orange-git
-pkgver=4.1.0
+pkgver=4.1.1
 pkgrel=1
 pkgdesc="Wallpaper manager and downloader with plugin support (Wallhaven, DuckDuckGo Images) for KDE Plasma 6"
 arch=('x86_64' 'aarch64')
