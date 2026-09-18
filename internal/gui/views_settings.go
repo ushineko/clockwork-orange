@@ -65,7 +65,7 @@ func (u *ui) newSettingsForm() *settingsForm {
 			setting = false
 		}
 		u.scheduleSave()
-		u.redrawStatus()
+		u.sh.RedrawStatus()
 	})
 	f.desktop = widget.NewCheck("Desktop wallpaper only", func(b bool) {
 		if setting {
@@ -80,7 +80,7 @@ func (u *ui) newSettingsForm() *settingsForm {
 			setting = false
 		}
 		u.scheduleSave()
-		u.redrawStatus()
+		u.sh.RedrawStatus()
 	})
 	f.lockscreen = widget.NewCheck("Lock screen wallpaper only", func(b bool) {
 		if setting {
@@ -95,10 +95,10 @@ func (u *ui) newSettingsForm() *settingsForm {
 			setting = false
 		}
 		u.scheduleSave()
-		u.redrawStatus()
+		u.sh.RedrawStatus()
 	})
 
-	f.wait = numericEntry(1, 86400, func(n int) { u.doc.DefaultWait = n; u.scheduleSave(); u.redrawStatus() })
+	f.wait = numericEntry(1, 86400, func(n int) { u.doc.DefaultWait = n; u.scheduleSave(); u.sh.RedrawStatus() })
 	f.extensions = widget.NewEntry()
 	f.extensions.SetPlaceHolder("Comma-separated extensions")
 	f.extensions.OnChanged = func(s string) {
@@ -228,14 +228,14 @@ func (u *ui) buildSettings() fyne.CanvasObject {
 
 	validate := widget.NewButtonWithIcon("Validate", theme.ConfirmIcon(), func() {
 		if _, err := config.Parse(yaml); err != nil {
-			u.flash("Invalid YAML syntax: "+err.Error(), fd.StatusBad)
+			u.sh.Flash("Invalid YAML syntax: "+err.Error(), fd.StatusBad)
 			return
 		}
-		u.flash("YAML syntax is valid.", fd.StatusGood)
+		u.sh.Flash("YAML syntax is valid.", fd.StatusGood)
 	})
 	copyBtn := widget.NewButtonWithIcon("Copy", theme.ContentCopyIcon(), func() {
-		u.app.Clipboard().SetContent(text)
-		u.flash("Copied the configuration to the clipboard.", fd.StatusGood)
+		u.sh.App.Clipboard().SetContent(text)
+		u.sh.Flash("Copied the configuration to the clipboard.", fd.StatusGood)
 	})
 
 	where := u.docPath

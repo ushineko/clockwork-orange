@@ -179,10 +179,10 @@ func (u *ui) fieldWidget(f *pluginForm, field plugins.Field, block map[string]an
 	f.fields[field.Key] = entryField{e}
 	switch field.Widget {
 	case plugins.WidgetFilePath:
-		return dialogs.WithBrowse(u.win, e, false)
+		return dialogs.WithBrowse(u.sh.Window, e, false)
 	case plugins.WidgetDirectoryPath:
 		open := widget.NewButtonWithIcon("Open", theme.FolderIcon(), func() { u.openPath(e.Text) })
-		return container.NewBorder(nil, nil, nil, container.NewHBox(dialogs.BrowseButton(u.win, e, true), open), e)
+		return container.NewBorder(nil, nil, nil, container.NewHBox(dialogs.BrowseButton(u.sh.Window, e, true), open), e)
 	case plugins.WidgetNone:
 	}
 	return e
@@ -200,15 +200,15 @@ enough to open it by hand.
 */
 func (u *ui) openPath(path string) {
 	if path == "" {
-		u.flash("There is nothing to open yet.", fd.StatusWarn)
+		u.sh.Flash("There is nothing to open yet.", fd.StatusWarn)
 		return
 	}
 	go func() {
-		done := u.busy("Opening " + filepath.Base(path) + "…")
+		done := u.sh.Busy("Opening " + filepath.Base(path) + "…")
 		defer done()
 		if err := dialogs.OpenPath(path); err != nil {
 			fyne.Do(func() {
-				u.flash(fmt.Sprintf("Could not ask the desktop to open %s: %v. "+
+				u.sh.Flash(fmt.Sprintf("Could not ask the desktop to open %s: %v. "+
 					"Open it by hand; nothing else was affected.", path, err), fd.StatusWarn)
 			})
 		}
@@ -471,7 +471,7 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 	form := u.newPluginForm(info, u.doc.Plugins[name], func(block map[string]any) {
 		u.doc.SetPlugin(name, block)
 		u.scheduleSave()
-		u.redrawStatus()
+		u.sh.RedrawStatus()
 	})
 
 	runnable := name != "local"
@@ -480,7 +480,7 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 	})
 	download.Importance = widget.HighImportance
 	reset := widget.NewButtonWithIcon("Reset & run", theme.ViewRefreshIcon(), func() {
-		dialogs.ConfirmDestructive(u.win, "Delete all downloaded files and run fresh?",
+		dialogs.ConfirmDestructive(u.sh.Window, "Delete all downloaded files and run fresh?",
 			"Every file in "+pluginDir(info, form.values())+" is deleted, then the plugin downloads "+
 				"again. The history and the blacklist are not touched, so images already seen are "+
 				"not fetched a second time.", "Delete and run", func() {
@@ -491,14 +491,14 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 		download.Disable()
 		reset.Disable()
 	}
-	u.gate(download, reset)
+	u.sh.Gate(download, reset)
 
 	rv := u.reviewFor(name, info, form.values())
 	apply := widget.NewButtonWithIcon(fmt.Sprintf("Apply blacklist (%d)", rv.markedCount()), theme.DeleteIcon(), func() {
 		u.applyBlacklist(name, rv)
 	})
 	apply.Importance = widget.DangerImportance
-	if rv.markedCount() == 0 || u.working() {
+	if rv.markedCount() == 0 || u.sh.Working() {
 		apply.Disable()
 	}
 	rv.applyBtn = apply
@@ -544,7 +544,7 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 			return
 		}
 		u.pluginTab = tabs.SelectedIndex()
-		u.refresh()
+		u.sh.Refresh()
 	}
 
 	// Border, not VBox: the content pane is a Scroll, which sizes its content

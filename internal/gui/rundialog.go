@@ -54,8 +54,8 @@ type runDialog struct {
 
 // openRunDialog builds and shows the dialog. reset adds reset=true.
 func (u *ui) openRunDialog(name, title string, form *pluginForm, reset bool) {
-	if u.working() {
-		u.flash("Something is already running. Wait for it to finish, or cancel it.", fd.StatusWarn)
+	if u.sh.Working() {
+		u.sh.Flash("Something is already running. Wait for it to finish, or cancel it.", fd.StatusWarn)
 		return
 	}
 	d := &runDialog{name: name, override: map[string]any{"force": true}, pane: logpane.New(nil)}
@@ -113,11 +113,11 @@ func (u *ui) openRunDialog(name, title string, form *pluginForm, reset bool) {
 	body.Add(d.progress)
 	body.Add(d.status)
 	body.Add(container.NewBorder(nil, nil, nil, widgets.FixedWidth(widgets.FixedHeight(d.preview, logpane.DefaultHeight), 300), pane))
-	if !u.onScreen() {
+	if !u.sh.OnScreen() {
 		// Headless: no dialog to show; the caller drives startRun.
 		return
 	}
-	d.dlg = dialog.NewCustomWithoutButtons(title, body, u.win)
+	d.dlg = dialog.NewCustomWithoutButtons(title, body, u.sh.Window)
 	d.dlg.SetButtons([]fyne.CanvasObject{d.start, d.cancel, d.closeBtn})
 	d.dlg.Resize(fyne.NewSize(900, 640))
 	d.dlg.Show()
@@ -160,8 +160,8 @@ func (d *runDialog) showPreview(img image.Image) {
 // startRun runs the plugin with the dialog's overrides on a goroutine with a
 // cancellable context. u.running gates every other operation meanwhile.
 func (u *ui) startRun(d *runDialog) {
-	if u.working() {
-		u.flash("Something is already running. Wait for it to finish, or cancel it.", fd.StatusWarn)
+	if u.sh.Working() {
+		u.sh.Flash("Something is already running. Wait for it to finish, or cancel it.", fd.StatusWarn)
 		return
 	}
 	if d.terms != nil {
@@ -177,7 +177,7 @@ func (u *ui) startRun(d *runDialog) {
 	d.pane.Model().Append(logpane.Info, "Starting "+d.name+"…")
 	d.progress.SetValue(0)
 	d.status.SetText("Running…")
-	u.regate()
+	u.sh.Rebuild()
 
 	req := core.RunPluginRequest{Request: u.requestWithEvents(u.runEvents(d)), Name: d.name, Override: d.override}
 	finish := func(res core.PluginResultPath, err error, cancelled bool) {
@@ -193,14 +193,14 @@ func (u *ui) startRun(d *runDialog) {
 		case err != nil:
 			d.pane.Model().Append(logpane.Error, "Error: "+err.Error())
 			d.status.SetText("Failed")
-			u.flash(d.name+": "+err.Error(), fd.StatusBad)
+			u.sh.Flash(d.name+": "+err.Error(), fd.StatusBad)
 		default:
 			d.pane.Model().Append(logpane.Info, "Done.")
 			d.status.SetText("Done — " + widgets.OrNone(res.Message, res.Path))
 			d.progress.SetValue(1)
 		}
 		d.pane.Draw()
-		u.regate()
+		u.sh.Rebuild()
 	}
 	run := func() {
 		stop := d.pane.Pump()
@@ -210,7 +210,7 @@ func (u *ui) startRun(d *runDialog) {
 		cancel()
 		fyne.Do(func() { finish(core.PluginResultPath{Path: res.Path, Message: res.Message}, err, cancelled) })
 	}
-	if !u.onScreen() {
+	if !u.sh.OnScreen() {
 		run()
 		return
 	}

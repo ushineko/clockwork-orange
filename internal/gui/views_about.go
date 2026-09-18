@@ -47,7 +47,7 @@ func (u *ui) buildAbout() fyne.CanvasObject {
 	// and leaves the rest out of the widget tree, which is what makes the
 	// section scroll smoothly (spec 011).
 	u.readme = markdown.New(string(assets.README()), markdown.Options{})
-	u.readme.Follow(u.content)
+	u.readme.Follow(u.sh.Scroller())
 
 	return container.NewVBox(head, widget.NewSeparator(), u.readme)
 }

@@ -46,16 +46,16 @@ func (u *ui) buildService() fyne.CanvasObject {
 	en := serviceEnablement(st)
 	verb := func(label string, icon fyne.Resource, enabled bool, what string, op func(context.Context, core.Request) error, done string) *widget.Button {
 		b := widget.NewButtonWithIcon(label, icon, func() {
-			u.perform(what, func(ctx context.Context) error {
+			u.sh.Perform(what, func(ctx context.Context) error {
 				if err := op(ctx, u.request()); err != nil {
 					return err
 				}
 				fyne.Do(func() { u.serviceOK = false; u.loadService() })
-				u.ok(done)
+				fyne.Do(func() { u.sh.OK(done) })
 				return nil
 			})
 		})
-		if !enabled || u.working() {
+		if !enabled || u.sh.Working() {
 			b.Disable()
 		}
 		return b
@@ -66,22 +66,22 @@ func (u *ui) buildService() fyne.CanvasObject {
 	install := verb("Install", theme.DownloadIcon(), en.install, "Installing the service…", core.ServiceInstall,
 		"Service installed and enabled. It starts at login and runs now.")
 	uninstall := widget.NewButtonWithIcon("Uninstall", theme.DeleteIcon(), func() {
-		dialogs.ConfirmDestructive(u.win, "Uninstall the service?",
+		dialogs.ConfirmDestructive(u.sh.Window, "Uninstall the service?",
 			"The systemd user unit is stopped, disabled and its file removed. Your configuration, "+
 				"downloaded images, history and blacklist are not touched; the window's own timer "+
 				"keeps changing wallpapers while it is open.", "Uninstall", func() {
-				u.perform("Uninstalling the service…", func(ctx context.Context) error {
+				u.sh.Perform("Uninstalling the service…", func(ctx context.Context) error {
 					if err := core.ServiceUninstall(ctx, u.request()); err != nil {
 						return err
 					}
 					fyne.Do(func() { u.serviceOK = false; u.loadService() })
-					u.ok("Service uninstalled.")
+					fyne.Do(func() { u.sh.OK("Service uninstalled.") })
 					return nil
 				})
 			})
 	})
 	uninstall.Importance = widget.DangerImportance
-	if !en.uninstall || u.working() {
+	if !en.uninstall || u.sh.Working() {
 		uninstall.Disable()
 	}
 	toolbar := container.NewHBox(start, stop, restart, install, uninstall)
@@ -140,7 +140,7 @@ func (u *ui) refreshJournal() {
 			u.activity.Draw()
 		})
 	}
-	if !u.onScreen() {
+	if !u.sh.OnScreen() {
 		run()
 		return
 	}
@@ -153,7 +153,7 @@ func (u *ui) armJournalRefresh() {
 		u.journalStop()
 		u.journalStop = nil
 	}
-	if !u.doc.AutoUpdateLogs || !u.onScreen() {
+	if !u.doc.AutoUpdateLogs || !u.sh.OnScreen() {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -168,7 +168,7 @@ func (u *ui) armJournalRefresh() {
 				return
 			case <-t.C:
 				fyne.Do(func() {
-					if u.currentTitle() == sectionService && !u.hiddenToTray {
+					if u.sh.Current().Title() == sectionService && !u.hiddenToTray {
 						u.refreshJournal()
 					}
 				})

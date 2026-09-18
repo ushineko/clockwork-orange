@@ -24,17 +24,22 @@ const sampleLogLine = "[DEBUG] Selected image from source ~/Pictures/Wallpapers/
 // user's desktop, which is why they are a section rather than a line in a
 // preferences dialog.
 func (u *ui) buildAppearance() fyne.CanvasObject {
+	// The choices the controls edit; each change saves and applies the whole
+	// set, so one control cannot undo another's value.
+	a := u.sh.Appearance()
+	apply := func() { u.setAppearance(a) }
+
 	scheme := widget.NewSelect(fdtheme.SchemeNames(), func(name string) {
-		u.appearance.Scheme = name
-		u.applyAppearance()
+		a.Scheme = name
+		apply()
 	})
-	scheme.SetSelected(u.appearance.Scheme)
+	scheme.SetSelected(a.Scheme)
 
 	font := widget.NewSelect(fdtheme.FontNames(), func(name string) {
-		u.appearance.Font = name
-		u.applyAppearance()
+		a.Font = name
+		apply()
 	})
-	font.SetSelected(u.appearance.Font)
+	font.SetSelected(a.Font)
 
 	sizes := make([]string, 0, len(fdtheme.TextSizes()))
 	for _, s := range fdtheme.TextSizes() {
@@ -43,21 +48,21 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 	size := widget.NewSelect(sizes, func(v string) {
 		for _, s := range fdtheme.TextSizes() {
 			if fmt.Sprintf("%g", s) == v {
-				u.appearance.TextSize = s
-				u.applyAppearance()
+				a.TextSize = s
+				apply()
 				return
 			}
 		}
 	})
-	size.SetSelected(fmt.Sprintf("%g", u.appearance.TextSize))
+	size.SetSelected(fmt.Sprintf("%g", a.TextSize))
 
 	reset := widget.NewButton("Reset to defaults", func() {
 		d := fdtheme.DefaultAppearance()
-		u.appearance.Scheme, u.appearance.Font, u.appearance.TextSize = d.Scheme, d.Font, d.TextSize
-		scheme.SetSelected(u.appearance.Scheme)
-		font.SetSelected(u.appearance.Font)
-		size.SetSelected(fmt.Sprintf("%g", u.appearance.TextSize))
-		u.applyAppearance()
+		a.Scheme, a.Font, a.TextSize = d.Scheme, d.Font, d.TextSize
+		scheme.SetSelected(a.Scheme)
+		font.SetSelected(a.Font)
+		size.SetSelected(fmt.Sprintf("%g", a.TextSize))
+		apply()
 	})
 
 	// The console font is the monospace face of the log panes (Service,
@@ -69,8 +74,8 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 	consoleFont.OnChanged = func(name string) {
 		u.doc.ConsoleFontFamily = name
 		u.scheduleSave()
-		u.applyAppearance()
-		u.refresh()
+		u.sh.App.Settings().SetTheme(u.theme())
+		u.sh.Refresh()
 	}
 	consoleSizes := make([]string, 0, 12)
 	for _, n := range []int{8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24} {
@@ -83,7 +88,7 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 		if _, err := fmt.Sscanf(v, "%d", &n); err == nil && n >= 6 && n <= 48 {
 			u.doc.ConsoleFontSize = n
 			u.scheduleSave()
-			u.refresh()
+			u.sh.Refresh()
 		}
 	}
 
@@ -94,14 +99,14 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 		scales = append(scales, fdtheme.ScaleLabel(s))
 	}
 	scaleSel := widget.NewSelect(scales, nil)
-	scaleSel.SetSelected(fdtheme.ScaleLabel(u.appearance.Scale))
-	restart := widget.NewButtonWithIcon("Restart the window now", theme.ViewRefreshIcon(), func() { u.restart() })
+	scaleSel.SetSelected(fdtheme.ScaleLabel(a.Scale))
+	restart := widget.NewButtonWithIcon("Restart the window now", theme.ViewRefreshIcon(), func() { u.sh.Restart() })
 	restart.Hide()
 	scaleSel.OnChanged = func(v string) {
-		u.appearance.Scale = fdtheme.ScaleValue(v)
-		u.appearance.Save(u.app.Preferences())
+		a.Scale = fdtheme.ScaleValue(v)
+		apply()
 		restart.Show()
-		u.flash("Interface scale saved. It applies when the window next opens.", fd.StatusInfo)
+		u.sh.Flash("Interface scale saved. It applies when the window next opens.", fd.StatusInfo)
 	}
 
 	form := widget.NewForm(

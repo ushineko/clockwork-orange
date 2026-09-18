@@ -66,7 +66,7 @@ func (u *ui) buildBlacklist() fyne.CanvasObject {
 	filter.SetText(u.blState.filter)
 	filter.OnChanged = func(s string) {
 		u.blState.filter = s
-		u.refresh()
+		u.sh.Refresh()
 	}
 	refresh := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() {
 		u.blOK = false
@@ -97,13 +97,13 @@ func (u *ui) buildBlacklist() fyne.CanvasObject {
 			}
 		}
 		grid.UnselectAll()
-		u.refresh()
+		u.sh.Refresh()
 	}
 
 	remove := widget.NewButtonWithIcon(fmt.Sprintf("Remove selected from blacklist (%d)", len(u.blState.selected)),
 		theme.DeleteIcon(), func() { u.removeSelectedBlacklist() })
 	remove.Importance = widget.DangerImportance
-	if len(u.blState.selected) == 0 || u.working() {
+	if len(u.blState.selected) == 0 || u.sh.Working() {
 		remove.Disable()
 	}
 	count := widgets.Dim(fmt.Sprintf("%d of %d shown · click a row to select it", len(rows), len(u.blacklist)))
@@ -127,16 +127,16 @@ func (u *ui) removeSelectedBlacklist() {
 	if len(hashes) == 0 {
 		return
 	}
-	dialogs.ConfirmDestructive(u.win, "Remove from the blacklist?",
+	dialogs.ConfirmDestructive(u.sh.Window, "Remove from the blacklist?",
 		fmt.Sprintf("%d image(s) will be allowed to be downloaded again. The files were deleted when "+
 			"they were blacklisted and are not restored; the history is not touched.", len(hashes)),
 		"Remove", func() {
-			u.perform("Removing from the blacklist…", func(ctx context.Context) error {
+			u.sh.Perform("Removing from the blacklist…", func(ctx context.Context) error {
 				if err := core.BlacklistRemove(ctx, core.BlacklistRemoveRequest{Request: u.request(), Hashes: hashes}); err != nil {
 					return err
 				}
 				fyne.Do(func() { u.blState.selected = map[string]bool{} })
-				u.ok(fmt.Sprintf("Removed %d image(s) from the blacklist.", len(hashes)))
+				fyne.Do(func() { u.sh.OK(fmt.Sprintf("Removed %d image(s) from the blacklist.", len(hashes))) })
 				return nil
 			})
 		})

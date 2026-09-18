@@ -331,7 +331,7 @@ func (r *reviewModel) draw(u *ui) {
 	}
 	if r.applyBtn != nil {
 		r.applyBtn.SetText(fmt.Sprintf("Apply blacklist (%d)", r.markedCount()))
-		if r.markedCount() == 0 || u.working() {
+		if r.markedCount() == 0 || u.sh.Working() {
 			r.applyBtn.Disable()
 		} else {
 			r.applyBtn.Enable()
@@ -385,7 +385,7 @@ func (r *reviewModel) draw(u *ui) {
 		})
 		cache.prefetch(idx, images)
 	}
-	if !u.onScreen() {
+	if !u.sh.OnScreen() {
 		load()
 		return
 	}
@@ -428,13 +428,13 @@ func (r *reviewModel) handleKey(u *ui, key fyne.KeyName) bool {
 // to the review when a plugin section is on screen.
 func (u *ui) onTypedKey(e *fyne.KeyEvent) {
 	if e.Name == fyne.KeyF5 {
-		u.invalidate()
+		u.sh.Invalidate()
 		return
 	}
 	if u.review == nil || u.review.preview == nil {
 		return
 	}
-	if _, isPlugin := pluginForTitle(u.currentTitle()); !isPlugin || u.pluginTab != 1 {
+	if _, isPlugin := pluginForTitle(u.sh.Current().Title()); !isPlugin || u.pluginTab != 1 {
 		return // the keys belong to the Review tab; on Configuration they would move an unseen image
 	}
 	u.review.handleKey(u, e.Name)
@@ -446,7 +446,7 @@ watch re-scans when the directory changes, 500 ms after the events settle
 second, and one scan per file would decode the newest image over and over.
 */
 func (r *reviewModel) watch(u *ui) {
-	if r.watcher != nil || r.dir == "" || !u.onScreen() {
+	if r.watcher != nil || r.dir == "" || !u.sh.OnScreen() {
 		return
 	}
 	w, err := fsnotify.NewWatcher()
@@ -517,7 +517,7 @@ func (u *ui) applyBlacklist(name string, rv *reviewModel) {
 	if len(targets) == 0 {
 		return
 	}
-	u.perform(fmt.Sprintf("Blacklisting %d image(s)…", len(targets)), func(ctx context.Context) error {
+	u.sh.Perform(fmt.Sprintf("Blacklisting %d image(s)…", len(targets)), func(ctx context.Context) error {
 		_, err := core.RunPlugin(ctx, core.RunPluginRequest{
 			Request: u.requestWithEvents(paneEvents(u.activity)),
 			Name:    name,
@@ -534,7 +534,7 @@ func (u *ui) applyBlacklist(name string, rv *reviewModel) {
 			rv.scan()
 			u.blOK = false
 		})
-		u.ok(fmt.Sprintf("Blacklisted and removed %d image(s).", len(targets)))
+		fyne.Do(func() { u.sh.OK(fmt.Sprintf("Blacklisted and removed %d image(s).", len(targets))) })
 		return nil
 	})
 }

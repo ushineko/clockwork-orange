@@ -35,15 +35,15 @@ func (u *ui) buildHistory() fyne.CanvasObject {
 	}
 
 	reset := widget.NewButtonWithIcon("Reset history database", theme.DeleteIcon(), func() {
-		dialogs.ConfirmDestructive(u.win, "Clear the download history?",
+		dialogs.ConfirmDestructive(u.sh.Window, "Clear the download history?",
 			"Every record is deleted and the database compacted. Images already on disk are not "+
 				"touched, and the blacklist is not touched; plugins may download previously seen "+
 				"images again. This cannot be undone.", "Clear history", func() {
-				u.perform("Clearing the history…", func(ctx context.Context) error {
+				u.sh.Perform("Clearing the history…", func(ctx context.Context) error {
 					if err := core.HistoryClear(ctx, u.request()); err != nil {
 						return err
 					}
-					u.ok("History database cleared.")
+					fyne.Do(func() { u.sh.OK("History database cleared.") })
 					return nil
 				})
 			})
@@ -51,16 +51,18 @@ func (u *ui) buildHistory() fyne.CanvasObject {
 	reset.Importance = widget.DangerImportance
 
 	scan := widget.NewButtonWithIcon("Scan & import existing files", theme.FolderOpenIcon(), func() {
-		u.performCancellable("Scanning existing images…", true, func(ctx context.Context) error {
+		u.sh.PerformCancellable("Scanning existing images…", func(ctx context.Context) error {
 			res, err := core.HistoryImport(ctx, core.HistoryImportRequest{Request: u.request()})
 			if err != nil {
 				return err
 			}
-			u.ok(fmt.Sprintf("Imported %d image(s) from %s; skipped %d duplicate(s).", res.Imported, res.Dir, res.Skipped))
+			fyne.Do(func() {
+				u.sh.OK(fmt.Sprintf("Imported %d image(s) from %s; skipped %d duplicate(s).", res.Imported, res.Dir, res.Skipped))
+			})
 			return nil
 		})
 	})
-	u.gate(reset, scan)
+	u.sh.Gate(reset, scan)
 
 	return container.NewVBox(
 		head,

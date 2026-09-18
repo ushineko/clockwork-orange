@@ -20,7 +20,7 @@ than none.
 func sendNotification(u *ui, title, body string) {
 	conn, err := dbus.SessionBus()
 	if err != nil {
-		u.app.SendNotification(fyneNotification(title, body))
+		u.sh.App.SendNotification(fyneNotification(title, body))
 		return
 	}
 	obj := conn.Object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
@@ -29,6 +29,6 @@ func sendNotification(u *ui, title, body string) {
 		[]string{}, map[string]dbus.Variant{"desktop-entry": dbus.MakeVariant("io.ushineko.clockwork-orange")},
 		int32(notifyExpiryMs))
 	if call.Err != nil {
-		u.app.SendNotification(fyneNotification(title, body))
+		u.sh.App.SendNotification(fyneNotification(title, body))
 	}
 }

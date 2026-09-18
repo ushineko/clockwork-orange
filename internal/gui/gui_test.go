@@ -18,6 +18,7 @@ import (
 	fd "github.com/ushineko/fynedesygn"
 	"github.com/ushineko/fynedesygn/fynetest"
 	"github.com/ushineko/fynedesygn/logpane"
+	"github.com/ushineko/fynedesygn/shell"
 	fdtheme "github.com/ushineko/fynedesygn/theme"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
@@ -154,11 +155,11 @@ func walk(o fyne.CanvasObject, visit func(fyne.CanvasObject) bool) bool {
 }
 
 /*
-testUI is a window with no window: enough of a *ui for the parts that do not
-draw, over temp databases, a fake desktop and a fake systemctl, with HOME
-redirected so nothing touches the developer's real config. Sections built
-from it load inline (onScreen is false), so a test sees finished state when
-the builder returns.
+testUI is a window with no window: the program's state over a headless shell,
+temp databases, a fake desktop and a fake systemctl, with HOME redirected so
+nothing touches the developer's real config. Sections built from it load
+inline (the shell is not on screen), so a test sees finished state when the
+builder returns.
 */
 func testUI(t *testing.T) (*ui, *fakePlatform, *platform.FakeRunner) {
 	t.Helper()
@@ -178,18 +179,16 @@ func testUI(t *testing.T) (*ui, *fakePlatform, *platform.FakeRunner) {
 	deps := &core.Deps{Platform: fp, Service: platform.NewService(runner), History: hist, Blacklist: bl}
 	t.Cleanup(func() { _ = deps.Close() })
 
-	u := &ui{
-		app:      app,
-		win:      test.NewWindow(widget.NewLabel("")),
-		flashes:  container.NewVBox(),
-		deps:     deps,
-		version:  "vtest",
-		activity: logpane.New(nil),
-	}
-	u.appearance = fdtheme.DefaultAppearance()
-	t.Cleanup(func() { u.shutdown(); u.win.Close() })
+	u := &ui{deps: deps, version: "vtest", activity: logpane.New(nil)}
 	u.loadConfigNow()
 	u.plugins = core.AvailablePlugins()
+	u.sh = shell.Headless(app, u.shellOptions(Options{}))
+	// Headless has no window; the dialogs need one to hang off, and the
+	// tests that drive them get this one. OnScreen stays false.
+	win := test.NewWindow(widget.NewLabel(""))
+	u.sh.Window = win
+	u.sh.App.Settings().SetTheme(u.theme())
+	t.Cleanup(func() { u.shutdown(); win.Close() })
 	return u, fp, runner
 }
 
@@ -240,18 +239,19 @@ func TestSchemeNamesListsEveryPalette(t *testing.T) {
 // 012 AC5).
 func TestASavedAppearanceFromThePreviousBuildIsReadUnchanged(t *testing.T) {
 	u, _, _ := testUI(t)
-	p := u.app.Preferences()
+	p := u.sh.App.Preferences()
 	p.SetString("appearance.scheme", "Oxygen Dark")
 	p.SetString("appearance.font", "Fyne default")
 	p.SetFloat("appearance.textSize", 14)
 	p.SetFloat("appearance.scale", 1.2)
 
-	u.loadAppearance()
+	// The next launch: a shell built over the same preference store.
+	u.sh = shell.Headless(u.sh.App, u.shellOptions(Options{}))
 	th := u.theme()
 	require.Equal(t, "Oxygen Dark", th.Palette().Name)
 	require.Equal(t, float32(14), th.TextSize())
-	require.Equal(t, fdtheme.DefaultFontName, u.appearance.Font)
-	require.Equal(t, float32(1.2), u.appearance.Scale)
+	require.Equal(t, fdtheme.DefaultFontName, u.sh.Appearance().Font)
+	require.Equal(t, float32(1.2), u.sh.Appearance().Scale)
 }
 
 // The console font family and size come from the YAML, not the preference
@@ -296,13 +296,16 @@ func TestConsoleFontAndSizeFromTheDocumentReachTheThemeAndThePanes(t *testing.T)
 
 // --section opens the named section, case-insensitively; a typo opens the
 // first rather than a dead window.
-func TestSectionIndexResolvesNamesAndFallsBackToTheFirst(t *testing.T) {
-	_, _, _ = testUI(t)
-	secs := sections()
-	require.Equal(t, 0, sectionIndex(secs, ""))
-	require.Equal(t, 0, sectionIndex(secs, "nope"))
-	require.Equal(t, len(secs)-1, sectionIndex(secs, "about"))
-	require.Equal(t, 2, sectionIndex(secs, "Wallhaven"))
+func TestSectionSelectionResolvesNamesAndFallsBackToTheFirst(t *testing.T) {
+	u, _, _ := testUI(t)
+	first := u.sh.Sections()[0].Title()
+	require.Equal(t, first, u.sh.Current().Title(), "no --section: the first")
+	u.sh.Select("about")
+	require.Equal(t, "About", u.sh.Current().Title())
+	u.sh.Select("Wallhaven")
+	require.Equal(t, "Wallhaven", u.sh.Current().Title())
+	u.sh.Select("nope")
+	require.Equal(t, first, u.sh.Current().Title(), "a typo opens the first, not a dead window")
 }
 
 // A name in Actions() is a claim that the GUI reaches that operation. A
@@ -322,8 +325,8 @@ func TestActionsAreUniqueAndNonEmpty(t *testing.T) {
 // window down on first launch.
 func TestEverySectionRendersHeadlessly(t *testing.T) {
 	u, _, _ := testUI(t)
-	for _, s := range sections() {
-		require.NotPanicsf(t, func() { _ = s.build(u) }, "empty document: %s", s.title)
+	for _, s := range u.sh.Sections() {
+		require.NotPanicsf(t, func() { _ = s.Build(u.sh) }, "empty document: %s", s.Title())
 	}
 	for title, b := range sectionBuilders() {
 		require.NotPanicsf(t, func() { _ = b.build(u) }, "empty document: %s", title)
@@ -338,34 +341,34 @@ func TestEverySectionRendersHeadlessly(t *testing.T) {
 	writeDoc(t, doc)
 	u.loadConfigNow()
 	require.NoError(t, u.deps.Blacklist.Add("abc", "local", filepath.Join(dir, "imga.jpg")))
-	for _, s := range sections() {
-		require.NotPanicsf(t, func() { _ = s.build(u) }, "populated document: %s", s.title)
+	for _, s := range u.sh.Sections() {
+		require.NotPanicsf(t, func() { _ = s.Build(u.sh) }, "populated document: %s", s.Title())
+	}
+
+	// And in every scheme: a component that reads a palette role the scheme
+	// does not carry would take the window down on the next Appearance click.
+	for _, name := range fdtheme.SchemeNames() {
+		a := u.sh.Appearance()
+		a.Scheme = name
+		u.setAppearance(a)
+		for _, s := range u.sh.Sections() {
+			require.NotPanicsf(t, func() { _ = s.Build(u.sh) }, "%s: %s", name, s.Title())
+		}
 	}
 }
 
-// --- flash (copied from nmsbonker) ----------------------------------------------
+// --- banners -------------------------------------------------------------------
 
-func TestFlashKeepsFailuresUntilDismissed(t *testing.T) {
-	_, fades := flashHold(fd.StatusBad)
-	require.False(t, fades, "a failure must not clear itself")
-	warn, fades := flashHold(fd.StatusWarn)
-	require.True(t, fades)
-	good, _ := flashHold(fd.StatusGood)
-	require.Greater(t, warn, good, "a warning names a condition to act on, so it stays longer")
-	require.GreaterOrEqual(t, good.Seconds(), 5.0)
-}
-
+// The shell's banner slot is wired: a result shows, a newer one replaces it,
+// and dismissing clears it. The timings and the fade are the library's.
 func TestFlashShowsOneBannerAtATime(t *testing.T) {
 	u, _, _ := testUI(t)
-	u.flash("first", fd.StatusGood)
-	require.Len(t, u.flashes.Objects, 1)
-	u.flash("second", fd.StatusBad)
-	require.Len(t, u.flashes.Objects, 1, "a newer result replaces the older one")
-	stale := u.flashSeq - 1
-	u.clearFlash(stale)
-	require.Len(t, u.flashes.Objects, 1, "a stale fade timer must not clear the newer banner")
-	u.clearFlash(u.flashSeq)
-	require.Empty(t, u.flashes.Objects)
+	u.sh.Flash("first", fd.StatusGood)
+	require.Equal(t, "first", u.sh.FlashText())
+	u.sh.Flash("second", fd.StatusBad)
+	require.Equal(t, "second", u.sh.FlashText(), "a newer result replaces the older one")
+	u.sh.ClearFlash()
+	require.Empty(t, u.sh.FlashText())
 }
 
 // --- window geometry (R7.2) --------------------------------------------------------
