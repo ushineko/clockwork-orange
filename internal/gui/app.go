@@ -1,8 +1,3 @@
-// Copied from nmsbonker (same author) — keep in sync by hand. The shell, the
-// flash slot, the busy popup and the small shared widgets are nmsbonker's; the
-// sections, the status bar's contents, the timer and the tray are this
-// project's.
-
 /*
 Package gui is the desktop front end of spec 010 (R7).
 
@@ -20,9 +15,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
-	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +28,11 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/logpane"
+	"github.com/ushineko/fynedesygn/markdown"
+	fdtheme "github.com/ushineko/fynedesygn/theme"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/core"
@@ -60,11 +58,10 @@ type ui struct {
 	// supply fakes.
 	deps *core.Deps
 
-	// appearance, persisted across runs. Held here so a change in one control
-	// can rebuild the theme with the other two unchanged.
-	scheme   string
-	fontName string
-	textSize float32
+	// appearance is the scheme, interface font, text size and scale,
+	// persisted across runs in the preference store. The console font is not
+	// in it: that lives in the document (consoleFamily).
+	appearance fdtheme.Appearance
 
 	content *container.Scroll
 	nav     *widget.List
@@ -115,7 +112,7 @@ type ui struct {
 	// activity is the log every long-running thing in this window writes to:
 	// the wallpaper timer's cycles, plugin runs started from a section, and on
 	// Linux the service journal tail. It outlives the sections.
-	activity *logPane
+	activity *logpane.Pane
 	// timer is the in-process wallpaper rotation (R7.12).
 	timer wallpaperTimer
 	// review is the plugin section's image review, kept across rebuilds of
@@ -123,7 +120,7 @@ type ui struct {
 	review *reviewModel
 	// readme is the About section's document pane while that section is on
 	// screen. It watches the content scroll, so detach forgets it.
-	readme *markdownPane
+	readme *markdown.Pane
 	// blState is the Blacklist section's filter and selection.
 	blState blacklistState
 	// pluginTab is the plugin sections' selected tab (0 configuration, 1
@@ -153,75 +150,28 @@ type ui struct {
 	flashSeq int // identifies the banner that owns the slot, so a stale timer cannot clear a newer one
 }
 
-// Preference keys. Namespaced so a later setting cannot collide with one of
-// these by accident.
-const (
-	prefScheme = "appearance.scheme"
-	prefFont   = "appearance.font"
-	prefSize   = "appearance.textSize"
-	// prefScale is the interface scale multiplier, applied through FYNE_SCALE
-	// at window creation (see applyScalePreference). 0 means the system's.
-	prefScale = "appearance.scale"
-)
-
-// scaleEnv is Fyne's scale override, read when a window is created.
-const scaleEnv = "FYNE_SCALE"
-
-// scaleChoices are the interface scales Appearance offers; 0 is "System".
-var scaleChoices = []float32{0, 1.1, 1.2, 1.3, 1.5, 1.75, 2} //nolint:gochecknoglobals // a fixed table
-
-/*
-applyScalePreference hands the saved interface scale to Fyne (R7.16).
-
-Fyne has no per-application scale setting: FYNE_SCALE in the environment or a
-scale in ~/.config/fyne/settings.json, which every Fyne program on the machine
-reads. But the environment variable is read when a window is created, not when
-the process starts, so setting it here, after the app exists and before the
-window does, scopes it to this program. An explicit FYNE_SCALE from the shell
-wins, so a capture script can still force one.
-
-Why it exists: Fyne's text has no hinting, and on a fractional-scale Wayland
-desktop it reads soft; drawn a fifth larger it reads well. A user who wants
-that should not have to know an environment variable.
-*/
-func (u *ui) applyScalePreference() {
-	if os.Getenv(scaleEnv) != "" {
-		return
-	}
-	if s := u.app.Preferences().Float(prefScale); s > 0 {
-		_ = os.Setenv(scaleEnv, strconv.FormatFloat(s, 'f', 2, 32))
-	}
-}
-
-// loadAppearance reads the saved appearance, falling back to the defaults. A
-// stale value — a scheme that was renamed, a font since uninstalled — falls back
-// rather than failing: paletteByName and loadFont both tolerate an unknown name.
+// loadAppearance reads the saved appearance, falling back to the defaults.
 func (u *ui) loadAppearance() {
-	p := u.app.Preferences()
-	u.scheme = p.StringWithFallback(prefScheme, palettes[0].name)
-	u.fontName = p.StringWithFallback(prefFont, defaultFontName)
-	u.textSize = float32(p.FloatWithFallback(prefSize, float64(defaultTextSize)))
+	u.appearance = fdtheme.LoadAppearance(u.app.Preferences())
 }
 
-// applyAppearance rebuilds the theme from the current settings and saves them.
+// applyAppearance saves the current appearance and rebuilds the theme from it.
 func (u *ui) applyAppearance() {
-	p := u.app.Preferences()
-	p.SetString(prefScheme, u.scheme)
-	p.SetString(prefFont, u.fontName)
-	p.SetFloat(prefSize, float64(u.textSize))
-
+	u.appearance.Save(u.app.Preferences())
 	u.app.Settings().SetTheme(u.theme())
 }
 
 // theme is the current theme: scheme, interface font and text size from the
-// preference store, console font from the document.
-func (u *ui) theme() kdeTheme {
-	return kdeTheme{
-		p:    paletteByName(u.scheme),
-		font: loadFont(u.fontName),
-		mono: loadFont(consoleFamily(u.doc)),
-		text: u.textSize,
-	}
+// preference store, console font from the document. Built here rather than by
+// Appearance.Theme because the monospace face comes from the YAML, not from
+// the preference store.
+func (u *ui) theme() fdtheme.Theme {
+	a := u.appearance
+	return fdtheme.New(fdtheme.SchemeByName(a.Scheme), fdtheme.Options{
+		Font:     fdtheme.LoadFont(a.Font),
+		Mono:     fdtheme.LoadFont(consoleFamily(u.doc)),
+		TextSize: a.TextSize,
+	})
 }
 
 // consoleFamily is the document's console font family; the Python default
@@ -238,6 +188,21 @@ func consoleFamily(doc config.Document) string {
 func consoleSize(doc config.Document) float32 {
 	n := docDefaultsFor(doc).ConsoleFontSize
 	return float32(min(48, max(6, n)))
+}
+
+// paneOptions shapes a log pane the way every pane in this window is drawn:
+// the fixed height, the console text size from the document, Copy through the
+// app's clipboard reporting into the banner slot, and Clear when onClear is
+// given (nil for a pane whose content comes from the journal).
+func (u *ui) paneOptions(title string, onClear func()) logpane.Options {
+	return logpane.Options{
+		Title:     title,
+		Height:    logpane.DefaultHeight,
+		TextSize:  consoleSize(u.doc),
+		OnClear:   onClear,
+		Clipboard: u.app.Clipboard(),
+		Flash:     u.flash,
+	}
 }
 
 // The fixed section titles (R7.3). The first is Service on Linux and Activity
@@ -347,7 +312,7 @@ func sections() []section {
 func SectionNames() []string { return sectionTitles() }
 
 // SchemeNames lists the colour schemes, for the same reason.
-func SchemeNames() []string { return paletteNames() }
+func SchemeNames() []string { return fdtheme.SchemeNames() }
 
 // Options configure a run. Section and Scheme exist so a capture script can
 // deep-link into the window; they override the saved appearance for that run
@@ -383,7 +348,7 @@ func Run(o Options) {
 	}
 	// Before the toolkit starts: GLFW reads the cursor theme from the
 	// environment at init, and there is no second chance once the window is up.
-	applyCursorTheme()
+	fdtheme.ApplyCursorTheme()
 
 	// The ID gives the app a preferences store, which Fyne writes under the
 	// user's config directory. That file holds the appearance settings and
@@ -391,16 +356,16 @@ func Run(o Options) {
 	// clockwork-orange.yml, so that the daemon and this window agree.
 	a := app.NewWithID("io.ushineko.clockwork-orange")
 	u := &ui{app: a, version: core.Version(), configPath: o.ConfigPath, release: release}
-	u.activity = newLogPane()
+	u.activity = logpane.New(nil)
 	u.win = a.NewWindow("Clockwork Orange " + u.version)
 	u.win.SetIcon(appIcon())
 	a.SetIcon(appIcon())
 	u.loadAppearance()
-	u.applyScalePreference()
+	fdtheme.ApplyScale(u.appearance.Scale)
 	if o.Scheme != "" {
 		// Forced for this run only, so a capture does not overwrite whatever
 		// the user had chosen.
-		u.scheme = paletteByName(o.Scheme).name
+		u.appearance.Scheme = fdtheme.SchemeByName(o.Scheme).Name
 	}
 	// The document is read before the theme is applied and the window sized:
 	// the console font, the window's size and every form come out of it.
@@ -552,12 +517,12 @@ func (u *ui) swap(build func(*ui) fyne.CanvasObject, keepScroll bool) {
 // detach forgets every live widget the sections hold, and stops the review
 // watcher: the pane they drew into is about to be replaced.
 func (u *ui) detach() {
-	u.activity.detach()
+	u.activity.Detach()
 	if u.review != nil {
 		u.review.detach()
 	}
 	if u.readme != nil {
-		u.readme.detach()
+		u.readme.Detach()
 		u.readme = nil
 	}
 }
@@ -596,22 +561,22 @@ func (u *ui) statusBar() fyne.CanvasObject {
 	plugins := widget.NewLabel(fmt.Sprintf("%d/%d", len(enabled), len(core.AvailablePluginNames())))
 
 	bar := container.NewHBox(
-		dim("mode"), mode, sep(),
-		dim("interval"), wait, sep(),
-		dim("plugins"), plugins,
+		widgets.Dim("mode"), mode, widgets.Sep(),
+		widgets.Dim("interval"), wait, widgets.Sep(),
+		widgets.Dim("plugins"), plugins,
 	)
 	if runtime.GOOS == "linux" {
-		svc := statusText("reading…", StatusInfo)
+		svc := widgets.StatusText("reading…", fd.StatusInfo)
 		if u.serviceOK {
-			svc = statusText(string(u.service.State), serviceStatus(u.service.State))
+			svc = widgets.StatusText(string(u.service.State), serviceStatus(u.service.State))
 		}
-		bar.Add(sep())
-		bar.Add(dim("service"))
+		bar.Add(widgets.Sep())
+		bar.Add(widgets.Dim("service"))
 		bar.Add(svc)
 	}
 	if u.timer.daemonHeld {
-		bar.Add(sep())
-		bar.Add(statusText("timer idle: the daemon is cycling", StatusInfo))
+		bar.Add(widgets.Sep())
+		bar.Add(widgets.StatusText("timer idle: the daemon is cycling", fd.StatusInfo))
 	}
 	return container.NewVBox(widget.NewSeparator(), container.NewPadded(bar))
 }
@@ -702,7 +667,7 @@ func (u *ui) showBusy() {
 			u.busyLabel = widget.NewLabel(u.busyWhat)
 			u.busyLabel.Alignment = fyne.TextAlignCenter
 			bar := widget.NewProgressBarInfinite()
-			rows := container.NewVBox(u.busyLabel, fixedWidth(bar, 320))
+			rows := container.NewVBox(u.busyLabel, widgets.FixedWidth(bar, 320))
 			if u.busyCancel != nil {
 				cancel := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 					if u.busyCancel != nil {
@@ -785,11 +750,11 @@ const (
 // A failure does not: it waits to be dismissed, or until another operation
 // replaces it. An error that removes itself on a timer is an error nobody read,
 // and the operation it describes has already not happened.
-func flashHold(st Status) (time.Duration, bool) {
+func flashHold(st fd.Status) (time.Duration, bool) {
 	switch st {
-	case StatusBad:
+	case fd.StatusBad:
 		return 0, false
-	case StatusWarn:
+	case fd.StatusWarn:
 		return flashHoldWarn, true
 	default:
 		return flashHoldGood, true
@@ -811,7 +776,7 @@ Plugin output does not come through here. A run emits dozens of lines and one
 banner per line would be a slot flickering for a minute; the log pane is where
 those go, and one banner summarises the result.
 */
-func (u *ui) flash(text string, st Status) {
+func (u *ui) flash(text string, st fd.Status) {
 	u.flashSeq++
 	seq := u.flashSeq
 
@@ -829,7 +794,7 @@ func (u *ui) flash(text string, st Status) {
 	dismiss.Importance = widget.LowImportance
 
 	banner := container.NewStack(bg, container.NewPadded(
-		container.NewBorder(nil, nil, marker(st), dismiss, label)))
+		container.NewBorder(nil, nil, widgets.Marker(st), dismiss, label)))
 	u.flashes.Objects = []fyne.CanvasObject{banner}
 	u.flashes.Refresh()
 	u.showFlashPop()
@@ -884,33 +849,33 @@ func (u *ui) showFlashPop() {
 	}
 	c := u.win.Canvas()
 	if u.flashPop == nil {
-		u.flashPop = widget.NewPopUp(fixedWidth(u.flashes, flashWidth), c)
+		u.flashPop = widget.NewPopUp(widgets.FixedWidth(u.flashes, flashWidth), c)
 	}
 	cs := c.Size()
 	width := min(float32(flashWidth), cs.Width-40)
-	u.flashPop.Content = fixedWidth(u.flashes, width)
+	u.flashPop.Content = widgets.FixedWidth(u.flashes, width)
 	size := u.flashPop.Content.MinSize()
 	pos := fyne.NewPos((cs.Width-size.Width)/2, cs.Height-size.Height-56)
 	u.flashPop.ShowAtPosition(pos)
 }
 
 // flashTint is the banner's starting colour: the status role from the active
-// scheme, at low alpha so text stays readable over it in all five schemes.
-func (u *ui) flashTint(st Status) color.NRGBA {
-	p := paletteByName(u.scheme)
+// scheme, at low alpha so text stays readable over it in every scheme.
+func (u *ui) flashTint(st fd.Status) color.NRGBA {
+	p := fdtheme.SchemeByName(u.appearance.Scheme)
 	var c color.Color
 	switch st {
-	case StatusGood:
-		c = p.positive
-	case StatusWarn:
-		c = p.neutral
-	case StatusBad:
-		c = p.negative
+	case fd.StatusGood:
+		c = p.Positive
+	case fd.StatusWarn:
+		c = p.Neutral
+	case fd.StatusBad:
+		c = p.Negative
 	default:
-		c = p.selectionBG
+		c = p.SelectionBG
 	}
-	r, g, b, _ := c.RGBA()
-	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0x4d} //nolint:gosec // 16-bit channels; >>8 fits a byte
+	tint, _ := fdtheme.Alpha(c, 0x4d).(color.NRGBA)
+	return tint
 }
 
 // notify sends a desktop notification (R7.11) that goes away on its own.
@@ -925,94 +890,6 @@ func (u *ui) notify(title, body string) {
 
 func fyneNotification(title, body string) *fyne.Notification {
 	return fyne.NewNotification(title, body)
-}
-
-// --- small shared widgets -------------------------------------------------
-
-func dim(s string) fyne.CanvasObject {
-	l := widget.NewLabel(s)
-	l.Importance = widget.LowImportance
-	return l
-}
-
-func sep() fyne.CanvasObject { return widget.NewLabel("·") }
-
-// statusText colours a value by its status. The colour is drawn from the active
-// scheme's negative/positive/neutral roles, so it stays legible in all five.
-func statusText(s string, st Status) fyne.CanvasObject {
-	l := widget.NewLabel(s)
-	switch st {
-	case StatusGood:
-		l.Importance = widget.SuccessImportance
-	case StatusWarn:
-		l.Importance = widget.WarningImportance
-	case StatusBad:
-		l.Importance = widget.DangerImportance
-	case StatusInfo:
-	}
-	return l
-}
-
-// marker is the icon that ranks a row at a glance.
-func marker(s Status) fyne.CanvasObject {
-	switch s {
-	case StatusGood:
-		return widget.NewIcon(theme.ConfirmIcon())
-	case StatusWarn:
-		return widget.NewIcon(theme.WarningIcon())
-	case StatusBad:
-		return widget.NewIcon(theme.ErrorIcon())
-	case StatusInfo:
-	}
-	return widget.NewIcon(theme.InfoIcon())
-}
-
-// wrapped is a paragraph that reflows rather than running off the edge. Used
-// for the sentences in dialogs, which are the ones that state consequences.
-func wrapped(text string) fyne.CanvasObject {
-	l := widget.NewLabel(text)
-	l.Wrapping = fyne.TextWrapWord
-	return l
-}
-
-func heading(title, blurb string) fyne.CanvasObject {
-	h := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	b := widget.NewLabel(blurb)
-	b.Wrapping = fyne.TextWrapWord
-	b.Importance = widget.LowImportance
-	return container.NewVBox(h, b, widget.NewSeparator())
-}
-
-// note is a marked, wrapped sentence: the shape a caveat takes in a section.
-func note(text string, st Status) fyne.CanvasObject {
-	return container.NewBorder(nil, nil, marker(st), nil, wrapped(text))
-}
-
-// card is a titled block of facts with a rule under the title.
-func card(title string, body ...fyne.CanvasObject) fyne.CanvasObject {
-	head := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	return container.NewVBox(append([]fyne.CanvasObject{head, widget.NewSeparator()}, body...)...)
-}
-
-// humanSize renders a byte count the way history_tab.py did: B, KB or MB.
-func humanSize(n int64) string {
-	const kb, mb = 1024, 1024 * 1024
-	switch {
-	case n >= mb:
-		return fmt.Sprintf("%.1f MB", float64(n)/mb)
-	case n >= kb:
-		return fmt.Sprintf("%.1f KB", float64(n)/kb)
-	}
-	return fmt.Sprintf("%d B", n)
-}
-
-// orNone substitutes a stand-in for an empty value, so a blank cell never reads
-// as a rendering fault.
-func orNone(s, fallback string) string {
-	if strings.TrimSpace(s) == "" {
-		return fallback
-	}
-	return s
 }
 
 /*

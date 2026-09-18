@@ -519,7 +519,7 @@ func (u *ui) applyBlacklist(name string, rv *reviewModel) {
 	}
 	u.perform(fmt.Sprintf("Blacklisting %d image(s)…", len(targets)), func(ctx context.Context) error {
 		_, err := core.RunPlugin(ctx, core.RunPluginRequest{
-			Request: u.requestWithEvents(u.activity.events()),
+			Request: u.requestWithEvents(paneEvents(u.activity)),
 			Name:    name,
 			Override: map[string]any{
 				"action":  "process_blacklist",

@@ -23,22 +23,3 @@ func TestBlacklistFilterMatchesAnyColumnCaseInsensitively(t *testing.T) {
 	require.Equal(t, []store.BlacklistItem{items[0], items[1]}, filterBlacklist(items, "2026-"))
 	require.Empty(t, filterBlacklist(items, "zzz"))
 }
-
-// A thumbnail table gets an image column and taller rows; a plain one does
-// not pay for them.
-func TestDetailTableThumbnailColumn(t *testing.T) {
-	plain := &detailTable{}
-	plain.header("A", "B")
-	plain.row(StatusInfo, "1", "2")
-	require.False(t, plain.hasThumbs())
-	require.NotPanics(t, func() { plain.widget() })
-
-	withThumbs := &detailTable{thumbCol: 1}
-	withThumbs.header("", "Thumb", "Hash")
-	withThumbs.row(StatusInfo, " ", "", "abc")
-	withThumbs.thumbs = [][]byte{{0xff, 0xd8}}
-	require.True(t, withThumbs.hasThumbs())
-	require.NotNil(t, withThumbs.thumb(0))
-	require.Nil(t, withThumbs.thumb(5))
-	require.NotPanics(t, func() { withThumbs.widget() })
-}

@@ -1,6 +1,3 @@
-// Copied from nmsbonker (same author) — keep in sync by hand; the text is this
-// project's.
-
 package gui
 
 import (
@@ -10,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"github.com/ushineko/fynedesygn/markdown"
 
 	"github.com/ushineko/clockwork-orange/internal/gui/assets"
 )
@@ -48,8 +46,8 @@ func (u *ui) buildAbout() fyne.CanvasObject {
 	// rather than one RichText: the pane renders the blocks near the viewport
 	// and leaves the rest out of the widget tree, which is what makes the
 	// section scroll smoothly (spec 011).
-	u.readme = newMarkdownPane(string(assets.README()))
-	u.readme.follow(u.content)
+	u.readme = markdown.New(string(assets.README()), markdown.Options{})
+	u.readme.Follow(u.content)
 
 	return container.NewVBox(head, widget.NewSeparator(), u.readme)
 }

@@ -1,7 +1,3 @@
-// Copied from nmsbonker (same author) — keep in sync by hand. request, report,
-// ok, invalidate, onScreen and perform are nmsbonker's; the loaders and the
-// auto-save are this project's.
-
 package gui
 
 import (
@@ -10,6 +6,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	fd "github.com/ushineko/fynedesygn"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/core"
@@ -54,13 +51,13 @@ func (u *ui) report(what string, err error) {
 	if errors.Is(err, context.Canceled) {
 		return
 	}
-	fyne.Do(func() { u.flash(what+": "+err.Error(), StatusBad) })
+	fyne.Do(func() { u.flash(what+": "+err.Error(), fd.StatusBad) })
 }
 
 // ok reports a completed operation and treats what is on screen as stale.
 func (u *ui) ok(msg string) {
 	fyne.Do(func() {
-		u.flash(msg, StatusGood)
+		u.flash(msg, fd.StatusGood)
 		u.invalidate()
 	})
 }
@@ -106,7 +103,7 @@ func (u *ui) perform(what string, fn func(ctx context.Context) error) {
 
 func (u *ui) performCancellable(what string, cancellable bool, fn func(ctx context.Context) error) {
 	if u.working() {
-		u.flash("Something is already running. Wait for it to finish, or cancel it.", StatusWarn)
+		u.flash("Something is already running. Wait for it to finish, or cancel it.", fd.StatusWarn)
 		return
 	}
 	if !u.onScreen() {
@@ -148,7 +145,7 @@ func (u *ui) loadConfigNow() {
 	res, err := core.LoadConfig(context.Background(), u.request())
 	if err != nil {
 		u.docOK = true // do not retry on every rebuild
-		u.flash("Read the configuration: "+err.Error(), StatusBad)
+		u.flash("Read the configuration: "+err.Error(), fd.StatusBad)
 		return
 	}
 	u.doc, u.docPath, u.docExists, u.docOK = res.Doc, res.Path, res.Exists, true
@@ -351,7 +348,7 @@ func (u *ui) scheduleSave() {
 func (u *ui) performSave() {
 	path, err := core.SaveConfig(context.Background(), core.SaveConfigRequest{Request: u.request(), Doc: u.doc})
 	if err != nil {
-		u.flash("Save the configuration: "+err.Error(), StatusBad)
+		u.flash("Save the configuration: "+err.Error(), fd.StatusBad)
 		return
 	}
 	u.docPath, u.docExists = path, true
@@ -359,7 +356,7 @@ func (u *ui) performSave() {
 		// Headless there is no banner to show and no timer to re-arm, and
 		// touching widgets from the save timer's goroutine would race the
 		// test driving them: the test driver runs fyne.Do inline.
-		u.flash("Saved", StatusGood)
+		u.flash("Saved", fd.StatusGood)
 		u.notify("Saved", "Configuration saved")
 		u.timer.rearm(u)
 		u.redrawStatus()

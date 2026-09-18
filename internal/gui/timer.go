@@ -2,7 +2,6 @@ package gui
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -10,7 +9,6 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 
 	"github.com/ushineko/clockwork-orange/internal/core"
-	"github.com/ushineko/clockwork-orange/internal/events"
 	"github.com/ushineko/clockwork-orange/internal/platform"
 )
 
@@ -47,8 +45,7 @@ func (t *wallpaperTimer) start(u *ui) {
 	t.stop = make(chan struct{})
 	stop := t.stop
 	interval := time.Duration(waitSeconds(u.doc)) * time.Second
-	u.activity.log.append(events.LevelInfo, fmt.Sprintf("%s [INFO] Wallpaper timer: every %d seconds",
-		time.Now().Format("15:04:05"), waitSeconds(u.doc)))
+	paneEvents(u.activity).Infof("Wallpaper timer: every %d seconds", waitSeconds(u.doc))
 	go func() {
 		first := time.NewTimer(firstFireDelay)
 		defer first.Stop()
@@ -116,14 +113,14 @@ func (t *wallpaperTimer) fire(u *ui) {
 			u.redrawStatus()
 		}
 	})
-	ev := u.activity.events()
+	ev := paneEvents(u.activity)
 	if held {
 		ev.Infof("The service holds the cycling lock; the window's timer is idle")
-		fyne.Do(u.activity.draw)
+		fyne.Do(u.activity.Draw)
 		return
 	}
 	ev.Infof("=== Wallpaper Change Cycle ===")
-	stop := u.activity.pump()
+	stop := u.activity.Pump()
 	defer stop()
 	mode := core.ResolveMode(u.doc, false, false)
 	_, err := core.Cycle(context.Background(), core.CycleRequest{Request: u.requestWithEvents(ev), Mode: mode})

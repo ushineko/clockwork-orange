@@ -5,6 +5,8 @@ package gui
 import (
 	"os"
 	"syscall"
+
+	fd "github.com/ushineko/fynedesygn"
 )
 
 /*
@@ -22,6 +24,6 @@ func (u *ui) restart() {
 		return
 	}
 	if err := syscall.Exec(exe, os.Args, os.Environ()); err != nil { //nolint:gosec // our own binary, our own argv
-		u.flash("Could not restart: "+err.Error()+". Close and reopen the window.", StatusWarn)
+		u.flash("Could not restart: "+err.Error()+". Close and reopen the window.", fd.StatusWarn)
 	}
 }

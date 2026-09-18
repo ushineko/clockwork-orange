@@ -4,14 +4,21 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/fynetest"
+	"github.com/ushineko/fynedesygn/logpane"
+	fdtheme "github.com/ushineko/fynedesygn/theme"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/core"
@@ -177,9 +184,9 @@ func testUI(t *testing.T) (*ui, *fakePlatform, *platform.FakeRunner) {
 		flashes:  container.NewVBox(),
 		deps:     deps,
 		version:  "vtest",
-		activity: newLogPane(),
-		scheme:   palettes[0].name,
+		activity: logpane.New(nil),
 	}
+	u.appearance = fdtheme.DefaultAppearance()
 	t.Cleanup(func() { u.shutdown(); u.win.Close() })
 	u.loadConfigNow()
 	u.plugins = core.AvailablePlugins()
@@ -221,8 +228,70 @@ func TestSectionNamesNeedNoAppAndEveryOneHasABuilder(t *testing.T) {
 }
 
 func TestSchemeNamesListsEveryPalette(t *testing.T) {
-	require.Equal(t, []string{"Breeze Dark", "Breeze Light", "Oxygen Dark", "Adwaita Dark", "Adwaita Light"}, SchemeNames())
-	require.Equal(t, "Breeze Dark", paletteByName("no such scheme").name, "a stale preference must fall back rather than fail")
+	require.Equal(t, fdtheme.SchemeNames(), SchemeNames())
+	require.Subset(t, SchemeNames(), []string{"Breeze Dark", "Breeze Light", "Oxygen Dark", "Adwaita Dark", "Adwaita Light"},
+		"the schemes the previous build offered are still offered under the same names")
+	require.Equal(t, fdtheme.DefaultScheme().Name, fdtheme.SchemeByName("no such scheme").Name,
+		"a stale preference must fall back rather than fail")
+}
+
+// A saved appearance from the previous build is read unchanged: the keys are
+// the ones that build wrote, so nobody loses their scheme on upgrade (spec
+// 012 AC5).
+func TestASavedAppearanceFromThePreviousBuildIsReadUnchanged(t *testing.T) {
+	u, _, _ := testUI(t)
+	p := u.app.Preferences()
+	p.SetString("appearance.scheme", "Oxygen Dark")
+	p.SetString("appearance.font", "Fyne default")
+	p.SetFloat("appearance.textSize", 14)
+	p.SetFloat("appearance.scale", 1.2)
+
+	u.loadAppearance()
+	th := u.theme()
+	require.Equal(t, "Oxygen Dark", th.Palette().Name)
+	require.Equal(t, float32(14), th.TextSize())
+	require.Equal(t, fdtheme.DefaultFontName, u.appearance.Font)
+	require.Equal(t, float32(1.2), u.appearance.Scale)
+}
+
+// The console font family and size come from the YAML, not the preference
+// store, and reach both the theme's monospace face and the log panes' rows
+// (spec 012 AC6).
+func TestConsoleFontAndSizeFromTheDocumentReachTheThemeAndThePanes(t *testing.T) {
+	u, _, _ := testUI(t)
+	// A family the scanner will find: Fyne's own monospace face, written under
+	// a name no machine has, so the test does not depend on installed fonts.
+	dir := t.TempDir()
+	mono := theme.DefaultTheme().Font(fyne.TextStyle{Monospace: true})
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ConsoleProbe-Regular.ttf"), mono.Content(), 0o600))
+	fdtheme.RescanFonts(dir)
+	t.Cleanup(func() { fdtheme.RescanFonts() })
+	require.Contains(t, consoleFontNames(), "Console Probe")
+
+	u.doc.ConsoleFontFamily = "Console Probe"
+	u.doc.ConsoleFontSize = 13
+	th := u.theme()
+	require.Equal(t, "ConsoleProbe-Regular.ttf", th.Font(fyne.TextStyle{Monospace: true}).Name(),
+		"the console family is the theme's monospace face")
+	require.NotEqual(t, "ConsoleProbe-Regular.ttf", th.Font(fyne.TextStyle{}).Name(),
+		"and never the interface face")
+
+	paneEvents(u.activity).Infof("console probe line")
+	body := u.buildActivity()
+	win := test.NewWindow(body)
+	t.Cleanup(win.Close)
+	win.Resize(fyne.NewSize(900, 700))
+	var row *canvas.Text
+	fynetest.WalkRendered(body, func(o fyne.CanvasObject) bool {
+		if tx, ok := o.(*canvas.Text); ok && strings.Contains(tx.Text, "console probe line") {
+			row = tx
+			return true
+		}
+		return false
+	})
+	require.NotNil(t, row, "the pane draws the line it was given")
+	require.Equal(t, float32(13), row.TextSize, "at console_font_size")
+	require.True(t, row.TextStyle.Monospace)
 }
 
 // --section opens the named section, case-insensitively; a typo opens the
@@ -277,38 +346,26 @@ func TestEverySectionRendersHeadlessly(t *testing.T) {
 // --- flash (copied from nmsbonker) ----------------------------------------------
 
 func TestFlashKeepsFailuresUntilDismissed(t *testing.T) {
-	_, fades := flashHold(StatusBad)
+	_, fades := flashHold(fd.StatusBad)
 	require.False(t, fades, "a failure must not clear itself")
-	warn, fades := flashHold(StatusWarn)
+	warn, fades := flashHold(fd.StatusWarn)
 	require.True(t, fades)
-	good, _ := flashHold(StatusGood)
+	good, _ := flashHold(fd.StatusGood)
 	require.Greater(t, warn, good, "a warning names a condition to act on, so it stays longer")
 	require.GreaterOrEqual(t, good.Seconds(), 5.0)
 }
 
 func TestFlashShowsOneBannerAtATime(t *testing.T) {
 	u, _, _ := testUI(t)
-	u.flash("first", StatusGood)
+	u.flash("first", fd.StatusGood)
 	require.Len(t, u.flashes.Objects, 1)
-	u.flash("second", StatusBad)
+	u.flash("second", fd.StatusBad)
 	require.Len(t, u.flashes.Objects, 1, "a newer result replaces the older one")
 	stale := u.flashSeq - 1
 	u.clearFlash(stale)
 	require.Len(t, u.flashes.Objects, 1, "a stale fade timer must not clear the newer banner")
 	u.clearFlash(u.flashSeq)
 	require.Empty(t, u.flashes.Objects)
-}
-
-func TestBrowseButtonOpensAChooserWithoutPanicking(t *testing.T) {
-	u, _, _ := testUI(t)
-	for _, dir := range []bool{false, true} {
-		field := widget.NewEntry()
-		require.NotPanics(t, func() { test.Tap(u.browseButton(field, dir)) })
-	}
-	require.NotPanics(t, func() { u.chooseFolder("", func(string) {}) })
-	for _, text := range []string{"", "/nonexistent/path/for/a/test", "~"} {
-		require.NotNil(t, pickerStart(text))
-	}
 }
 
 // --- window geometry (R7.2) --------------------------------------------------------
@@ -340,28 +397,4 @@ func TestWindowSizeRestoresFromTheConfigAndPersistsAfterAResize(t *testing.T) {
 		t.Fatal("an unchanged size must not write again")
 	default:
 	}
-}
-
-// The interface scale reaches Fyne through FYNE_SCALE at window creation
-// (R7.16): a saved preference sets it, an explicit environment value wins,
-// and the Select's labels round-trip.
-func TestInterfaceScalePreferenceSetsFyneScaleUnlessTheEnvironmentDoes(t *testing.T) {
-	u, _, _ := testUI(t)
-	t.Setenv(scaleEnv, "")
-	u.applyScalePreference()
-	require.Empty(t, os.Getenv(scaleEnv), "no preference: Fyne decides")
-
-	u.app.Preferences().SetFloat(prefScale, 1.2)
-	u.applyScalePreference()
-	require.Equal(t, "1.20", os.Getenv(scaleEnv))
-
-	t.Setenv(scaleEnv, "0.9")
-	u.applyScalePreference()
-	require.Equal(t, "0.9", os.Getenv(scaleEnv), "the shell's value wins")
-
-	for _, s := range scaleChoices {
-		require.Equal(t, s, scaleValue(scaleLabel(s)))
-	}
-	require.Equal(t, "System", scaleLabel(0))
-	require.Equal(t, float32(0), scaleValue("nonsense"))
 }

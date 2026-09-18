@@ -1,6 +1,11 @@
 package gui
 
 import (
+	"time"
+
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/logpane"
+
 	"github.com/ushineko/clockwork-orange/internal/events"
 	"github.com/ushineko/clockwork-orange/internal/platform"
 )
@@ -10,49 +15,47 @@ import (
 // core returns. Keeping them apart is what stops a rendering decision from
 // landing in the package both front ends share.
 
-// Status ranks a value so a card or a table row can be read at a glance rather
-// than parsed word by word.
-type Status int
-
-const (
-	// StatusInfo is a plain fact with no judgement attached.
-	StatusInfo Status = iota
-	// StatusGood is a state the user wants to be in.
-	StatusGood
-	// StatusWarn is a state that needs an action but has broken nothing yet.
-	StatusWarn
-	// StatusBad is a state that is already costing the user something.
-	StatusBad
-)
-
-// levelStatus ranks a core log line, which is what colours the log panes.
-func levelStatus(l events.Level) Status {
+// logLevel maps a core log level onto the log pane's, which is what colours
+// a line. The mapping lives here so the pane never learns a domain level.
+func logLevel(l events.Level) logpane.Level {
 	switch l {
+	case events.LevelDebug:
+		return logpane.Debug
 	case events.LevelWarn:
-		return StatusWarn
+		return logpane.Warn
 	case events.LevelError:
-		return StatusBad
-	case events.LevelDebug, events.LevelInfo:
-		return StatusInfo
+		return logpane.Error
+	case events.LevelInfo:
+		return logpane.Info
 	}
-	return StatusInfo
+	return logpane.Info
+}
+
+// paneEvents is a sink that writes every level into a pane, timestamped the
+// way activity_log.py did (HH:MM:SS [LEVEL] message).
+func paneEvents(p *logpane.Pane) events.Events {
+	return events.Events{
+		OnLog: func(level events.Level, msg string) {
+			p.Model().Append(logLevel(level), time.Now().Format("15:04:05")+" "+level.String()+" "+msg)
+		},
+	}
 }
 
 // serviceStatus ranks the systemd state the way service_manager.py coloured
 // its status label (R7.4): active green, inactive and failed red, the two
 // transitional states amber, anything else plain.
-func serviceStatus(s platform.ServiceState) Status {
+func serviceStatus(s platform.ServiceState) fd.Status {
 	switch s {
 	case platform.StateActive:
-		return StatusGood
+		return fd.StatusGood
 	case platform.StateInactive, platform.StateFailed:
-		return StatusBad
+		return fd.StatusBad
 	case platform.StateActivating, platform.StateDeactivating:
-		return StatusWarn
+		return fd.StatusWarn
 	case platform.StateUnknown:
-		return StatusInfo
+		return fd.StatusInfo
 	}
-	return StatusInfo
+	return fd.StatusInfo
 }
 
 // serviceStateText is the status line's wording, from service_manager.py.
