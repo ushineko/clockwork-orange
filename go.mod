@@ -8,7 +8,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
-	github.com/ushineko/fynedesygn v0.1.1-0.20260918013133-3dbf6f3c2fa1
+	github.com/ushineko/fynedesygn v0.1.1
 	golang.org/x/image v0.46.0
 	golang.org/x/sys v0.48.0
 	gopkg.in/yaml.v3 v3.0.1

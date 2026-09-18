@@ -135,10 +135,9 @@ Replace, keeping behaviour:
 - [x] AC1 No file under `internal/gui` carries a "Copied from" header;
   `theme.go`, `fonts.go`, `cursor_*.go`, `views_table.go`, `dialogs.go`,
   `logpane.go`, `markdownpane.go`, `restart_*.go` are gone (R2, R3.6).
-- [x] AC2 `go.mod` requires `github.com/ushineko/fynedesygn v0.1.0`; no
-  `replace` directive (R1). (At the time of writing the requirement is the
-  pseudo-version of commit a7673fa, the commit v0.1.0 is to tag; bumping the
-  requirement to the tag is a one-line follow-up. No `replace` directive.)
+- [x] AC2 `go.mod` requires `github.com/ushineko/fynedesygn v0.1.1`; no
+  `replace` directive (R1; the spec said v0.1.0, and 0.1.1 is the release
+  that carries the hooks this adoption needed).
 - [x] AC3 `grep -rn "func (u \*ui) \(flash\|busy\|perform\|report\|ok\|invalidate\|refresh\|rebuild\|redrawStatus\|swap\|detach\|show\|gate\|working\|regate\)(" internal/gui` finds nothing (R3.1).
 - [x] AC4 `SectionNames()` returns the same list as before the change, in
   order, without a Fyne app (R3.2).
@@ -178,37 +177,19 @@ Replace, keeping behaviour:
 
 ## Gaps found
 
-What the library lacked, and how the program handled it without changing the
-library. Each is a candidate library spec item.
+Recorded during implementation against the pre-release library, then fixed
+in fynedesygn 0.1.1 (its spec 006) and adopted here in the same branch:
 
 1. **No hook for a monospace face from outside the preference store.**
-   `Appearance.Theme()` is what `shell.New`, `shell.Headless` and
-   `Shell.SetAppearance` apply, and it takes `Mono` from `appearance.mono`
-   only. This program keeps the console font in the YAML, so it builds its
-   own theme (`ui.theme`, `fdtheme.New` with `Options.Mono` from
-   `consoleFamily(doc)`) and applies it after `shell.New`, after
-   `SetAppearance` (`ui.setAppearance`) and when the console font changes.
-   Each is a second `SetTheme` over the shell's. A library hook, such as
-   `shell.Options.Theme func(fdtheme.Appearance) fyne.Theme` or a
-   `Shell.SetTheme`, would remove the double apply.
-2. **`Appearance.Save` writes `appearance.mono` unconditionally.** R2.1 wanted
-   the key left unset because this program does not use it; the library
-   writes `"Fyne default"` for it on every save. Harmless (the value is the
-   default and nothing here reads it), recorded so the library can decide
-   whether Save should skip the default.
-3. **`shell.New` uses the program's callbacks before it returns the shell.**
-   `buildWindow` selects the first section (which runs its `Build`), builds
-   the status bar and runs `OnStart`, all inside `New`, so a program whose
-   builders need the `*Shell` cannot read it from the field `New`'s result is
-   assigned to. The program records the shell it is handed at the top of
-   every builder (`sections`), in `StatusBar`, `OnStart` and `OnInvalidate`
-   (`u.sh = s`). A first-called `Options.Bind func(*Shell)`, or a two-phase
-   `New`/`Start`, would make one assignment enough.
-4. **No way to add a typed-key handler beside the shell's F5 binding.** The
-   shell installs its own `Canvas().SetOnTypedKey` for F5; the review's arrow
-   keys and Space need the same hook. The program replaces the handler in
-   `OnStart` (`onTypedKey`) and re-implements F5 there. An
-   `Options.OnTypedKey` the shell calls after its own check would do.
+   Resolved by `shell.Options.Theme`; `themeFor` is that hook and the second
+   `SetTheme` is gone.
+2. **`Appearance.Save` writes `appearance.mono` unconditionally.** Left as
+   is in the library: the saved default is stable and nothing here reads it.
+3. **`shell.New` used the program's callbacks before returning the shell.**
+   Resolved by `shell.Options.OnCreate`; the shell is stored once.
+4. **No way to add a typed-key handler beside the shell's F5.** Resolved by
+   `shell.Options.OnTypedKey`; the review's keys go through it and the
+   program no longer replaces the canvas handler.
 
 Differences adopted rather than worked around (the program changed to the
 library's shape, as the Context section says):
