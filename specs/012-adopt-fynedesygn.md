@@ -3,7 +3,7 @@
 > **Note**: This work has no associated issue tracker ticket. The repository
 > is a personal public project without an issue tracker.
 
-## Status: INCOMPLETE
+## Status: COMPLETE (the manual desktop pass, AC9, was verified by the author on 2026-09-19 — issue #17)
 
 ## Executive Summary
 
@@ -149,7 +149,8 @@ Replace, keeping behaviour:
 - [x] AC7 `make test` (with `-tags parity`) and `make lint` pass; every
   section renders headlessly in all nine schemes (R4).
 - [x] AC8 `govulncheck -mode binary` on both built binaries: no findings.
-- [ ] AC9 The GUI is run on this machine and the Service, Activity, a
+- [x] AC9 The GUI is run on this machine and the Service, Activity, a
+  - Verified: manually by the author, 2026-09-19 (issue #17); the section has since been through the v4.1.x and v4.2.x releases.
   plugin, History, Blacklist, Settings, Appearance and About sections are
   opened; a plugin run streams into the Activity pane; a banner shows; the
   window hides to the tray and comes back (manual, recorded in the report).
