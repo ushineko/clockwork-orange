@@ -113,7 +113,9 @@ func (u *ui) buildBlacklist() fyne.CanvasObject {
 
 	return container.NewBorder(
 		container.NewVBox(head, container.NewBorder(nil, nil, widgets.Dim("Filter"), refresh, filter), count),
-		container.NewHBox(remove), nil, nil,
+		container.NewHBox(widgets.WithTip(remove,
+			"Allows the ticked images to be downloaded again. The files were deleted when they were "+
+				"blacklisted and are not restored, and the download history is not touched.")), nil, nil,
 		widgets.FixedHeight(grid, 480))
 }
 

@@ -144,6 +144,16 @@ func walk(o fyne.CanvasObject, visit func(fyne.CanvasObject) bool) bool {
 		}
 	case *container.Scroll:
 		return walk(c.Content, visit)
+	case *container.Split:
+		// A Split is a widget, not a container, so its two halves are
+		// invisible to a structural walk -- and since spec 013 the Service and
+		// Activity sections are one. Recorded as a gap against fynetest.Walk,
+		// which descends a Scroll and a tab set and stops at this.
+		for _, child := range []fyne.CanvasObject{c.Leading, c.Trailing} {
+			if !walk(child, visit) {
+				return false
+			}
+		}
 	case *container.AppTabs:
 		for _, item := range c.Items {
 			if !walk(item.Content, visit) {

@@ -16,6 +16,7 @@ package gui
 
 import (
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -222,12 +223,20 @@ func sectionTitles() []string {
 	return append(out, sectionHistory, sectionBlacklist, sectionSettings, sectionAppearance, sectionAbout)
 }
 
-// sectionEntry is what a section is made of: a deferred icon, its builder,
-// and the hook that releases the live widgets it holds when it is replaced.
+// sectionEntry is what a section is made of: a deferred icon, its builder, the
+// hook that releases the live widgets it holds when it is replaced, and the
+// hook that runs when the navigation arrives at it.
 type sectionEntry struct {
 	icon   func() fyne.Resource
 	build  func(*ui) fyne.CanvasObject
 	detach func(*ui)
+	// arrive runs when the navigation arrives at the section, and not when it
+	// is rebuilt where it stands (spec 013 R7). A section that refetches in
+	// its builder loops, because the fetch finishing rebuilds the section that
+	// started it; a section that refetches only when its loaded flag happens
+	// to be false shows whatever it last read, which is stale the moment a
+	// plugin run blacklists an image.
+	arrive func(*ui)
 }
 
 // sectionBuilders is what each section is made of. sections walks
@@ -254,17 +263,22 @@ func sectionBuilders() map[string]sectionEntry {
 			u.readme = nil
 		}
 	}
+	// Arriving at one of the two stores is a reason to read it again: both
+	// are written behind the section's back, by a plugin run marking an image
+	// or by the CLI.
+	staleBlacklist := func(u *ui) { u.blOK = false }
+	staleHistory := func(u *ui) { u.histOK = false }
 	m := map[string]sectionEntry{
-		sectionService:    {theme.ComputerIcon, (*ui).buildService, activity},
-		sectionActivity:   {theme.ComputerIcon, (*ui).buildActivity, activity},
-		sectionHistory:    {theme.HistoryIcon, (*ui).buildHistory, nil},
-		sectionBlacklist:  {theme.CancelIcon, (*ui).buildBlacklist, nil},
-		sectionSettings:   {theme.SettingsIcon, (*ui).buildSettings, nil},
-		sectionAppearance: {theme.ColorPaletteIcon, (*ui).buildAppearance, nil},
-		sectionAbout:      {theme.HelpIcon, (*ui).buildAbout, readme},
+		sectionService:    {theme.ComputerIcon, (*ui).buildService, activity, nil},
+		sectionActivity:   {theme.ComputerIcon, (*ui).buildActivity, activity, nil},
+		sectionHistory:    {theme.HistoryIcon, (*ui).buildHistory, nil, staleHistory},
+		sectionBlacklist:  {theme.CancelIcon, (*ui).buildBlacklist, nil, staleBlacklist},
+		sectionSettings:   {theme.SettingsIcon, (*ui).buildSettings, nil, nil},
+		sectionAppearance: {theme.ColorPaletteIcon, (*ui).buildAppearance, nil, nil},
+		sectionAbout:      {theme.HelpIcon, (*ui).buildAbout, readme, nil},
 	}
 	for _, name := range core.AvailablePluginNames() {
-		m[pluginTitle(name)] = sectionEntry{theme.FileImageIcon, func(u *ui) fyne.CanvasObject { return u.buildPlugin(name) }, review}
+		m[pluginTitle(name)] = sectionEntry{pluginIcon(name), func(u *ui) fyne.CanvasObject { return u.buildPlugin(name) }, review, nil}
 	}
 	return m
 }
@@ -284,6 +298,9 @@ func sections(u *ui) []shell.Section {
 		sec := shell.NewSection(title, b.icon, func(*shell.Shell) fyne.CanvasObject { return b.build(u) })
 		if b.detach != nil {
 			sec.OnDetach(func() { b.detach(u) })
+		}
+		if b.arrive != nil {
+			sec.OnArrive(func() { b.arrive(u) })
 		}
 		out = append(out, sec)
 	}
@@ -342,29 +359,43 @@ func Run(o Options) {
 	u.shutdown()
 }
 
-// shellOptions describes this program to the shell.
+// settingsPath is this window's own settings file (spec 013 R2.1).
 //
-// The preference store the app ID names holds the appearance settings and
-// nothing else: every setting the CLI can also see lives in
-// clockwork-orange.yml, so that the daemon and this window agree.
+// In the state directory this program already owns, beside history.db and
+// blacklist.db, rather than a second directory named for the app ID. It holds
+// what belongs to the window and nothing else -- the appearance, the
+// navigation's shape, the dragged dividers. Every setting the CLI can also see
+// stays in clockwork-orange.yml, where 2.9.x and the daemon read it.
+func settingsPath() string {
+	return filepath.Join(config.StateDir(), "gui-settings.json")
+}
+
+// shellOptions describes this program to the shell.
 func (u *ui) shellOptions(o Options) shell.Options {
 	return shell.Options{
 		AppID:        appID,
 		Name:         "Clockwork Orange",
 		Version:      u.version,
 		Icon:         appIcon(),
+		SettingsPath: settingsPath(),
 		Sections:     sections(u),
 		Section:      o.Section,
 		Scheme:       o.Scheme,
 		Size:         windowSize(u.doc, u.docExists),
-		StatusBar:    func(*shell.Shell) []fyne.CanvasObject { return u.statusSegments() },
-		OnCreate:     func(s *shell.Shell) { u.sh = s },
-		Theme:        u.themeFor,
-		OnTypedKey:   u.onTypedKey,
-		OnStart:      u.onStart,
-		OnInvalidate: u.onInvalidate,
-		OnStop:       func(*shell.Shell) { u.shutdown() },
-		AlsoWorking:  func() bool { return u.running },
+		// Every shape the library offers (spec 013 R3.1): this window has
+		// seven-odd sections and a review that wants the whole width, so
+		// icons-only and hidden are both useful, and the shell draws the
+		// control and binds Ctrl+B once a program lists more than one.
+		NavModes:      []shell.NavMode{shell.NavLabels, shell.NavIcons, shell.NavHidden},
+		NavPlacements: []shell.NavPlacement{shell.NavLeft, shell.NavTop},
+		StatusBar:     func(*shell.Shell) []fyne.CanvasObject { return u.statusSegments() },
+		OnCreate:      func(s *shell.Shell) { u.sh = s },
+		Theme:         u.themeFor,
+		OnTypedKey:    u.onTypedKey,
+		OnStart:       u.onStart,
+		OnInvalidate:  u.onInvalidate,
+		OnStop:        func(*shell.Shell) { u.shutdown() },
+		AlsoWorking:   func() bool { return u.running },
 	}
 }
 

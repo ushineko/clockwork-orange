@@ -115,29 +115,33 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 		widget.NewFormItem("Text size", size),
 		widget.NewFormItem("Console font", consoleFont),
 		widget.NewFormItem("Console text size", consoleSizeSel),
-		widget.NewFormItem("Interface scale", container.NewHBox(scaleSel, restart)),
+		widget.NewFormItem("Interface scale", container.NewHBox(
+			widgets.WithTip(scaleSel, "Enlarges everything in the window on top of the desktop's own scale. "+
+				"Fyne fixes a window's scale when it is created, so this applies when the window next opens."),
+			restart)),
 	)
 
 	return container.NewVScroll(container.NewVBox(
 		widgets.Heading("Appearance", "How this window looks. Fyne draws its own widgets, so this is what decides whether it sits well next to the rest of your desktop."),
 		form,
 		container.NewHBox(reset),
-		widgets.Dim("Every setting about how this window looks is here. The colour scheme, font and text "+
-			"size are kept in Fyne's own preference store; the console font and its size are "+
+		widgets.DimWrapped("Every setting about how this window looks is here. The colour scheme, font, text "+
+			"size and interface scale are kept in this window's own settings file, "+
+			"~/.config/clockwork-orange/gui-settings.json; the console font and its size are "+
 			"written to clockwork-orange.yml as console_font_family and console_font_size, the "+
 			"keys the previous versions used, and apply to the log panes in Service, Activity "+
 			"and plugin runs."),
 		widget.NewSeparator(),
 		fdtheme.Sample(sampleLogLine),
 		widget.NewSeparator(),
-		widgets.Dim("The KDE schemes are transcribed from the desktop's colour-scheme files, the Adwaita ones from "+
+		widgets.DimWrapped("The KDE schemes are transcribed from the desktop's colour-scheme files, the Adwaita ones from "+
 			"libadwaita's named colours, the Windows and macOS ones from their published design tokens. They are "+
 			"compiled in, so the window does not follow the desktop's current scheme and needs no desktop installed."),
-		widgets.Dim("Fonts are read from the system font directories. Fyne draws its own text and does "+
+		widgets.DimWrapped("Fonts are read from the system font directories. Fyne draws its own text and does "+
 			"not consult fontconfig, so this list is what was found on disk rather than what "+
 			"the desktop is configured to use. A family with no bold or italic face is drawn "+
 			"in its regular face for those styles."),
-		widgets.Dim("Interface scale enlarges everything in the window, text included, on top of the desktop's "+
+		widgets.DimWrapped("Interface scale enlarges everything in the window, text included, on top of the desktop's "+
 			"own scale. Fyne draws text without hinting, which on a fractionally scaled desktop reads "+
 			"soft at the default size; 1.2 is usually enough. It takes effect when the window is opened."),
 	))

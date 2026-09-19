@@ -511,10 +511,16 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 	// column the review sat below the fold of every plugin with more than a
 	// few settings, and the keys it listens for went to a pane nobody could
 	// see. The selected tab survives the rebuilds every operation causes.
-	configTab := container.NewVBox(
-		widgets.Card("Configuration", form.body),
-		widgets.Card("Actions", container.NewHBox(download, reset)),
-	)
+	//
+	// The actions are pinned to the bottom of the tab and the form scrolls
+	// under them (spec 013 R11). In a single column they were the last thing
+	// in it, so on a plugin with a long form -- Wallhaven has eleven fields --
+	// the two buttons the section exists for sat below the fold, and a user
+	// who had just finished filling the form had nothing in front of them to
+	// press. A control that starts work does not scroll away from it.
+	configTab := container.NewBorder(nil,
+		widgets.Card("Actions", container.NewHBox(download, reset)), nil, nil,
+		container.NewVScroll(widgets.Card("Configuration", form.body)))
 	// Plain words, no arrow glyphs: the arrows come from a fallback font and
 	// Fyne's shaper drew the run boundary after them as a missing glyph.
 	hint := widgets.Dim("Arrow keys: previous/next  ·  Space: mark/unmark")
