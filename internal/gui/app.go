@@ -109,9 +109,11 @@ type ui struct {
 	// hiddenToTray says the window is hidden rather than closed.
 	hiddenToTray bool
 	// release frees the single-instance lock on quit; stopListen closes the
-	// second-launch socket.
+	// second-launch socket; stopPprof closes the profiling server when one was
+	// asked for.
 	release    func()
 	stopListen func()
+	stopPprof  func()
 	// showHook replaces showWindow for the second-launch listener in tests.
 	showHook func()
 	// tick drives the 5 s status polls while the window is open.
@@ -439,6 +441,10 @@ func (u *ui) shellOptions(o Options) shell.Options {
 func (u *ui) onStart(s *shell.Shell) {
 	u.setupTray()
 	u.stopListen = u.listenShow()
+	// Off unless CLOCKWORK_PPROF asks for it (spec 017). Reported as a banner
+	// rather than logged: a profiling server the user turned on and that did
+	// not come up is worth saying out loud.
+	u.stopPprof = startPprof(func(msg string) { s.Flash(msg, fd.StatusInfo) })
 	s.Window.SetCloseIntercept(u.onClose)
 	if u.docErr != "" {
 		s.Flash(u.docErr, fd.StatusBad)

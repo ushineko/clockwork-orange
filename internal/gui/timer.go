@@ -207,6 +207,10 @@ func (u *ui) shutdown() {
 		u.stopListen()
 		u.stopListen = nil
 	}
+	if u.stopPprof != nil {
+		u.stopPprof()
+		u.stopPprof = nil
+	}
 	if u.release != nil {
 		u.release()
 		u.release = nil
