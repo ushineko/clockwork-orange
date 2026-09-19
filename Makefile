@@ -13,6 +13,15 @@ VERSION?=$(shell tr -d 'v[:space:]' < .tag 2>/dev/null || echo dev)
 COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 LDFLAGS=-w -s -X $(MODULE)/internal/buildinfo.Version=$(VERSION) -X $(MODULE)/internal/buildinfo.Commit=$(COMMIT)
 
+# migrated_fynedo tells Fyne this front end has been through the fyne.Do
+# migration, so it stops asking which goroutine it is on. Without it, Fyne
+# answers that question with runtime.Stack -- a full traceback -- on every
+# Canvas.Refresh. Profiled on a sibling program during a window drag: 52% of the
+# process's CPU was printing tracebacks. Every UI mutation off the main
+# goroutine here goes through fyne.Do, which is what the tag asserts.
+# See fynedesygn docs/fyne-quirks.md, quirk 31.
+FYNE_TAGS?=migrated_fynedo
+
 LINT_NAME?=golangci-lint
 LINT_VERSION?=v2.12.2
 LINT_PROGRAM=$(LINT_NAME)-$(LINT_VERSION)
@@ -83,7 +92,7 @@ build: ## Build the CLI/daemon for the host platform (no CGO: the daemon needs n
 .PHONY: build-gui
 build-gui: ## Build the desktop front end for the host platform (requires CGO)
 	@mkdir -p bin
-	CGO_ENABLED=1 go build -ldflags='$(LDFLAGS)' -trimpath -o bin/clockwork-orange-gui ./cmd/clockwork-orange-gui
+	CGO_ENABLED=1 go build -tags $(FYNE_TAGS) -ldflags='$(LDFLAGS)' -trimpath -o bin/clockwork-orange-gui ./cmd/clockwork-orange-gui
 
 .PHONY: build-all
 build-all: ## Build static CLI binaries for every platform, plus the host's GUI
@@ -98,7 +107,7 @@ build-all: ## Build static CLI binaries for every platform, plus the host's GUI
 	@# it would need a C toolchain per target; CI builds it on a runner per OS
 	@# (spec 010 R8.6). The daemon works without it.
 	@echo "building the GUI for this host ..."; \
-	if CGO_ENABLED=1 go build -ldflags='$(LDFLAGS)' -trimpath \
+	if CGO_ENABLED=1 go build -tags $(FYNE_TAGS) -ldflags='$(LDFLAGS)' -trimpath \
 		-o dist/clockwork-orange-gui-$$(go env GOOS)-$$(go env GOARCH) ./cmd/clockwork-orange-gui; then \
 		echo "  built dist/clockwork-orange-gui-$$(go env GOOS)-$$(go env GOARCH)"; \
 	else \

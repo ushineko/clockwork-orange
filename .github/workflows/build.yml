@@ -147,7 +147,7 @@ jobs:
         $env:PATH = "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin;$env:PATH"
         $env:CGO_ENABLED = "1"
         # --icon is resolved relative to --src, so it must be absolute.
-        fyne package --os windows --name clockwork-orange-gui --icon "$PWD/packaging/icons/clockwork-orange-512x512.png" `
+        fyne package --os windows --name clockwork-orange-gui --tags migrated_fynedo --icon "$PWD/packaging/icons/clockwork-orange-512x512.png" `
           --app-id io.ushineko.clockwork-orange --app-version $env:APP_VERSION --release --src ./cmd/clockwork-orange-gui
         $exe = Get-ChildItem -Recurse -Filter clockwork-orange-gui.exe | Select-Object -First 1
         if (-not $exe) { throw "fyne package produced no clockwork-orange-gui.exe" }
@@ -187,7 +187,7 @@ jobs:
         mkdir -p dist
         CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o dist/clockwork-orange ./cmd/clockwork-orange
         # --icon is resolved relative to --src, so it must be absolute.
-        CGO_ENABLED=1 fyne package --os darwin --name "Clockwork Orange" --icon "$PWD/packaging/icons/clockwork-orange-512x512.png" \
+        CGO_ENABLED=1 fyne package --os darwin --name "Clockwork Orange" --tags migrated_fynedo --icon "$PWD/packaging/icons/clockwork-orange-512x512.png" \
           --app-id io.ushineko.clockwork-orange --app-version "$APP_VERSION" --release --src ./cmd/clockwork-orange-gui
         APP=$(find . -maxdepth 3 -name "Clockwork Orange.app" -type d | head -1)
         [ -n "$APP" ] || { echo "fyne package produced no .app"; exit 1; }
