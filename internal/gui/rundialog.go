@@ -17,7 +17,6 @@ import (
 
 	"github.com/ushineko/clockwork-orange/internal/core"
 	"github.com/ushineko/clockwork-orange/internal/events"
-	"github.com/ushineko/clockwork-orange/internal/imaging"
 )
 
 // --- the plugin run dialog (R7.5) ----------------------------------------------
@@ -50,6 +49,10 @@ type runDialog struct {
 	dlg      *dialog.CustomDialog
 	// lastSaved is the newest ImageSaved path, for the preview.
 	lastSaved string
+	// previews holds each saved image decoded once and scaled to preview
+	// size, bounded. It belongs to the dialog, so the frames go when the
+	// dialog does rather than outliving the run that produced them.
+	previews *previewCache
 }
 
 // openRunDialog builds and shows the dialog. reset adds reset=true.
@@ -61,7 +64,7 @@ func (u *ui) openRunDialog(name, title string, form *pluginForm, reset bool) {
 		u.sh.SayBusy()
 		return
 	}
-	d := &runDialog{name: name, override: map[string]any{"force": true}, pane: logpane.New(nil)}
+	d := &runDialog{name: name, override: map[string]any{"force": true}, pane: logpane.New(nil), previews: newPreviewCache()}
 	if reset {
 		d.override["reset"] = true
 	}
@@ -143,7 +146,14 @@ func (u *ui) runEvents(d *runDialog) events.Events {
 		},
 		OnImageSaved: func(path string) {
 			d.lastSaved = path
-			img, _, err := imaging.DecodeFile(path)
+			// Through the preview cache, which decodes once and scales to the
+			// preview's own size (spec 016). Handing canvas.Image a full 4K
+			// frame makes Fyne re-scale eight million pixels on every redraw
+			// of this dialog -- and this dialog redraws constantly, because
+			// the log pane pumps and the progress bar moves while the download
+			// runs. preview.go was written for exactly this and the dialog
+			// never used it.
+			img, err := d.previews.get(path)
 			if err != nil {
 				return
 			}
