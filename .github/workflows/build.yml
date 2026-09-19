@@ -193,6 +193,34 @@ jobs:
         [ -n "$APP" ] || { echo "fyne package produced no .app"; exit 1; }
         mv "$APP" dist/
         cp dist/clockwork-orange "dist/Clockwork Orange.app/Contents/MacOS/clockwork-orange"
+    - name: Sign the app bundle
+      run: |
+        APP="dist/Clockwork Orange.app"
+        # fyne package leaves each Mach-O with only the linker's implicit ad-hoc
+        # signature (Identifier=a.out) and writes no _CodeSignature seal, and the
+        # CLI is copied in above, which would invalidate a seal even if there
+        # were one. Sign the nested CLI first so the bundle seal captures the
+        # signed bytes; signing it afterwards would break the seal again.
+        codesign --force --sign - "$APP/Contents/MacOS/clockwork-orange"
+        codesign --force --sign - --identifier io.ushineko.clockwork-orange "$APP"
+    - name: Verify the signature
+      run: |
+        APP="dist/Clockwork Orange.app"
+        # Guards the regression in #24: an invalid signature cannot be waived by
+        # Gatekeeper's "Open Anyway", so the app is unlaunchable rather than
+        # merely untrusted. This is not a notarization check - an ad-hoc bundle
+        # is still refused by spctl, which is expected and not gated here.
+        codesign --verify --strict --verbose=2 "$APP"
+        test -f "$APP/Contents/_CodeSignature/CodeResources" \
+          || { echo "no CodeResources seal in bundle"; exit 1; }
+        codesign -dv --verbose=2 "$APP" 2> "$RUNNER_TEMP/sig.txt" || true
+        grep -q '^Identifier=io.ushineko.clockwork-orange$' "$RUNNER_TEMP/sig.txt" \
+          || { echo "bundle identifier not stamped:"; cat "$RUNNER_TEMP/sig.txt"; exit 1; }
+        grep -q '^Sealed Resources version=' "$RUNNER_TEMP/sig.txt" \
+          || { echo "bundle seals no resources:"; cat "$RUNNER_TEMP/sig.txt"; exit 1; }
+        ! grep -q 'linker-signed' "$RUNNER_TEMP/sig.txt" \
+          || { echo "still carrying the linker's implicit signature:"; cat "$RUNNER_TEMP/sig.txt"; exit 1; }
+        rm -f "$RUNNER_TEMP/sig.txt"
     - name: Self-test
       run: |
         "dist/Clockwork Orange.app/Contents/MacOS/clockwork-orange" --self-test
