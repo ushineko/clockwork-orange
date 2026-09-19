@@ -65,9 +65,20 @@ they are.
 
 Download the zip from the releases page. The Windows zip holds
 `clockwork-orange.exe` and `clockwork-orange-gui.exe`; the macOS zip holds
-`Clockwork Orange.app`, which is not notarised, so open it once with
-right-click, Open. On both, running the program with no arguments opens the
-window.
+`Clockwork Orange.app`. On both, running the program with no arguments opens
+the window.
+
+The macOS app is signed ad-hoc, not with an Apple Developer ID, and is not
+notarised. macOS quarantines anything a browser downloads, and refuses an
+ad-hoc bundle outright rather than offering the usual "Open Anyway" — the
+message is *"damaged and can't be opened"*, which is Gatekeeper declining it,
+not a corrupt download. Right-click, Open no longer works either. Clear the
+quarantine flag once, after moving the app to Applications:
+
+    xattr -dr com.apple.quarantine "/Applications/Clockwork Orange.app"
+
+It then launches normally, and the flag does not come back until you download
+a new copy.
 
 ## Quick start
 

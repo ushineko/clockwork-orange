@@ -32,8 +32,16 @@ Command line, from a terminal in the unzipped folder:
 ## macOS 13 and later
 
 `Clockwork-Orange-macOS.zip` holds `Clockwork Orange.app`. Move it to
-Applications. It is not notarised, so the first launch is right-click, **Open**,
-then confirm.
+Applications, then clear the quarantine flag the browser set:
+
+    xattr -dr com.apple.quarantine "/Applications/Clockwork Orange.app"
+
+Without that, macOS says *"damaged and can't be opened"*. The app is not
+damaged: it is signed ad-hoc rather than with an Apple Developer ID, and
+Gatekeeper refuses an ad-hoc bundle instead of offering "Open Anyway".
+Right-click, **Open** does not work around it — that route was removed, and it
+never applied to ad-hoc signatures. Clearing the flag is a one-off per
+download.
 
 The command line is inside the bundle at
 `Clockwork Orange.app/Contents/MacOS/clockwork-orange`; the same flags as
