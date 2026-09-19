@@ -2,6 +2,7 @@ package gui
 
 import (
 	"net/url"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -21,6 +22,11 @@ const projectURL = "https://github.com/ushineko/clockwork-orange"
 
 // tagline is the About dialog's motto, from main_window.py.
 const tagline = "My choice is your imperative"
+
+// readmeSettle is how long the window must stop resizing before the README is
+// measured again: long enough to swallow a drag, short enough that letting go
+// of the edge reflows the document while the hand is still on the mouse.
+const readmeSettle = 120 * time.Millisecond
 
 /*
 buildAbout is the logo, the name, the version and the README (R7.10). The
@@ -46,7 +52,13 @@ func (u *ui) buildAbout() fyne.CanvasObject {
 	// rather than one RichText: the pane renders the blocks near the viewport
 	// and leaves the rest out of the widget tree, which is what makes the
 	// section scroll smoothly (spec 011).
-	u.readme = markdown.New(string(assets.README()), markdown.Options{})
+	// SettleResize coalesces the re-measure a width change forces (issue #26).
+	// Measuring this document means rendering every block to ask its height,
+	// and Fyne hands a widget a Resize for every step of a drag, from inside
+	// the event poll: a profile of a drag with this section showing put 32% of
+	// all CPU in the pane's measure, and the event queue cannot drain while it
+	// runs, so the window moved in bursts.
+	u.readme = markdown.New(string(assets.README()), markdown.Options{SettleResize: readmeSettle})
 	u.readme.Follow(u.sh.Scroller())
 
 	return container.NewVBox(head, widget.NewSeparator(), u.readme)
