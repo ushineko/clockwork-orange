@@ -115,7 +115,10 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 		widget.NewFormItem("Text size", size),
 		widget.NewFormItem("Console font", consoleFont),
 		widget.NewFormItem("Console text size", consoleSizeSel),
-		widget.NewFormItem("Interface scale", container.NewHBox(scaleSel, restart)),
+		widget.NewFormItem("Interface scale", container.NewHBox(
+			widgets.WithTip(scaleSel, "Enlarges everything in the window on top of the desktop's own scale. "+
+				"Fyne fixes a window's scale when it is created, so this applies when the window next opens."),
+			restart)),
 	)
 
 	return container.NewVScroll(container.NewVBox(

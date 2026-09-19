@@ -84,23 +84,48 @@ func (u *ui) buildService() fyne.CanvasObject {
 	if !en.uninstall || u.sh.Working() {
 		uninstall.Disable()
 	}
-	toolbar := container.NewHBox(start, stop, restart, install, uninstall)
+	// The two controls whose consequence the label cannot fit (spec 013 R6.1).
+	// The other three do what they say.
+	toolbar := container.NewHBox(start, stop, restart,
+		widgets.WithTip(install, "Writes the systemd user unit, enables it so it starts at login, and starts it now. "+
+			"The window's own timer stays idle while the service is cycling."),
+		widgets.WithTip(uninstall, "Stops and disables the unit and removes its file. Your configuration, images, "+
+			"history and blacklist are not touched."))
 
-	return container.NewVBox(
-		head,
-		widgets.Card("Status", status, detailsPane),
-		widgets.Card("Control", toolbar),
-		u.journalPane(),
+	// Under a divider the user can drag (spec 013 R4.1). A fixed region is
+	// wrong for the pane that matters: the run worth reading is whichever one
+	// went wrong, and the position is the shell's, so it survives this
+	// section's rebuild on every 5 s status poll.
+	return u.sh.VSplit(logSplitKey, logSplitOffset,
+		container.NewVScroll(container.NewVBox(
+			head,
+			widgets.Card("Status", status, detailsPane),
+			widgets.Card("Control", toolbar),
+			u.journalControls(),
+		)),
+		u.journalPaneWidget("Service log", nil),
 	)
 }
 
+// logSplitKey is the divider over the log pane. Service and Activity share it
+// on purpose: it is one pane as far as the user is concerned, and the first
+// section differs only by platform (spec 013 R4.2).
+const logSplitKey = "log"
+
+// logSplitOffset is where the divider sits before anyone has dragged it:
+// roughly the proportion the pane's fixed height used to give it.
+const logSplitOffset = 0.55
+
 /*
-journalPane is the service log: journalctl's tail in the activity pane, with
-Refresh now and the auto-refresh toggle and interval bound to auto_update_logs
-and logs_refresh_interval in the document (R7.4). The pane keeps its scroll
-position across refreshes unless it is following the tail.
+journalControls is the service log's controls: Refresh now and the auto-refresh
+toggle and interval, bound to auto_update_logs and logs_refresh_interval in the
+document (R7.4).
+
+They sit above the divider with the rest of the section rather than with the
+pane: the bottom half of a split is the pane and nothing else, so dragging the
+bar all the way down leaves a pane and not a pane with a strip on top of it.
 */
-func (u *ui) journalPane() fyne.CanvasObject {
+func (u *ui) journalControls() fyne.CanvasObject {
 	refresh := widget.NewButtonWithIcon("Refresh now", theme.ViewRefreshIcon(), func() { u.refreshJournal() })
 	// SetChecked fires OnChanged, so the handler is attached after the
 	// initial value is in place: a section build must not schedule a save.
@@ -121,13 +146,18 @@ func (u *ui) journalPane() fyne.CanvasObject {
 			u.armJournalRefresh()
 		}
 	}
-	controls := container.NewHBox(auto, widgets.Dim("every"), widgets.FixedWidth(interval, 60), widgets.Dim("s"), refresh)
-	pane := u.activity.Widget(u.paneOptions("Service log", nil))
 	if u.activity.Model().Len() == 0 {
 		u.refreshJournal()
 	}
 	u.armJournalRefresh()
-	return container.NewVBox(controls, pane)
+	return container.NewHBox(auto, widgets.Dim("every"), widgets.FixedWidth(interval, 60), widgets.Dim("s"), refresh)
+}
+
+// journalPaneWidget is the log pane itself, the bottom half of the section's
+// split. Options.Height is the pane's minimum, not its size: it takes whatever
+// the divider gives it.
+func (u *ui) journalPaneWidget(title string, onClear func()) fyne.CanvasObject {
+	return u.activity.Widget(u.paneOptions(title, onClear))
 }
 
 // refreshJournal re-reads the last 50 journal lines into the pane.
@@ -205,7 +235,10 @@ func (u *ui) buildActivity() fyne.CanvasObject {
 		"What this window has done since it opened: every wallpaper change the timer made and "+
 			"every plugin run. The timer fires on the interval in Settings while the window is "+
 			"open or in the tray.")
-	return container.NewVBox(head, u.activity.Widget(u.paneOptions("Application activity", func() {
-		paneEvents(u.activity).Infof("Activity log cleared by user")
-	})))
+	return u.sh.VSplit(logSplitKey, logSplitOffset,
+		container.NewVScroll(container.NewVBox(head)),
+		u.journalPaneWidget("Application activity", func() {
+			paneEvents(u.activity).Infof("Activity log cleared by user")
+		}),
+	)
 }

@@ -63,12 +63,19 @@ func (u *ui) buildHistory() fyne.CanvasObject {
 		})
 	})
 	u.sh.Gate(reset, scan)
+	// What each button costs, for the pointer that hovers before it commits
+	// (spec 013 R6.1). The notes below the buttons say the same thing to
+	// whoever reads the section rather than hovers over it.
+	resetTip := widgets.WithTip(reset, "Deletes every record and compacts the database. Images on disk and the "+
+		"blacklist are untouched, but plugins may download previously seen images again. Cannot be undone.")
+	scanTip := widgets.WithTip(scan, "Records every *.jpg already in the DuckDuckGo Images download directory as "+
+		"downloaded, so a fresh history does not fetch them all again. Cancellable.")
 
 	return container.NewVBox(
 		head,
 		widgets.Card("Database statistics", stats),
 		widgets.Card("Actions",
-			container.NewHBox(reset, scan),
+			container.NewHBox(resetTip, scanTip),
 			widgets.Note("Resetting the history lets previously deleted images be downloaded again. "+
 				"Scanning records every *.jpg in the DuckDuckGo Images download directory as "+
 				"already downloaded.", fd.StatusInfo)),

@@ -55,7 +55,10 @@ type runDialog struct {
 // openRunDialog builds and shows the dialog. reset adds reset=true.
 func (u *ui) openRunDialog(name, title string, form *pluginForm, reset bool) {
 	if u.sh.Working() {
-		u.sh.Flash("Something is already running. Wait for it to finish, or cancel it.", fd.StatusWarn)
+		// SayBusy names the operation holding the indicator and offers its
+		// Cancel, and says nothing while the modal busy popup is already on
+		// screen saying it (spec 013 R5.1).
+		u.sh.SayBusy()
 		return
 	}
 	d := &runDialog{name: name, override: map[string]any{"force": true}, pane: logpane.New(nil)}
@@ -161,7 +164,10 @@ func (d *runDialog) showPreview(img image.Image) {
 // cancellable context. u.running gates every other operation meanwhile.
 func (u *ui) startRun(d *runDialog) {
 	if u.sh.Working() {
-		u.sh.Flash("Something is already running. Wait for it to finish, or cancel it.", fd.StatusWarn)
+		// SayBusy names the operation holding the indicator and offers its
+		// Cancel, and says nothing while the modal busy popup is already on
+		// screen saying it (spec 013 R5.1).
+		u.sh.SayBusy()
 		return
 	}
 	if d.terms != nil {
