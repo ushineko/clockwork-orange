@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -447,7 +448,16 @@ func (p *duckduckgo) processImageErr(ctx context.Context, c ddgCandidate, downlo
 	}
 	ev.Infof("%s Processing image: %dx%d", ddgLog, w, h)
 
-	cropped := imaging.CoverResizeCrop(rgb, ddgTargetWidth, ddgTargetHeight)
+	// Flat padding comes off before the cover-crop, or the crop preserves it
+	// (spec 019). Free here: the image is already decoded and about to be
+	// re-encoded anyway.
+	var trimmed image.Image = rgb
+	if kept, cut := imaging.TrimBars(rgb); cut {
+		ev.Infof("%s Trimmed flat bars: %dx%d -> %dx%d", ddgLog, w, h, kept.Dx(), kept.Dy())
+		trimmed = rgb.SubImage(kept)
+	}
+
+	cropped := imaging.CoverResizeCrop(trimmed, ddgTargetWidth, ddgTargetHeight)
 	if err := imaging.SaveJPEG(filePath, cropped, ddgJPEGQuality); err != nil {
 		return false, err
 	}

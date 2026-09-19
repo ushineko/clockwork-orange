@@ -26,6 +26,10 @@ const (
 	wallhavenDownloadTimeout = 20 * time.Second
 	wallhavenDefaultQuery    = "landscape"
 	wallhavenLog             = "[Wallhaven]"
+	// wallhavenJPEGQuality is used only when a padded JPEG has to be written
+	// back after trimming (spec 019); an untrimmed download keeps its original
+	// bytes and is never re-encoded.
+	wallhavenJPEGQuality = 95
 )
 
 // wallhaven is the port of plugins/wallhaven.py (R5.3).
@@ -162,6 +166,14 @@ func (p *wallhaven) processQueries(ctx context.Context, queries []string, cfg ma
 		results, err := p.searchAPI(ctx, params)
 		if err != nil {
 			ev.Errorf("%s API Error for '%s': %v", wallhavenLog, query, err)
+			// An API that is down is down for every term. Six queries against
+			// it is six identical errors and six pointless round trips
+			// (spec 019); the run stops and says so once.
+			if isUpstreamDown(err) {
+				ev.Errorf("%s The API is unavailable; skipping the remaining terms. This is an "+
+					"outage at wallhaven.cc, not a problem with your configuration or API key.", wallhavenLog)
+				break
+			}
 			continue
 		}
 		ev.Infof("%s Found %d wallpapers for '%s'", wallhavenLog, len(results), query)
@@ -280,7 +292,7 @@ func (p *wallhaven) searchAPI(ctx context.Context, params url.Values) ([]wallhav
 		return nil, err
 	}
 	if status != 200 {
-		return nil, fmt.Errorf("HTTP %d: %s", status, string(body))
+		return nil, apiError(status, body)
 	}
 	var payload struct {
 		Data []wallhavenItem `json:"data"`
@@ -356,6 +368,17 @@ func (p *wallhaven) downloadItem(ctx context.Context, rawURL, filePath string, e
 		return false, fmt.Errorf("write %s: %w", filePath, err)
 	}
 
+	// Flat padding comes off before the hash is taken, so the history and the
+	// blacklist record the picture that is on disk (spec 019). This plugin
+	// saves the bytes it downloaded rather than re-encoding them, so the file
+	// is only rewritten for the one image in seventy that is padded; a failure
+	// to read it back is not a reason to discard the download.
+	if cut, err := imaging.TrimBarsFile(filePath, wallhavenJPEGQuality); err != nil {
+		ev.Debugf("%s Could not check %s for flat bars: %v", wallhavenLog, filepath.Base(filePath), err)
+	} else if cut {
+		ev.Infof("%s Trimmed flat bars from %s", wallhavenLog, filepath.Base(filePath))
+	}
+
 	hash, err := imaging.SHA256File(filePath)
 	if err != nil {
 		return false, err
@@ -395,4 +418,61 @@ func removeFile(p string) error {
 		return fmt.Errorf("remove %s: %w", p, err)
 	}
 	return nil
+}
+
+/*
+apiError turns a non-200 into something a person can read.
+
+The body is not the message. Wallhaven sits behind Cloudflare, so a failure
+arrives as a kilobyte of challenge markup, and the plugin used to paste all of
+it into the log once per configured term. What matters is the status, what it
+means, and enough of the body to recognise something unexpected.
+*/
+func apiError(status int, body []byte) error {
+	if what, known := apiStatusMeaning(status); known {
+		return fmt.Errorf("HTTP %d: %s", status, what)
+	}
+	return fmt.Errorf("HTTP %d: %s", status, snippet(body))
+}
+
+// apiStatusMeaning names the statuses worth naming, and says whether it knew
+// the one it was given. They want different words: an outage is "try later", a
+// bad key is "fix your configuration", a rate limit is "slow down".
+func apiStatusMeaning(status int) (string, bool) {
+	switch status {
+	case 401:
+		return "the API key was rejected (wallhaven.cc > Account > API)", true
+	case 429:
+		return "rate limited; wallhaven allows 45 requests a minute", true
+	case 503, 521, 522, 523, 524:
+		return "the API is unavailable (an outage at wallhaven.cc, not a problem with your key)", true
+	}
+	return "", false
+}
+
+// isUpstreamDown reports whether an error from searchAPI means the API itself
+// is unreachable, rather than this query being wrong.
+func isUpstreamDown(err error) bool {
+	for _, status := range []int{503, 521, 522, 523, 524} {
+		what, _ := apiStatusMeaning(status)
+		if strings.Contains(err.Error(), fmt.Sprintf("HTTP %d: %s", status, what)) {
+			return true
+		}
+	}
+	return false
+}
+
+// snippet is as much of an unexpected body as is worth reading: one line, and
+// not a screenful of markup.
+func snippet(body []byte) string {
+	const longest = 200
+	s := strings.TrimSpace(string(body))
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) > longest {
+		return s[:longest] + "…"
+	}
+	if s == "" {
+		return "(empty response)"
+	}
+	return s
 }

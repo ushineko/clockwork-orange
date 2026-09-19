@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -275,8 +276,11 @@ func TestWallhavenRunContinuesWithTheNextQueryAfterANon200Search(t *testing.T) {
 	require.NoError(t, err, "API failures are per query; the run still succeeds with the directory")
 	require.Equal(t, dir, res.Path)
 	require.Len(t, f.requestsFor("/search"), 2, "both queries were attempted")
-	require.True(t, rec.hasLogContaining("API Error for 'a': HTTP 429: nope"))
-	require.True(t, rec.hasLogContaining("API Error for 'b': HTTP 429: nope"))
+	// The message names what the status means rather than pasting the body
+	// (spec 019); a 429 is the caller's problem to slow down, not an outage,
+	// so the run carries on to the next term.
+	require.True(t, rec.hasLogContaining("API Error for 'a': HTTP 429: rate limited"))
+	require.True(t, rec.hasLogContaining("API Error for 'b': HTTP 429: rate limited"))
 	require.Equal(t, []int{0, 45, 95, 100}, rec.pcts())
 	require.FileExists(t, filepath.Join(dir, ".last_run"), "the marker is stamped even when every search failed")
 }
@@ -392,4 +396,64 @@ func TestWallhavenSearchTimesOutViaContextRatherThanHangingForever(t *testing.T)
 	defer cancel()
 	_, err := p.searchAPI(ctx, url.Values{"sorting": {"relevance"}})
 	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+/*
+A Cloudflare error page is not the message (spec 019).
+
+The plugin used to paste the whole body into the log, once per configured term,
+so one outage produced six kilobytes of challenge markup and no explanation.
+The status is what the user can act on: an outage means try later, a 401 means
+fix the key, a 429 means slow down.
+*/
+func TestAPIErrorSaysWhatTheStatusMeans(t *testing.T) {
+	cloudflare := []byte(`<html>
+<head><title>503 Service Temporarily Unavailable</title></head>
+<body><center><h1>503 Service Temporarily Unavailable</h1></center>
+<script>window.__CF$cv$params={r:'a3db481bef3a0f19'};</script></body>
+</html>`)
+
+	err := apiError(503, cloudflare)
+	require.Contains(t, err.Error(), "HTTP 503")
+	require.Contains(t, err.Error(), "outage at wallhaven.cc")
+	require.NotContains(t, err.Error(), "__CF$cv$params", "the markup is not the message")
+	require.Less(t, len(err.Error()), 200)
+
+	require.Contains(t, apiError(401, nil).Error(), "API key was rejected")
+	require.Contains(t, apiError(429, nil).Error(), "45 requests a minute")
+
+	// A status with nothing to say about it still shows the body, briefly.
+	odd := apiError(418, []byte("I'm a teapot"))
+	require.Contains(t, odd.Error(), "HTTP 418")
+	require.Contains(t, odd.Error(), "teapot")
+}
+
+// An unexpected body is truncated rather than pasted whole, and whitespace is
+// collapsed so a multi-line page is one line in the log.
+func TestSnippetIsOneShortLine(t *testing.T) {
+	long := make([]byte, 0, 2000)
+	for range 200 {
+		long = append(long, []byte("spam\n  ")...)
+	}
+	s := snippet(long)
+	require.LessOrEqual(t, len(s), 204)
+	require.NotContains(t, s, "\n")
+	require.Equal(t, "(empty response)", snippet([]byte("   ")))
+}
+
+/*
+An API that is down is down for every term (spec 019).
+
+Six queries against a dead endpoint is six identical errors and six pointless
+round trips. The statuses that mean "the origin is unreachable" stop the run;
+one that means "this query was wrong" does not.
+*/
+func TestOnlyAnOutageStopsTheRun(t *testing.T) {
+	for _, status := range []int{503, 521, 522, 523, 524} {
+		require.Truef(t, isUpstreamDown(apiError(status, nil)), "HTTP %d is an outage", status)
+	}
+	for _, status := range []int{401, 429, 418} {
+		require.Falsef(t, isUpstreamDown(apiError(status, nil)), "HTTP %d is not an outage", status)
+	}
+	require.False(t, isUpstreamDown(errors.New("dial tcp: connection refused")))
 }
