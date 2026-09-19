@@ -100,6 +100,11 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 	}
 	scaleSel := widget.NewSelect(scales, nil)
 	scaleSel.SetSelected(fdtheme.ScaleLabel(a.Scale))
+	// Deliberate departure from the affixed-controls rule (spec 014): this one
+	// stays inline, beside the setting that raises it. It appears only after
+	// the scale is changed, it acts on that row and nothing else, and affixed
+	// at the foot of the section it would be a button that materialises far
+	// from anything the user just touched.
 	restart := widget.NewButtonWithIcon("Restart the window now", theme.ViewRefreshIcon(), func() { u.sh.Restart() })
 	restart.Hide()
 	scaleSel.OnChanged = func(v string) {
@@ -121,10 +126,12 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 			restart)),
 	)
 
-	return container.NewVScroll(container.NewVBox(
+	// Reset is affixed and everything else scrolls behind it (spec 014). This
+	// section is mostly prose -- four paragraphs and a type sample -- so the
+	// one control in it is the first thing to go off the bottom.
+	return container.NewBorder(nil, container.NewHBox(reset), nil, nil, container.NewVScroll(container.NewVBox(
 		widgets.Heading("Appearance", "How this window looks. Fyne draws its own widgets, so this is what decides whether it sits well next to the rest of your desktop."),
 		form,
-		container.NewHBox(reset),
 		widgets.DimWrapped("Every setting about how this window looks is here. The colour scheme, font, text "+
 			"size and interface scale are kept in this window's own settings file, "+
 			"~/.config/clockwork-orange/gui-settings.json; the console font and its size are "+
@@ -144,5 +151,5 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 		widgets.DimWrapped("Interface scale enlarges everything in the window, text included, on top of the desktop's "+
 			"own scale. Fyne draws text without hinting, which on a fractionally scaled desktop reads "+
 			"soft at the default size; 1.2 is usually enough. It takes effect when the window is opened."),
-	))
+	)))
 }
