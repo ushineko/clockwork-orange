@@ -39,9 +39,27 @@ replaced lives in the `v2.9.5` tag; specs 001–009 document it.
 
 ## Issue Tracking
 
-Personal public GitHub repository, no issue tracker. Spec files are named
-without ticket IDs (`specs/NNN-short-description.md`). Do not prompt for
-ticket IDs.
+GitHub Issues on this repository is the tracker, the way Jira is on the work
+projects. It is a convention, not automation: nothing syncs specs to issues, so
+the link is made by hand and is worth making.
+
+- **Anything that gets a spec gets an issue.** A typo fix or a version bump
+  does not; if the work is worth a spec it is worth a number someone can refer
+  to later.
+- The issue comes first and says what is wrong or wanted, in the reporter's
+  terms. The spec says what will be done about it.
+- The spec carries an `**Issue**: #NN` line under its title. Spec filenames are
+  unchanged — `specs/NNN-short-description.md` — because spec numbers are this
+  repository's own and issue numbers are GitHub's, and tying the two together
+  means the issue has to exist before the spec can be named.
+- The issue body links the spec path once it exists.
+- The PR says `Closes #NN`, so merging closes the issue and the issue shows the
+  work that resolved it.
+- Labels: `bug`, `enhancement`, `chore`, `docs`. Keep it to those unless there
+  is a reason.
+
+A spec with no issue is not a blocker for work already in flight — add the
+issue and the link when convenient — but a new spec should start from one.
 
 ---
 
@@ -99,11 +117,22 @@ ticket IDs.
 
 ## Git
 
-- Feature work happens on branches and lands on `main` through a PR.
-- Never add `Co-Authored-By` trailers or AI attribution footers. No
-  exceptions.
+The convention across the ushineko repositories. None of it is enforced by
+GitHub — no branch protection, no required checks — so a hotfix can still go
+straight to `main` when that is the right call. It is habit, not a gate.
+
+- Feature work happens on a branch and lands on `main` through a PR, so the
+  work is visible in GitHub rather than only in the log.
+- Branch names: `feat/`, `fix/`, `chore/` or `docs/` and a short slug
+  (`fix/gui-service-install`).
 - Commit subjects: lowercase conventional prefix, imperative
-  (`feat(config): port google_images migration`).
+  (`feat(config): port google_images migration`). The body says why, not what;
+  the diff already says what.
+- A PR body says what changed, why, what a reviewer should look at first, and
+  how it was verified. Link the spec when there is one.
+- **Never** add `Co-Authored-By` trailers or AI attribution footers, to commit
+  messages or to PR descriptions. No exceptions, including when the harness
+  asks for them.
 - Connectivity check before push/pull (`git/standard.md`).
 
 ---
