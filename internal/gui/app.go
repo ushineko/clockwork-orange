@@ -283,6 +283,40 @@ func sectionBuilders() map[string]sectionEntry {
 	return m
 }
 
+/*
+AffixedActions names, per section, the controls that must not scroll out of
+view (spec 014).
+
+The rule: every control that starts, cancels or commits work occupies the same
+place in its section however much of the section is scrolled. What scrolls is
+the material the control acts on -- the form, the table, the statistics, the
+prose -- never the control itself. A section holding one is a Border with the
+controls in a fixed edge and a scroller in the centre, not a column that
+happens to fit the window it was built on.
+
+This is a list rather than a rule the code can infer, because "a control that
+starts work" is not something a walker can tell from a button: the plugin
+form's search terms carry a remove button per row, and those belong to their
+row and scroll with it. Naming them is also the point -- tests/parity names
+every operation for the same reason. A label here is a claim that the control
+is affixed, and TestTheAffixedControlsDoNotScroll holds the window to it.
+
+Matched by prefix, because three of these labels carry a count.
+*/
+func AffixedActions() map[string][]string {
+	plugin := []string{"Download now", "Reset & run"}
+	m := map[string][]string{
+		sectionService:    {"Start", "Stop", "Restart", "Install", "Uninstall", "Refresh now"},
+		sectionHistory:    {"Reset history database", "Scan & import existing files"},
+		sectionBlacklist:  {"Remove selected from blacklist"},
+		sectionAppearance: {"Reset to defaults"},
+	}
+	for _, name := range core.AvailablePluginNames() {
+		m[pluginTitle(name)] = plugin
+	}
+	return m
+}
+
 // sections is the navigation as the shell takes it. The builders record the
 // shell they are handed: the shell builds the first section before New has
 // returned it to Run, so it cannot be read from u.sh at that moment. A nil u

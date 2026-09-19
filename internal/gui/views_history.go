@@ -71,13 +71,16 @@ func (u *ui) buildHistory() fyne.CanvasObject {
 	scanTip := widgets.WithTip(scan, "Records every *.jpg already in the DuckDuckGo Images download directory as "+
 		"downloaded, so a fresh history does not fetch them all again. Cancellable.")
 
-	return container.NewVBox(
-		head,
-		widgets.Card("Database statistics", stats),
-		widgets.Card("Actions",
-			container.NewHBox(resetTip, scanTip),
+	// The two actions are affixed and the statistics scroll behind them
+	// (spec 014). The note stays with the statistics: it is what the reader
+	// reads, not what they press.
+	return container.NewBorder(nil,
+		widgets.Card("Actions", container.NewHBox(resetTip, scanTip)), nil, nil,
+		container.NewVScroll(container.NewVBox(
+			head,
+			widgets.Card("Database statistics", stats),
 			widgets.Note("Resetting the history lets previously deleted images be downloaded again. "+
 				"Scanning records every *.jpg in the DuckDuckGo Images download directory as "+
-				"already downloaded.", fd.StatusInfo)),
-	)
+				"already downloaded.", fd.StatusInfo),
+		)))
 }

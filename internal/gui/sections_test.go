@@ -235,3 +235,110 @@ func TestThePluginActionsDoNotScrollAway(t *testing.T) {
 	})
 	require.Positive(t, scrolled, "the form scrolls under the actions")
 }
+
+// --- affixed controls (spec 014) ---------------------------------------------
+
+/*
+buttonsBelowAScroller is every button under o that some container.Scroll
+encloses, by label.
+
+A button in a scroller moves with what it scrolls, which is right for a control
+that belongs to a row and wrong for one that belongs to the section.
+*/
+func buttonsBelowAScroller(o fyne.CanvasObject) map[string]bool {
+	out := map[string]bool{}
+	var visit func(o fyne.CanvasObject, scrolled bool)
+	visit = func(o fyne.CanvasObject, scrolled bool) {
+		if o == nil {
+			return
+		}
+		if b, ok := o.(*widget.Button); ok && scrolled {
+			out[b.Text] = true
+		}
+		switch c := o.(type) {
+		case *fyne.Container:
+			for _, child := range c.Objects {
+				visit(child, scrolled)
+			}
+		case *container.Scroll:
+			visit(c.Content, true)
+		case *container.Split:
+			visit(c.Leading, scrolled)
+			visit(c.Trailing, scrolled)
+		case *container.AppTabs:
+			for _, item := range c.Items {
+				visit(item.Content, scrolled)
+			}
+		}
+	}
+	visit(o, false)
+	return out
+}
+
+// buttonWithPrefix finds a button whose label starts with prefix; three of the
+// affixed labels carry a count that changes with the data.
+func buttonWithPrefix(o fyne.CanvasObject, prefix string) *widget.Button {
+	var found *widget.Button
+	walk(o, func(c fyne.CanvasObject) bool {
+		if b, ok := c.(*widget.Button); ok && strings.HasPrefix(b.Text, prefix) && found == nil {
+			found = b
+		}
+		return true
+	})
+	return found
+}
+
+/*
+No control that starts work scrolls out of view (spec 014).
+
+The rule, and the bug that produced it: the Service section's five verbs sat in
+the scrolling half of its split, under a heading, a status line and a
+fixed-height details pane, and the default divider position put them off the
+bottom of it. The window reported that the service was running and offered no
+way to stop it. The plugin section had the same shape for the same reason, one
+long form earlier.
+
+This holds every section named in AffixedActions, so the next section laid out
+as a column that happens to fit fails the build rather than the window.
+*/
+func TestTheAffixedControlsDoNotScroll(t *testing.T) {
+	u, _, _ := testUI(t)
+	u.pluginTab = 0
+	for _, sec := range sections(u) {
+		title := sec.Title()
+		want, named := AffixedActions()[title]
+		if !named {
+			continue
+		}
+		body := sec.Build(u.sh)
+		scrolled := buttonsBelowAScroller(body)
+		for _, prefix := range want {
+			b := buttonWithPrefix(body, prefix)
+			require.NotNilf(t, b, "%s: no control labelled %q", title, prefix)
+			require.Falsef(t, scrolled[b.Text],
+				"%s: %q is inside a scroller, so it scrolls away from the section it acts on", title, b.Text)
+		}
+	}
+}
+
+// Every section that has controls worth affixing is named. A section added
+// with a toolbar and no entry would pass the test above by not being looked at.
+func TestEverySectionWithControlsIsNamed(t *testing.T) {
+	u, _, _ := testUI(t)
+	named := AffixedActions()
+	for _, sec := range sections(u) {
+		title := sec.Title()
+		if _, ok := named[title]; ok {
+			continue
+		}
+		switch title {
+		case sectionActivity, sectionSettings, sectionAbout:
+			// Activity's only control is the pane's own Clear, drawn in the
+			// pane header beside Copy. Settings' Validate and Copy act on the
+			// YAML box they sit above, and travel with it. About is a
+			// document.
+			continue
+		}
+		t.Fatalf("%s has no AffixedActions entry; name its controls or say here why it has none", title)
+	}
+}

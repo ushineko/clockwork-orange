@@ -96,13 +96,23 @@ func (u *ui) buildService() fyne.CanvasObject {
 	// wrong for the pane that matters: the run worth reading is whichever one
 	// went wrong, and the position is the shell's, so it survives this
 	// section's rebuild on every 5 s status poll.
+	//
+	// The controls are affixed above the divider and the status scrolls behind
+	// them (spec 014). The five verbs are the whole point of this section, and
+	// when they sat in the scrolling half under a heading, a status line and a
+	// 150 px details pane, the default divider position put them off the
+	// bottom of it: a section reporting that the service is running, with no
+	// way to stop it in sight.
+	controls := container.NewVBox(
+		widgets.Card("Control", toolbar),
+		u.journalControls(),
+	)
 	return u.sh.VSplit(logSplitKey, logSplitOffset,
-		container.NewVScroll(container.NewVBox(
-			head,
-			widgets.Card("Status", status, detailsPane),
-			widgets.Card("Control", toolbar),
-			u.journalControls(),
-		)),
+		container.NewBorder(nil, controls, nil, nil,
+			container.NewVScroll(container.NewVBox(
+				head,
+				widgets.Card("Status", status, detailsPane),
+			))),
 		u.journalPaneWidget("Service log", nil),
 	)
 }
