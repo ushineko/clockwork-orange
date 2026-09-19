@@ -198,6 +198,20 @@ the user can choose, where the mark is nearly all there is.
 - R12.3 The first note's text is corrected: the appearance is in the settings
   file from R2, not in Fyne's preference store.
 
+### R13. A successful save says nothing
+
+- R13.1 `performSave` no longer flashes "Saved" or sends the "Configuration
+  saved" desktop notification. Every edit in every form arms the auto-save, so
+  a user working through a form was told a second after each field — a banner
+  over the section they were reading and a notification on the desktop — about
+  the one thing they had just asked for and could see had happened.
+- R13.2 A **failed** save still reports, as a `StatusBad` banner. That is the
+  one the user cannot see for themselves, and silence there would lose an edit
+  without saying so.
+- R13.3 Operation results elsewhere (`Shell.OK` after a service start, a
+  blacklist removal, a history import) are unchanged: those are outcomes the
+  user asked for and cannot otherwise confirm.
+
 ## Acceptance Criteria
 
 - [x] AC1 `go.mod` is at `fynedesygn v0.1.25` and `go mod tidy` is clean (R1.1)
@@ -238,6 +252,8 @@ the user can choose, where the mark is nearly all there is.
   - Verified: `TestThePluginActionsDoNotScrollAway` — the buttons are in the section and in no `container.Scroll` in it
 - [x] AC20 No section carries a long label that does not wrap (R12)
   - Verified: `TestNoSectionHasAnUnwrappedParagraph`, which fails on the pre-fix Appearance section with "a 297-character note does not wrap"
+- [x] AC21 A successful save shows no banner and sends no notification; a failed one still reports (R13)
+  - Verified: `performSave` in `internal/gui/state.go` — the success path does no reporting, the error path still flashes `StatusBad`. Not covered by a test: the reporting branch was behind `Shell.OnScreen()`, which is false under the headless test driver, so a headless assertion would pass whatever the code did
 - [x] AC17 `govulncheck ./...` is clean (security extension)
   - Verified: `govulncheck ./...` — no vulnerabilities found (govulncheck v1.8.0, DB 2026-09-16)
 

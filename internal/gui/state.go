@@ -218,8 +218,9 @@ func (u *ui) noteSize(s fyne.Size) {
 	}
 	if u.lastSize.IsZero() {
 		// The first reading is the baseline, not a resize: the canvas comes
-		// up a pixel or two off the requested size, and saving that on every
-		// start flashed "Saved" at a user who had changed nothing.
+		// up a pixel or two off the requested size, so taking it as a change
+		// rewrites the configuration file on every start for a window nobody
+		// resized.
 		u.lastSize = s
 		return
 	}
@@ -271,11 +272,16 @@ func (u *ui) performSave() {
 	}
 	u.docPath, u.docExists = path, true
 	if u.sh.OnScreen() {
-		// Headless there is no banner to show and no timer to re-arm, and
-		// touching widgets from the save timer's goroutine would race the
+		// Headless there is no timer to re-arm and no status bar to redraw,
+		// and touching widgets from the save timer's goroutine would race the
 		// test driving them: the test driver runs fyne.Do inline.
-		u.sh.Flash("Saved", fd.StatusGood)
-		u.notify("Saved", "Configuration saved")
+		//
+		// A successful save says nothing (spec 013 R13). Every edit in every
+		// form arms the save, so a form the user is working through announced
+		// itself a second after each field -- a banner over the section and a
+		// desktop notification, for the thing they had just asked for and
+		// could see in the section anyway. A failed save still reports: that
+		// is the one the user cannot see.
 		u.timer.rearm(u)
 		u.sh.RedrawStatus()
 	}
