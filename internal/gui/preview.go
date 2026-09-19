@@ -31,12 +31,24 @@ type previewCache struct {
 	inflight map[string]chan struct{}
 }
 
-// Preview geometry: the frame is scaled to fit inside this box. Larger than
-// the pane so a 1.5× HiDPI scale still gets a pixel per pixel.
+/*
+Preview geometry: the frame is scaled to fit inside this box, larger than the
+pane so a fractionally scaled desktop still gets a pixel per pixel.
+
+Sized from a heap profile rather than a guess (spec 018). At 1600×900 a frame
+is 5.76 MB, and with a cache in the review and another in the run dialog the
+two held 176 MB of the 228 MB live heap -- the largest thing in the window by
+a wide margin, for thumbnails of a pane a few hundred pixels across. 1200×675
+is 3.24 MB a frame and still over a pixel per pixel at 1.5× on that pane.
+
+previewCap is twelve rather than sixteen for the same reason: the prefetcher
+reaches one neighbour each way, so the cache only has to cover a run of
+arrow-key presses, not a directory.
+*/
 const (
-	previewMaxW  = 1600
-	previewMaxH  = 900
-	previewCap   = 16
+	previewMaxW  = 1200
+	previewMaxH  = 675
+	previewCap   = 12
 	prefetchEach = 1 // neighbours on each side to scale ahead
 )
 

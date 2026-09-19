@@ -385,6 +385,10 @@ func Run(o Options) {
 		requestShow()
 		return
 	}
+	// Before anything allocates: a soft ceiling, so a review of 4K images
+	// collects harder instead of leaving the arena at its high-water mark
+	// (spec 018).
+	setMemLimit()
 	u := &ui{version: core.Version(), configPath: o.ConfigPath, release: release, activity: logpane.New(nil)}
 	// The document is read before the shell is built: the window's size, the
 	// console font and every form come out of it.
