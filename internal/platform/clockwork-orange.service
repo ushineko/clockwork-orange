@@ -1,6 +1,13 @@
 [Unit]
 Description=Clockwork Orange - Wallpaper Service
 After=graphical-session.target
+# A unit that cannot start at all gives up instead of trying forever. With
+# RestartSec=10 the default limit (5 starts in 10 s) is never reached, so a
+# misconfigured ExecStart restarted every ten seconds for as long as the unit
+# was enabled; five failures in two minutes is a unit that is not going to
+# start, and `failed` is a state the user can see.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 [Service]
 Type=simple
 Environment=DISPLAY=:0
