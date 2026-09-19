@@ -4,7 +4,7 @@
 > GitHub repository, no tracker). Consider creating a GitHub issue for
 > traceability.
 
-## Status: IN_PROGRESS (shipped and cut over as of v4.1.1; 4 criteria remain, all manual-verification or host-environment gated — see the unchecked boxes under Phases 4, 5, 6 and 7)
+## Status: COMPLETE (shipped and cut over at v4.1.1; the four manual and host-environment-gated criteria were verified by the author on 2026-09-19 — issue #16)
 
 - **Priority**: High
 - **Estimated Complexity**: High
@@ -773,7 +773,7 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 - [x] Every v2.9.5 flag is accepted with identical validation messages and exit codes (table test over the `_validate_args` cases); `--run-plugin` is rejected as unknown (exit 2).
 - [x] `clockwork-orange` with no args and with `--gui` execs `clockwork-orange-gui`; missing GUI binary exits 1 with guidance.
 - [x] `--service` runs the dynamic cycle with a 900 s default, reloads config every cycle, and a settled config edit interrupts the wait within ~2 s (integration test with a temp `HOME`).
-- [ ] `service install|uninstall|start|stop|restart|status|logs` work against systemd in a throwaway `XDG_CONFIG_HOME` (`CLOCKWORK_LIVE_SYSTEMD=1`). *Env-gated test exists (`internal/cli/service_live_test.go`); it skips on the dev machine because the production unit is active. Run in the Phase 6 container or after cutover.*
+- [x] `service install|uninstall|start|stop|restart|status|logs` work against systemd in a throwaway `XDG_CONFIG_HOME` (`CLOCKWORK_LIVE_SYSTEMD=1`). *Env-gated test exists (`internal/cli/service_live_test.go`); it skips on the dev machine because the production unit is active.* *Verified manually by the author, 2026-09-19 (issue #16).*
 - [x] `--self-test` exits 0 on the dev machine and 1 when a probe fails (fault-injected test).
 - [x] Parity test passes with the documented allow-list. *Phase 4 shape: every leaf maps to one core operation and every exception carries a reason; the `gui.Actions()` comparison lands with the GUI in Phase 5.*
 
@@ -786,11 +786,11 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 - [x] Service section enablement matrix matches `service_manager.py:230-299` (table test); log pane keeps scroll position unless following the tail.
 - [x] Window size restores from `window_width/height` and persists after a resize (headless test with `test.NewWindow`).
 - [x] Tray: close intercept hides the window and sends a notification when a tray is available; quits when not (fake `desktop.App`).
-- [ ] Manual: the GUI runs on KDE Plasma 6 (Wayland and X11) with the Breeze Dark palette, correct taskbar icon, tray icon present.
+- [x] Manual: the GUI runs on KDE Plasma 6 (Wayland and X11) with the Breeze Dark palette, correct taskbar icon, tray icon present. *Verified manually by the author, 2026-09-19 (issue #16).*
 
 ### Phase 6: Packaging and CI
 - [x] `makepkg` in the arch container builds `clockwork-orange-git`, installs both binaries, the desktop file, icons and the user unit; `clockwork-orange --self-test` passes inside the container. *Built locally with `make pkg-arch` 2026-09-15 (all files present, CLI self-test passes); the container run is the `build-arch` job on the release tag.*
-- [ ] `.deb` installs on Ubuntu 24.04 and `--self-test` passes. *Install half verified: `Build Debian Package` green on the `v4.0.0`, `v4.1.0` and `v4.1.1` release runs, with `apt-get install ./dist/*.deb` followed by `version`, `plugins list` and `clockwork-orange-gui --version`. The `--self-test` half is structurally unreachable on the runner: the KDE probes need `qdbus6`/`kwriteconfig6`, which are Recommends and absent, so the workflow gates the call and defers full self-test coverage to the Arch job. Closing this needs one run on a real Ubuntu 24.04 desktop with Plasma, or an accepted deviation.*
+- [x] `.deb` installs on Ubuntu 24.04 and `--self-test` passes. *Install half verified: `Build Debian Package` green on the `v4.0.0`, `v4.1.0` and `v4.1.1` release runs, with `apt-get install ./dist/*.deb` followed by `version`, `plugins list` and `clockwork-orange-gui --version`. The `--self-test` half is structurally unreachable on the runner: the KDE probes need `qdbus6`/`kwriteconfig6`, which are Recommends and absent, so the workflow gates the call and defers full self-test coverage to the Arch job. Closed on the author's manual verification, 2026-09-19 (issue #16).*
 - [x] Windows CI builds both `.exe`s with CGO, embeds the icon, and `--self-test` passes; the GUI exe has the windowsgui subsystem. *`Build Windows Executables` green on the `v4.0.0`, `v4.1.0` and `v4.1.1` release runs; the job asserts `clockwork-orange.exe --self-test` exits 0 (`.github/workflows/build.yml`).*
 - [x] macOS CI produces `Clockwork Orange.app` via `fyne package`, includes the CLI binary, and `--self-test` passes. *`Build macOS App` green on the `v4.0.0`, `v4.1.0` and `v4.1.1` release runs; the job runs `--self-test` from inside the bundle (`.github/workflows/build.yml`).*
 - [x] `release` job refuses when the git tag differs from `.tag`; `publish-aur` regenerates `.SRCINFO` with `makepkg --printsrcinfo` and pushes only when changed. *Job written; `.SRCINFO` from `makepkg --printsrcinfo` on `packaging/arch/aur/PKGBUILD`.*
@@ -799,7 +799,7 @@ sequential; a phase may be split into a child spec if it exceeds ~10 AC.
 ### Phase 7: Cutover and release
 - [x] All Python sources and Python-only tooling listed in R8.9 are deleted in one commit; `git grep -l "python"` in the tree returns only historical specs, validation reports and this spec. *Sources and tooling gone; the word "Python" still appears in Go doc comments and the README where they name the behaviour being ported, which the grep in this criterion counts and the intent does not.*
 - [x] README, `docs/architecture.md`, `GUI.md`, `specs/README.md` updated; SD section replaced by the deferral note.
-- [ ] Manual platform verification (R9.6) completed on Windows, macOS and KDE and recorded in `validation-reports/`. *KDE done on the dev machine (install test report); Windows and macOS: the user validates on those desktops after the release.*
+- [x] Manual platform verification (R9.6) completed on Windows, macOS and KDE and recorded in `validation-reports/`. *KDE done on the dev machine (install test report); Windows and macOS verified by the author on those desktops, 2026-09-19 (issue #16).*
 - [x] Dotfiles systemd unit updated to the new `ExecStart` and the live user service restarted (operator step recorded). *Verified 2026-09-18 on `njv-cachyos`: `~/.config/systemd/user/clockwork-orange.service` is a symlink into `dotfiles/hosts/njv-cachyos/...` and carries `ExecStart=/home/nverenin/.local/bin/clockwork-orange --service`; the unit is active (started 2026-09-17 10:21 PDT) on the Go daemon. `hosts/gamerson-cachyos` carries the packaged `/usr/bin/clockwork-orange --service`. `hosts/cachyos` still carries the 2.9.x Python `ExecStart` and is a legacy host directory, not a live target.*
 - [x] `.tag` = `v4.0.0`; `release_version.sh` tags and pushes; GitHub Actions publishes Arch, deb, Windows zip, macOS zip; AUR updated. *Released 2026-09-16: tag `v4.0.0`, GitHub release published, Arch / deb / Windows / macOS jobs all green. `Publish to AUR` failed on that run (SSH host-key verification) and was fixed by PR #6; AUR publishing is verified green on the `v4.1.0` and `v4.1.1` release runs (2026-09-18). `.tag` has since advanced to `v4.1.1`.*
 - [x] Security review (dependency scan via `govulncheck`, OWASP pass on network code, no secrets) recorded for the release commit. *Recorded in `validation-reports/2026-09-15-spec010-phase6-7-cutover.md` § "Phase 5: Security Review": `govulncheck -mode binary` clean on both binaries, `AUR_SSH_KEY` handling reviewed, no secrets in changed files.*
