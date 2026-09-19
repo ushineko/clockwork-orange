@@ -26,6 +26,12 @@ can drag; the "something is already running" refusal names what is running and
 offers its Cancel; six controls gained hover notes; and Blacklist and History
 refetch on arrival rather than showing what they last read.
 
+Three further fixes came out of looking at the built window (R10 to R12): a
+mark per plugin section instead of one picture icon for all three, the plugin
+Configuration tab's actions pinned so they cannot scroll below the fold, and
+the Appearance section's four notes wrapped — they were `widgets.Dim`, which
+does not wrap, so the section was as wide as its longest unbroken line.
+
 Reviewers should look first at `internal/gui/app.go` (the settings path, the
 nav declaration, the arrival hooks) and at `internal/gui/views_service.go`,
 whose section became a split. Nothing moved out of `clockwork-orange.yml`, so
@@ -152,6 +158,46 @@ lacks is recorded in "Gaps found" for a library spec, not worked around here
   already names the library as the rulebook.
 - R9.2 This spec's "Gaps found" is the hand-off to the library.
 
+### R10. A mark per plugin section
+
+Found while looking at the built window: all three plugin sections drew
+`theme.FileImageIcon`, so Local, Wallhaven and DuckDuckGo Images were
+indistinguishable in the navigation — and R3.1 has just made icons-only a shape
+the user can choose, where the mark is nearly all there is.
+
+- R10.1 Each plugin section draws its own mark: a folder for the directory
+  Local reads, a wall of tiles for the gallery Wallhaven downloads from, a
+  magnifier for the search DuckDuckGo Images runs.
+- R10.2 The marks are this repository's own drawings, embedded from
+  `internal/gui/assets`, and are themed so they recolour with the scheme.
+- R10.3 They are filled silhouettes and never stroked, and use only the
+  attributes Fyne's SVG recolouring understands. Fyne replaces an SVG's fills
+  and leaves its strokes as authored, and it re-marshals the document, so a
+  stroke keeps the colour it was drawn in and an unknown attribute is dropped.
+- R10.4 A plugin this build has no drawing for keeps the generic picture icon.
+
+### R11. Actions that do not scroll away
+
+- R11.1 The plugin section's Configuration tab pins its Actions card to the
+  bottom and scrolls the form under it:
+  `Border(nil, actions, nil, nil, VScroll(form))`, the shape the design system
+  already prescribes. Wallhaven has eleven fields, and with the actions last in
+  one column the two buttons the section exists for sat below the fold.
+- R11.2 The Review tab's controls already sit in a `Border` top strip and are
+  unchanged.
+
+### R12. Paragraphs wrap
+
+- R12.1 The Appearance section's four notes are `widgets.DimWrapped`, not
+  `widgets.Dim`. `Dim` does not wrap, so a paragraph in one set the section's
+  minimum width to the whole unbroken line and the shell's scroller scrolled
+  sideways rather than reflowing — the same bug v4.1.1 fixed in the library's
+  own Appearance section, in this program's copy, which was missed.
+- R12.2 A test holds every section to the rule, so the next long note added in
+  a `Dim` fails the build rather than the window.
+- R12.3 The first note's text is corrected: the appearance is in the settings
+  file from R2, not in Fyne's preference store.
+
 ## Acceptance Criteria
 
 - [x] AC1 `go.mod` is at `fynedesygn v0.1.25` and `go mod tidy` is clean (R1.1)
@@ -186,6 +232,12 @@ lacks is recorded in "Gaps found" for a library spec, not worked around here
   - Verified: `internal/gui/settings_test.go` and `internal/gui/sections_test.go`
 - [x] AC16 `tests/parity` passes unchanged (R8.5)
   - Verified: `tests/parity` green, unchanged
+- [x] AC18 Each plugin section draws a different mark, and a plugin with no drawing keeps the generic icon (R10)
+  - Verified: `TestEachPluginSectionHasItsOwnIcon`, `TestAnUnknownPluginKeepsTheGenericIcon`
+- [x] AC19 The plugin Configuration tab's actions are outside its scroller (R11.1)
+  - Verified: `TestThePluginActionsDoNotScrollAway` — the buttons are in the section and in no `container.Scroll` in it
+- [x] AC20 No section carries a long label that does not wrap (R12)
+  - Verified: `TestNoSectionHasAnUnwrappedParagraph`, which fails on the pre-fix Appearance section with "a 297-character note does not wrap"
 - [x] AC17 `govulncheck ./...` is clean (security extension)
   - Verified: `govulncheck ./...` — no vulnerabilities found (govulncheck v1.8.0, DB 2026-09-16)
 
@@ -203,6 +255,11 @@ lacks is recorded in "Gaps found" for a library spec, not worked around here
 - **A new file in the state directory**: `gui-settings.json` joins the two
   SQLite stores in `~/.config/clockwork-orange/`. The 2.9.x line never reads
   that directory's contents by listing it, so an unknown file there is inert.
+- **A new section shape**: R11 makes the plugin Configuration tab a `Border`
+  with an inner scroller, so that tab now has a scroller inside the shell's
+  own. The design system prescribes exactly this for a pinned action strip and
+  the Appearance section already does it, so it is the sanctioned nesting
+  rather than a new one.
 - **Layout change**: R4.1 changes how the Service section is proportioned on
   first run. It is the section's own arrangement, not a data change, and the
   divider's default offset reproduces roughly what the fixed height gave.
@@ -213,6 +270,27 @@ lacks is recorded in "Gaps found" for a library spec, not worked around here
 ## Gaps found
 
 *(for a fynedesygn spec, not to be worked around here)*
+
+- **A rubric: a control that starts work never scrolls out of view.** The
+  design system has this rule in a narrow form — "Sections whose bottom action
+  strip must stay visible use `Border(nil, actions, nil, nil, VScroll(body))`"
+  — stated as a shape for the sections that already know they need it. R11 is
+  the case for stating it as a rule instead, and the plugin section is the
+  evidence: it was built as a single column, the shape reads correctly, and the
+  actions still went below the fold the moment a plugin had eleven fields. The
+  proposed wording, for a library spec:
+
+  > Every control that starts, cancels or commits work is affixed: it occupies
+  > the same place in the section however much of the section is scrolled. What
+  > scrolls is the material the control acts on — the form, the table, the
+  > document — never the control itself. A section with such a control is
+  > therefore a `Border` with the controls in a fixed edge and a scroller in
+  > the centre, not a column that happens to fit today.
+
+  Worth carrying into the library with a check of the gallery's own sections
+  and, if it can be made to work headlessly, a `fynetest` helper that fails a
+  section whose buttons are inside its scroller — the shape of the test in
+  `TestThePluginActionsDoNotScrollAway`.
 
 - **A structural walk that descends a split.** `fynetest.Walk` opens a
   `container.Scroll` and a tab set, because a section's content would otherwise

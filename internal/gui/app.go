@@ -278,7 +278,7 @@ func sectionBuilders() map[string]sectionEntry {
 		sectionAbout:      {theme.HelpIcon, (*ui).buildAbout, readme, nil},
 	}
 	for _, name := range core.AvailablePluginNames() {
-		m[pluginTitle(name)] = sectionEntry{theme.FileImageIcon, func(u *ui) fyne.CanvasObject { return u.buildPlugin(name) }, review, nil}
+		m[pluginTitle(name)] = sectionEntry{pluginIcon(name), func(u *ui) fyne.CanvasObject { return u.buildPlugin(name) }, review, nil}
 	}
 	return m
 }

@@ -4,10 +4,15 @@ import (
 	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
 	"github.com/ushineko/fynedesygn/fynetest"
 	"github.com/ushineko/fynedesygn/shell"
+
+	"github.com/ushineko/clockwork-orange/internal/gui/assets"
 )
 
 // arriverFor is the section with this title, as something the shell can tell
@@ -132,4 +137,101 @@ func TestTheControlsThatNeedOneCarryATip(t *testing.T) {
 
 	require.Len(t, fynetest.Tips(u.buildBlacklist()), 1, "Remove selected")
 	require.Len(t, fynetest.Tips(u.buildAppearance()), 1, "the interface scale")
+}
+
+// --- nothing important scrolls away, nothing long runs off (spec 013 R10-R12) ---
+
+// longNote is how many characters make a label a paragraph rather than a
+// caption. The shortest note in the window is comfortably under it and the
+// shortest paragraph comfortably over.
+const longNote = 120
+
+/*
+No section sets its minimum width from an unwrapped paragraph (spec 013 R12).
+
+widgets.Dim is a caption: it does not wrap, so a paragraph in one makes the
+section as wide as the whole unbroken line and the shell's scroller then scrolls
+sideways instead of reflowing. widgets.DimWrapped is the paragraph. This walks
+every section and fails on any long label that does not wrap.
+
+Monospace labels are exempt: a log line or a systemctl detail is read as it was
+written, and the scroller around it is the affordance on purpose.
+*/
+func TestNoSectionHasAnUnwrappedParagraph(t *testing.T) {
+	u, _, _ := testUI(t)
+	for _, sec := range sections(u) {
+		title := sec.Title()
+		walk(sec.Build(u.sh), func(o fyne.CanvasObject) bool {
+			l, ok := o.(*widget.Label)
+			if !ok || l.TextStyle.Monospace || len(l.Text) <= longNote {
+				return true
+			}
+			require.NotEqualf(t, fyne.TextWrapOff, l.Wrapping,
+				"%s: a %d-character note does not wrap, so the section is as wide as the line: %.60s…",
+				title, len(l.Text), l.Text)
+			return true
+		})
+	}
+}
+
+/*
+Every plugin section has its own mark (spec 013 R10).
+
+Three entries drawn with one picture icon are three things to guess between,
+and in the icons-only navigation shape the mark is nearly all there is.
+*/
+func TestEachPluginSectionHasItsOwnIcon(t *testing.T) {
+	u, _, _ := testUI(t)
+	seen := map[string]string{}
+	for _, sec := range sections(u) {
+		name, isPlugin := pluginForTitle(sec.Title())
+		if !isPlugin {
+			continue
+		}
+		icon := sec.Icon()
+		require.NotNilf(t, icon, "%s has no icon", sec.Title())
+		other, clash := seen[icon.Name()]
+		require.Falsef(t, clash, "%s and %s draw the same mark, %s", other, sec.Title(), icon.Name())
+		seen[icon.Name()] = sec.Title()
+		require.NotNilf(t, assets.PluginSVG(name), "%s has no drawing of its own", name)
+	}
+	require.Len(t, seen, 3, "local, wallhaven and duckduckgo_images")
+}
+
+// A plugin this build has no drawing for keeps the generic picture icon rather
+// than none at all.
+func TestAnUnknownPluginKeepsTheGenericIcon(t *testing.T) {
+	u, _, _ := testUI(t)
+	_ = u
+	require.Nil(t, assets.PluginSVG("stable_diffusion"))
+	require.Equal(t, theme.FileImageIcon().Name(), pluginIcon("stable_diffusion")().Name())
+}
+
+/*
+The plugin section's actions do not scroll away from the form (spec 013 R11).
+
+Wallhaven has eleven fields. With the actions last in one column, the two
+buttons the section exists for sat below the fold of a default-sized window,
+and the user who had just finished filling the form had nothing to press.
+*/
+func TestThePluginActionsDoNotScrollAway(t *testing.T) {
+	u, _, _ := testUI(t)
+	u.pluginTab = 0
+	body := u.buildPlugin("wallhaven")
+
+	require.NotNil(t, findButton(body, "Download now"), "the action is in the section")
+	require.NotNil(t, findButton(body, "Reset & run"))
+
+	scrolled := 0
+	walk(body, func(o fyne.CanvasObject) bool {
+		sc, ok := o.(*container.Scroll)
+		if !ok {
+			return true
+		}
+		scrolled++
+		require.Nil(t, findButton(sc, "Download now"), "the actions must not be inside the scroller")
+		require.Nil(t, findButton(sc, "Reset & run"))
+		return true
+	})
+	require.Positive(t, scrolled, "the form scrolls under the actions")
 }
