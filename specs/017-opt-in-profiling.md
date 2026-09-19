@@ -1,5 +1,7 @@
 # Spec 017: Opt-in profiling
 
+**Issue**: #18
+
 > **Note**: This work has no associated issue tracker ticket (personal public
 > GitHub repository, no tracker). Consider creating a GitHub issue for
 > traceability.
