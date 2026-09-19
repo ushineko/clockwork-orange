@@ -3,7 +3,9 @@ package platform
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -117,4 +119,92 @@ func TestNewReturnsTheHostPlatformNamedAfterGOOS(t *testing.T) {
 func TestServiceOnEveryOSReportsAStateTheGUIKnows(t *testing.T) {
 	s := NewService(&FakeRunner{Stdout: "inactive\n", Err: errors.New("exit status 3")})
 	require.Equal(t, StateInactive, s.IsActive(context.Background()))
+}
+
+/*
+The unit never names the window (spec 015).
+
+Install takes the unit's ExecStart from the running binary, and the window can
+install the service too. Before this fix it wrote
+ExecStart=/usr/bin/clockwork-orange-gui --service; that binary does not take
+--service, exits 2 on the unknown flag, and Restart=always started it again ten
+seconds later for as long as the unit stayed enabled.
+*/
+func TestTheDaemonBesideTheWindowIsTheDaemon(t *testing.T) {
+	cases := []struct {
+		exe   string
+		want  string
+		isGUI bool
+	}{
+		{"/usr/bin/clockwork-orange-gui", "/usr/bin/clockwork-orange", true},
+		{"/home/me/.local/bin/clockwork-orange-gui", "/home/me/.local/bin/clockwork-orange", true},
+		{`C:\Program Files\co\clockwork-orange-gui.exe`, `C:\Program Files\co\clockwork-orange.exe`, true},
+		{"/usr/bin/clockwork-orange", "", false},
+		{"/home/me/.local/bin/clockwork-orange", "", false},
+		// "-gui" in a parent directory is not the window: only the basename counts.
+		{"/opt/clockwork-orange-gui/bin/clockwork-orange", "", false},
+		// The test binary, which is what the Install tests run as.
+		{"/tmp/go-build/platform.test", "", false},
+	}
+	for _, c := range cases {
+		got, isGUI := daemonBeside(filepath.FromSlash(c.exe))
+		require.Equalf(t, c.isGUI, isGUI, "exe %q", c.exe)
+		if !c.isGUI {
+			continue
+		}
+		require.Equalf(t, filepath.FromSlash(c.want), got, "exe %q", c.exe)
+	}
+}
+
+// Whatever DaemonExecutable answers, it is never the window: that is the
+// property the unit depends on.
+func TestDaemonExecutableIsNeverTheWindow(t *testing.T) {
+	exe := DaemonExecutable()
+	require.NotEmpty(t, exe)
+	_, isGUI := daemonBeside(exe)
+	require.Falsef(t, isGUI, "the unit would run the window: %s", exe)
+	require.NotContains(t, string(UnitFileFor(exe)), "clockwork-orange-gui")
+}
+
+// A unit that cannot start gives up rather than restarting every ten seconds
+// for as long as it is enabled (spec 015 R3).
+func TestTheUnitBoundsItsRestarts(t *testing.T) {
+	unit := string(UnitFile)
+	require.Contains(t, unit, "StartLimitIntervalSec=120")
+	require.Contains(t, unit, "StartLimitBurst=5")
+	require.Contains(t, unit, "RestartSec=10")
+	limit := strings.Index(unit, "StartLimitIntervalSec")
+	service := strings.Index(unit, "[Service]")
+	require.Positive(t, limit)
+	require.Less(t, limit, service, "StartLimit* are [Unit] directives, not [Service] ones")
+}
+
+/*
+The window installing the service writes a unit for the daemon beside it
+(spec 015 R1).
+
+The window and the daemon are installed together -- by the packages into
+/usr/bin, by install.sh into ~/.local/bin -- so the sibling is where to look
+first. With no sibling and nothing on $PATH, the packaged path is the answer:
+wrong only on a machine where the daemon is somewhere else entirely, and a
+great deal less wrong than a unit naming the window.
+*/
+func TestTheWindowInstallsAUnitForTheDaemonBesideIt(t *testing.T) {
+	dir := t.TempDir()
+	gui := filepath.Join(dir, "clockwork-orange-gui")
+	daemon := filepath.Join(dir, "clockwork-orange")
+	require.NoError(t, os.WriteFile(gui, []byte("#!/bin/sh\n"), 0o755))
+	require.NoError(t, os.WriteFile(daemon, []byte("#!/bin/sh\n"), 0o755))
+
+	require.Equal(t, daemon, daemonFor(gui), "the sibling daemon")
+	require.Contains(t, string(UnitFileFor(daemonFor(gui))), "ExecStart="+daemon+" --service")
+
+	// No sibling: $PATH, then the packaged path. Emptying $PATH leaves the
+	// last resort, which must still not be the window.
+	lonely := filepath.Join(t.TempDir(), "clockwork-orange-gui")
+	require.NoError(t, os.WriteFile(lonely, []byte("#!/bin/sh\n"), 0o755))
+	t.Setenv("PATH", "")
+	require.Equal(t, packagedDaemon, daemonFor(lonely))
+	_, isGUI := daemonBeside(daemonFor(lonely))
+	require.False(t, isGUI)
 }
