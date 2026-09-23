@@ -225,6 +225,28 @@ func sectionTitles() []string {
 	return append(out, sectionHistory, sectionBlacklist, sectionSettings, sectionAppearance, sectionAbout)
 }
 
+// sectionPlugins is the heading the plugin sections are folded under.
+const sectionPlugins = "Plugins"
+
+/*
+pluginGroup folds the plugin sections under one heading.
+
+Three sources of pictures between Service and History read as three programs
+rather than one kind of thing, and a fourth would read as four. The heading
+says what they are; the list under it says which, when the reader wants to
+know. Their order and their titles do not change -- a group is drawn around
+sections, not made of them -- so --section, Ctrl+1..9 and every Select call
+still name the plugin itself.
+*/
+func pluginGroup() shell.NavGroup {
+	names := core.AvailablePluginNames()
+	members := make([]string, 0, len(names))
+	for _, name := range names {
+		members = append(members, pluginTitle(name))
+	}
+	return shell.NavGroup{Title: sectionPlugins, Icon: theme.StorageIcon, Members: members}
+}
+
 // sectionEntry is what a section is made of: a deferred icon, its builder, the
 // hook that releases the live widgets it holds when it is replaced, and the
 // hook that runs when the navigation arrives at it.
@@ -419,6 +441,7 @@ func (u *ui) shellOptions(o Options) shell.Options {
 		Icon:         appIcon(),
 		SettingsPath: settingsPath(),
 		Sections:     sections(u),
+		Groups:       []shell.NavGroup{pluginGroup()},
 		Section:      o.Section,
 		Scheme:       o.Scheme,
 		Size:         windowSize(u.doc, u.docExists),

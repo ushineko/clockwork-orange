@@ -425,3 +425,50 @@ func TestWindowSizeRestoresFromTheConfigAndPersistsAfterAResize(t *testing.T) {
 	default:
 	}
 }
+
+// The plugin sections are folded under one heading (spec 021). The group's
+// members are the plugin titles and nothing else: a member that names no
+// section draws nothing, so a typo here would quietly unfold the group.
+func TestThePluginGroupNamesEveryPluginSectionAndNothingElse(t *testing.T) {
+	g := pluginGroup()
+	require.Equal(t, sectionPlugins, g.Title)
+
+	var want []string
+	for _, name := range core.AvailablePluginNames() {
+		want = append(want, pluginTitle(name))
+	}
+	require.NotEmpty(t, want)
+	require.Equal(t, want, g.Members)
+
+	// Every member is a section, and the group is not one: --section, Ctrl+1..9
+	// and the tray's Select all name sections, and a heading is not a place.
+	names := SectionNames()
+	for _, m := range g.Members {
+		require.Contains(t, names, m)
+	}
+	require.NotContains(t, names, sectionPlugins)
+}
+
+// The plugin sections are contiguous, which is what the library asks of a
+// group's members: the list is drawn in Sections order and the heading appears
+// where the first member would have been, so a section that slipped between
+// two plugins would be drawn under the Plugins heading.
+func TestThePluginSectionsAreContiguous(t *testing.T) {
+	names := SectionNames()
+	members := map[string]bool{}
+	for _, m := range pluginGroup().Members {
+		members[m] = true
+	}
+	first, last := -1, -1
+	for i, n := range names {
+		if !members[n] {
+			continue
+		}
+		if first < 0 {
+			first = i
+		}
+		last = i
+	}
+	require.GreaterOrEqual(t, first, 0)
+	require.Equal(t, len(members), last-first+1, "a section sits between two plugins")
+}
