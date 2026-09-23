@@ -42,7 +42,10 @@ build() {
 	# the version is stamped by hand anyway.
 	export GOFLAGS="-buildvcs=false -mod=readonly"
 	export CGO_ENABLED=1
-	make build build-gui
+	# VERSION explicitly: a package is the plain version, and the Makefile
+	# would otherwise stamp a -dev suffix on a checkout that is not sitting
+	# on the release tag -- which a VCS package never is.
+	make build build-gui VERSION="$(tr -d '[:space:]v' < .tag)"
 }
 
 check() {

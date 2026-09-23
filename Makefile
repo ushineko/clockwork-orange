@@ -9,8 +9,23 @@ help: ## Show this help
 
 BINDIR=$(shell go env GOPATH)
 MODULE=github.com/ushineko/clockwork-orange
-VERSION?=$(shell tr -d 'v[:space:]' < .tag 2>/dev/null || echo dev)
 COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+
+# A build that is not the release says so.
+#
+# .tag is the version the release flow sets, and stamping it unconditionally
+# meant a build from a working tree reported the same string as the package --
+# so a window open beside a terminal could not be told apart from the one
+# pacman installed, which is exactly the confusion a local build creates.
+#
+# Released is HEAD sitting exactly on this version's tag with nothing
+# modified. Anything else is `4.3.2-1a2b3c4-dev`, which names the commit it
+# came from. The PKGBUILDs pass VERSION themselves, so a package is always
+# the plain version however it was checked out.
+TAG=$(shell tr -d 'v[:space:]' < .tag 2>/dev/null || echo dev)
+DIRTY=$(shell git status --porcelain 2>/dev/null | head -1)
+ATTAG=$(shell git describe --exact-match --tags --match 'v$(TAG)' HEAD 2>/dev/null)
+VERSION?=$(if $(and $(ATTAG),$(if $(DIRTY),,x)),$(TAG),$(TAG)-$(COMMIT)-dev)
 LDFLAGS=-w -s -X $(MODULE)/internal/buildinfo.Version=$(VERSION) -X $(MODULE)/internal/buildinfo.Commit=$(COMMIT)
 
 # migrated_fynedo tells Fyne this front end has been through the fyne.Do
