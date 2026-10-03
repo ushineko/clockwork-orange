@@ -76,7 +76,7 @@ func (u *ui) buildHistory() fyne.CanvasObject {
 	// reads, not what they press.
 	return container.NewBorder(nil,
 		widgets.Card("Actions", container.NewHBox(resetTip, scanTip)), nil, nil,
-		container.NewVScroll(container.NewVBox(
+		u.sh.VScroll(sectionHistory, container.NewVBox(
 			head,
 			widgets.Card("Database statistics", stats),
 			widgets.Note("Resetting the history lets previously deleted images be downloaded again. "+

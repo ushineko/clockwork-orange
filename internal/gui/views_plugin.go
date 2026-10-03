@@ -520,13 +520,17 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 	// press. A control that starts work does not scroll away from it.
 	configTab := container.NewBorder(nil,
 		widgets.Card("Actions", container.NewHBox(download, reset)), nil, nil,
-		container.NewVScroll(widgets.Card("Configuration", form.body)))
+		u.sh.VScroll(pluginTitle(name), widgets.Card("Configuration", form.body)))
 	// Plain words, no arrow glyphs: the arrows come from a fallback font and
 	// Fyne's shaper drew the run boundary after them as a missing glyph.
 	hint := widgets.Dim("Arrow keys: previous/next  ·  Space: mark/unmark")
-	toolbar := container.NewBorder(nil, nil,
-		container.NewHBox(apply, rescan), hint,
-		widgets.Dim(fmt.Sprintf("  %d image(s) in %s", len(rv.images), rv.dir)))
+	// The count and directory give way first: the shell's sections no longer
+	// scroll sideways (fynedesygn 0.1.55), so an untruncated path here set
+	// the window's minimum width to the length of the user's download dir.
+	where := widget.NewLabel(fmt.Sprintf("  %d image(s) in %s", len(rv.images), rv.dir))
+	where.Importance = widget.LowImportance
+	where.Truncation = fyne.TextTruncateEllipsis
+	toolbar := container.NewBorder(nil, nil, container.NewHBox(apply, rescan), hint, where)
 	reviewTab := container.NewBorder(toolbar, nil, nil, nil, rv.widget(u))
 	// Only the selected tab carries its real content; the other holds an
 	// empty box. AppTabs sizes itself to its tallest item, so with both
