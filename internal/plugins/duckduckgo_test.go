@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
@@ -420,4 +421,76 @@ func TestDuckDuckGoProcessBlacklistActionRunsBeforeIntervalCheck(t *testing.T) {
 	require.Len(t, items, 1)
 	require.Equal(t, "duckduckgo_images", items[0].Source)
 	require.Empty(t, f.requests)
+}
+
+/*
+The two DuckDuckGo requests carry the headers of the browser the User-Agent
+names (spec 022): the landing page as a navigation, i.js as that page's XHR.
+With a User-Agent and nothing else, i.js answered 403 after a few queries;
+with this set it did not, from the same IP. Image downloads go to other hosts
+and keep the plain set.
+*/
+func TestDuckDuckGoRequestsCarryTheirBrowsersHeaders(t *testing.T) {
+	h, bl := testStores(t)
+	f := newFakeDDG(t)
+	f.addImage("big.png", syntheticPNG(t, 1920, 1080), 1920, 1080)
+	p := f.plugin(h, bl)
+	_, err := p.Run(context.Background(), map[string]any{"download_dir": t.TempDir(), "force": true}, newRecorder().events())
+	require.NoError(t, err)
+
+	hints := map[string]string{
+		"Sec-Ch-Ua":          ddgSecChUa,
+		"Sec-Ch-Ua-Mobile":   "?0",
+		"Sec-Ch-Ua-Platform": `"Linux"`,
+	}
+	want := func(r *http.Request, h map[string]string) {
+		t.Helper()
+		for k, v := range h {
+			require.Equalf(t, v, r.Header.Get(k), "%s on %s", k, r.URL.Path)
+		}
+		for k, v := range hints {
+			require.Equalf(t, v, r.Header.Get(k), "%s on %s", k, r.URL.Path)
+		}
+	}
+
+	landings := f.requestsFor("/")
+	require.Len(t, landings, 1)
+	want(landings[0], map[string]string{
+		"Accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+		"Sec-Fetch-Dest":            "document",
+		"Sec-Fetch-Mode":            "navigate",
+		"Sec-Fetch-Site":            "none",
+		"Sec-Fetch-User":            "?1",
+		"Upgrade-Insecure-Requests": "1",
+	})
+
+	ijs := f.requestsFor("/i.js")
+	require.Len(t, ijs, 1)
+	want(ijs[0], map[string]string{
+		"Accept":           "application/json, text/javascript, */*; q=0.01",
+		"Referer":          "https://duckduckgo.com/",
+		"Sec-Fetch-Dest":   "empty",
+		"Sec-Fetch-Mode":   "cors",
+		"Sec-Fetch-Site":   "same-origin",
+		"X-Requested-With": "XMLHttpRequest",
+	})
+
+	img := f.requestsFor("/img/big.png")
+	require.Len(t, img, 1)
+	for _, k := range []string{"Sec-Fetch-Dest", "Sec-Fetch-Mode", "Sec-Fetch-Site", "X-Requested-With", "Sec-Ch-Ua"} {
+		require.Emptyf(t, img[0].Header.Get(k), "%s is not sent to image hosts", k)
+	}
+}
+
+// The client hints name the Chrome the User-Agent names. A hint that disagrees
+// with the User-Agent is the inconsistency the headers exist to remove.
+func TestDuckDuckGoClientHintsMatchTheUserAgent(t *testing.T) {
+	ua := regexp.MustCompile(`Chrome/(\d+)\.`).FindStringSubmatch(ddgUserAgent)
+	require.NotNil(t, ua)
+	require.Contains(t, ddgUserAgent, "X11; Linux", "Sec-Ch-Ua-Platform says Linux")
+	for _, brand := range []string{"Chromium", "Google Chrome"} {
+		m := regexp.MustCompile(`"` + brand + `";v="(\d+)"`).FindStringSubmatch(ddgSecChUa)
+		require.NotNilf(t, m, "%s missing from Sec-Ch-Ua", brand)
+		require.Equalf(t, ua[1], m[1], "%s version", brand)
+	}
 }

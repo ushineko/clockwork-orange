@@ -43,3 +43,25 @@ func TestLiveDuckDuckGoVqdAndResultsRoundTripReturnsAtLeastOneURL(t *testing.T) 
 	require.NoError(t, err)
 	require.NotEmpty(t, urls, "logs: %v", rec.logs)
 }
+
+// A run's worth of queries back to back (spec 022). With the 2.9.x headers
+// i.js answered 403 from about the fourth to the seventh query on; with the
+// browser's own it answered 24 in a row. Twelve different terms, one client,
+// no pause: the nightly run's shape with room to spare.
+func TestLiveDuckDuckGoQueriesBackToBackAreNotRefused(t *testing.T) {
+	requireLiveNet(t)
+	p := newDuckDuckGo(Deps{}.withDefaults())
+	for _, q := range []string{
+		"4k nature wallpapers", "4k space wallpapers", "site:reddit.com r/EarthPorn",
+		"site:reddit.com r/SpacePorn", "site:reddit.com r/Wallpapers", "corgis",
+		"scottish fold cats", "mountain lakes", "aurora borealis", "desert dunes",
+		"ocean waves", "forest fog",
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		rec := newRecorder()
+		urls, err := p.scrapeDirect(ctx, q, rec.events())
+		cancel()
+		require.NoError(t, err, q)
+		require.NotEmptyf(t, urls, "%q: logs %v", q, rec.logs)
+	}
+}
