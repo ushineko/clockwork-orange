@@ -129,7 +129,7 @@ func (u *ui) buildAppearance() fyne.CanvasObject {
 	// Reset is affixed and everything else scrolls behind it (spec 014). This
 	// section is mostly prose -- four paragraphs and a type sample -- so the
 	// one control in it is the first thing to go off the bottom.
-	return container.NewBorder(nil, container.NewHBox(reset), nil, nil, container.NewVScroll(container.NewVBox(
+	return container.NewBorder(nil, container.NewHBox(reset), nil, nil, u.sh.VScroll(sectionAppearance, container.NewVBox(
 		widgets.Heading("Appearance", "How this window looks. Fyne draws its own widgets, so this is what decides whether it sits well next to the rest of your desktop."),
 		form,
 		widgets.DimWrapped("Every setting about how this window looks is here. The colour scheme, font, text "+

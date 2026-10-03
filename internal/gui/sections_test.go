@@ -342,3 +342,65 @@ func TestEverySectionWithControlsIsNamed(t *testing.T) {
 		t.Fatalf("%s has no AffixedActions entry; name its controls or say here why it has none", title)
 	}
 }
+
+/*
+Every section fits the default window's content pane without being wider.
+
+The shell's sections scroll up and down and not across (fynedesygn 0.1.55), so
+a section's minimum width is the window's: one wider than the pane forces the
+window wider rather than scrolling. The plugin Review toolbar did that with the
+download directory spelt out in full, so the window's width tracked the length
+of a path. Both plugin tabs are measured, since only the selected one is built.
+*/
+func TestEverySectionFitsTheDefaultWindow(t *testing.T) {
+	u, _, _ := testUI(t)
+	pane := float32(defaultWindowWidth) * (1 - shell.NavOffset)
+	for _, tab := range []int{0, 1} {
+		u.pluginTab = tab
+		for _, sec := range sections(u) {
+			w := sec.Build(u.sh).MinSize().Width
+			require.LessOrEqualf(t, w, pane,
+				"%s (plugin tab %d) is %.0f wide; the default content pane is %.0f", sec.Title(), tab, w, pane)
+		}
+	}
+}
+
+/*
+A section's own scroller keeps its place when the section is rebuilt.
+
+Every section with affixed controls scrolls its body in a scroller of its own,
+and every operation rebuilds the section; Service rebuilds on each 5 s status
+poll. With a plain scroller that threw the page back to the top under the
+reader. shell.VScroll hands the old offset to the new scroller (fynedesygn
+spec 054). Navigation still starts at the top; that is the library's to test.
+*/
+func TestARebuildKeepsTheSectionsScrollPosition(t *testing.T) {
+	u, _, _ := testUI(t)
+	u.pluginTab = 0
+	for _, sec := range sections(u) {
+		if _, affixed := AffixedActions()[sec.Title()]; !affixed || sec.Title() == sectionBlacklist {
+			continue // Blacklist's only scroller is its table's own
+		}
+		before := firstScroll(sec.Build(u.sh))
+		require.NotNilf(t, before, "%s: no scroller holds the body", sec.Title())
+		before.Offset = fyne.NewPos(0, 120)
+		after := firstScroll(sec.Build(u.sh))
+		require.NotNilf(t, after, "%s: no scroller after the rebuild", sec.Title())
+		require.NotSamef(t, before, after, "%s: the section was rebuilt", sec.Title())
+		require.InDeltaf(t, 120, after.Offset.Y, 0.5, "%s: a rebuild threw the body back to the top", sec.Title())
+	}
+}
+
+// firstScroll is the outermost scroller in o: the section's body, not a
+// details pane inside it.
+func firstScroll(o fyne.CanvasObject) *container.Scroll {
+	var found *container.Scroll
+	walk(o, func(c fyne.CanvasObject) bool {
+		if s, ok := c.(*container.Scroll); ok {
+			found = s
+			return false
+		}
+		return true
+	})
+	return found
+}

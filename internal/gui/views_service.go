@@ -102,14 +102,15 @@ func (u *ui) buildService() fyne.CanvasObject {
 	// when they sat in the scrolling half under a heading, a status line and a
 	// 150 px details pane, the default divider position put them off the
 	// bottom of it: a section reporting that the service is running, with no
-	// way to stop it in sight.
+	// way to stop it in sight. The status scroller is the shell's, so the 5 s
+	// poll's rebuild leaves it where the reader put it (fynedesygn spec 054).
 	controls := container.NewVBox(
 		widgets.Card("Control", toolbar),
 		u.journalControls(),
 	)
 	return u.sh.VSplit(logSplitKey, logSplitOffset,
 		container.NewBorder(nil, controls, nil, nil,
-			container.NewVScroll(container.NewVBox(
+			u.sh.VScroll(sectionService, container.NewVBox(
 				head,
 				widgets.Card("Status", status, detailsPane),
 			))),
