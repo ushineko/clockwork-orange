@@ -28,8 +28,14 @@ const (
 	ddgLandingTimeout  = 15 * time.Second
 	ddgResultsTimeout  = 15 * time.Second
 	ddgDownloadTimeout = 10 * time.Second
-	ddgUserAgent       = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
-		"(KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36"
+	// ddgChromeMajor is the Chrome the requests claim to be. The User-Agent
+	// and the client hints are both built from it, so they cannot disagree
+	// (spec 022 R3).
+	ddgChromeMajor = "132"
+	ddgUserAgent   = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+		"(KHTML, like Gecko) Chrome/" + ddgChromeMajor + ".0.0.0 Safari/537.36"
+	ddgSecChUa = `"Chromium";v="` + ddgChromeMajor + `", "Not A(Brand";v="8", "Google Chrome";v="` +
+		ddgChromeMajor + `"`
 	ddgAcceptLanguage = "en-US,en;q=0.9"
 	ddgDefaultQuery   = "4k nature wallpapers"
 	ddgLog            = "[DuckDuckGo]"
@@ -239,6 +245,44 @@ func sessionHeaders(extra map[string]string) map[string]string {
 	return h
 }
 
+/*
+landingHeaders and resultsHeaders make the two DuckDuckGo requests look like
+the browser the User-Agent names: a top-level navigation, then the page's own
+XHR for results (spec 022). The 2.9.x direct path sent a User-Agent and
+nothing else Chrome sends, and DuckDuckGo answers i.js with 403 once it has
+seen a few of those -- on 2026-10-03, from one IP on Go's TLS stack, the old
+request was refused 5 times in 5 while this one passed 6 in 6 alongside it.
+Only the complete i.js set passed reliably; any one group of it alone did not.
+Image downloads keep sessionHeaders: they go to other hosts, as an <img> would.
+*/
+func landingHeaders() map[string]string {
+	return sessionHeaders(map[string]string{
+		"Accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+		"Sec-Fetch-Dest":            "document",
+		"Sec-Fetch-Mode":            "navigate",
+		"Sec-Fetch-Site":            "none",
+		"Sec-Fetch-User":            "?1",
+		"Upgrade-Insecure-Requests": "1",
+		"Sec-Ch-Ua":                 ddgSecChUa,
+		"Sec-Ch-Ua-Mobile":          "?0",
+		"Sec-Ch-Ua-Platform":        `"Linux"`,
+	})
+}
+
+func resultsHeaders() map[string]string {
+	return sessionHeaders(map[string]string{
+		"Accept":             "application/json, text/javascript, */*; q=0.01",
+		"Referer":            ddgBaseURL + "/",
+		"Sec-Fetch-Dest":     "empty",
+		"Sec-Fetch-Mode":     "cors",
+		"Sec-Fetch-Site":     "same-origin",
+		"X-Requested-With":   "XMLHttpRequest",
+		"Sec-Ch-Ua":          ddgSecChUa,
+		"Sec-Ch-Ua-Mobile":   "?0",
+		"Sec-Ch-Ua-Platform": `"Linux"`,
+	})
+}
+
 // scrapeImageURLs is _scrape_image_urls (D9): fetch the landing page for
 // the vqd token, then the i.js results. Every failure is logged and yields
 // no candidates. The landing request's status is not checked, as in the
@@ -255,7 +299,7 @@ func (p *duckduckgo) scrapeImageURLs(ctx context.Context, query string, ev event
 func (p *duckduckgo) scrapeDirect(ctx context.Context, query string, ev events.Events) ([]ddgCandidate, error) {
 	_, landing, err := httpGet(ctx, p.deps.HTTP, p.baseURL+"/",
 		url.Values{"q": {query}, "iax": {"images"}, "ia": {"images"}},
-		ddgLandingTimeout, sessionHeaders(nil))
+		ddgLandingTimeout, landingHeaders())
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +318,7 @@ func (p *duckduckgo) scrapeDirect(ctx context.Context, query string, ev events.E
 			"f":   {ddgResultFilter},
 			"p":   {"1"},
 		},
-		ddgResultsTimeout, sessionHeaders(map[string]string{"Referer": ddgBaseURL + "/"}))
+		ddgResultsTimeout, resultsHeaders())
 	if err != nil {
 		return nil, err
 	}
