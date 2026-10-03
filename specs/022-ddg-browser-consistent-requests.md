@@ -120,5 +120,12 @@ the trigger, because both clients used Go's TLS stack.
   --plugin-config '{"limit":3}'` with the desk's 7 queries. Every query logged
   `Found N potential images` (21–60), with no 403. `scottish fold cats` found
   23 and saved 3, its first downloads in at least 14 days.
-- **Step 3:** pending. Read the first nightly run after the release is
-  installed.
+- **Step 3:** v4.4.2 was installed on the desk (`make install` from the tag;
+  both binaries report `v4.4.2 (d110259)`) and the service was restarted. A
+  run from the installed GUI at 16:19 saved 19 DuckDuckGo images, and the
+  operator saw `scottish fold cats` results among them. That query is the one
+  that got a 403 on every nightly run before the fix. The service journal
+  shows no `HTTP 403` from DuckDuckGo since the restart. Not yet observed: a
+  nightly service run (about 23:20) on v4.4.2, which is the check this step
+  names. History does not record queries, so tying the cat images to that
+  query rests on the operator's report.
