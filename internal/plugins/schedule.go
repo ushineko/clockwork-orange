@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ushineko/clockwork-orange/internal/events"
+	"github.com/ushineko/clockwork-orange/internal/store"
 )
 
 // lastRunFile is the marker the download plugins keep in their download
@@ -74,16 +75,26 @@ func UpdateLastRun(dir string, now time.Time) error {
 }
 
 /*
-cleanupOldFiles enforces the retention limit (R5.3, R5.4): the regular files
-in dir matching pattern are sorted by modification time and the oldest
-len-maxFiles are removed. Errors are logged and otherwise ignored, as the
-Python `except: pass` did.
-
-Wallhaven passes "*", which — like pathlib's iterdir — includes .last_run, so
-the marker itself can be evicted; DuckDuckGo passes "*.jpg". Both quirks are
-ported as-is.
+cleanupOldFiles enforces the retention limit (R5.3, R5.4, spec 023): of the
+regular files in dir matching pattern, only those history says the app
+downloaded to that exact path, still unchanged, are counted; the oldest
+beyond maxFiles are removed. Anything else in the folder (the user's own
+files, a copy of a download, an edited download, .last_run) is never
+touched. maxFiles <= 0 turns retention off. Files already in the folder when
+it is first seen are grandfathered in by History.Adopt. Errors are logged and
+otherwise ignored, as the Python `except: pass` did.
 */
-func cleanupOldFiles(dir, pattern string, maxFiles int, logPrefix string, ev events.Events) {
+func cleanupOldFiles(h *store.History, dir, pattern string, maxFiles int, logPrefix string, ev events.Events) {
+	if maxFiles <= 0 {
+		ev.Infof("%s Retention is off (max_files %d); keeping every download.", logPrefix, maxFiles)
+		return
+	}
+	if n, err := h.Adopt(dir); err != nil {
+		ev.Warnf("%s Cleanup failed: %v", logPrefix, err)
+		return
+	} else if n > 0 {
+		ev.Infof("%s Adopted %d existing downloads into retention.", logPrefix, n)
+	}
 	matches, err := filepath.Glob(filepath.Join(dir, pattern))
 	if err != nil {
 		ev.Warnf("%s Cleanup failed: %v", logPrefix, err)
@@ -99,16 +110,20 @@ func cleanupOldFiles(dir, pattern string, maxFiles int, logPrefix string, ev eve
 		if err != nil || !info.Mode().IsRegular() {
 			continue
 		}
-		files = append(files, entry{path: m, mtime: info.ModTime()})
+		ours, err := h.Downloaded(m)
+		if err != nil {
+			ev.Warnf("%s Cleanup failed: %v", logPrefix, err)
+			return
+		}
+		if ours {
+			files = append(files, entry{path: m, mtime: info.ModTime()})
+		}
 	}
 	if len(files) <= maxFiles {
 		return
 	}
 	sort.SliceStable(files, func(i, j int) bool { return files[i].mtime.Before(files[j].mtime) })
 	toRemove := len(files) - maxFiles
-	if toRemove > len(files) {
-		toRemove = len(files)
-	}
 	ev.Infof("%s Cleaning up %d old images...", logPrefix, toRemove)
 	for _, f := range files[:toRemove] {
 		if err := os.Remove(f.path); err != nil {

@@ -138,7 +138,7 @@ func HistoryImport(ctx context.Context, req HistoryImportRequest) (HistoryImport
 		if err := ctx.Err(); err != nil {
 			return res, fmt.Errorf("import interrupted: %w", err)
 		}
-		added, err := d.History.AddEntry("file://imported/"+filepath.Base(f), f, "imported")
+		added, err := d.History.AddImported("file://imported/"+filepath.Base(f), f)
 		switch {
 		case err != nil:
 			req.Events.Warnf("Import %s: %v", f, err)

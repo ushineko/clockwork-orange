@@ -333,7 +333,7 @@ func TestWallhavenResetWipesTheDirectoryBeforeDownloading(t *testing.T) {
 	require.Equal(t, []string{".last_run", "wallhaven-n1.jpg"}, dirNames(t, dir))
 }
 
-func TestWallhavenRetentionRunsAfterDownloadingAndCountsEveryFile(t *testing.T) {
+func TestWallhavenRetentionRunsAfterDownloadingAndSparesFilesItDidNotDownload(t *testing.T) {
 	h, bl := testStores(t)
 	f := newFakeWallhaven(t)
 	f.addItem("r1", "wallhaven-r1.jpg", []byte("r1"))
@@ -342,10 +342,13 @@ func TestWallhavenRetentionRunsAfterDownloadingAndCountsEveryFile(t *testing.T) 
 	writeFile(t, old, []byte("old"))
 	require.NoError(t, os.Chtimes(old, fixedNow.Add(-48*time.Hour), fixedNow.Add(-48*time.Hour)))
 
-	_, err := f.plugin(h, bl).Run(context.Background(), map[string]any{"download_dir": dir, "max_files": 2}, events.Events{})
+	downloaded(t, h, filepath.Join(dir, "wallhaven-r0.jpg"), fixedNow.Add(-24*time.Hour))
+
+	_, err := f.plugin(h, bl).Run(context.Background(), map[string]any{"download_dir": dir, "max_files": 1}, events.Events{})
 	require.NoError(t, err)
-	// Three files (ancient, r1, .last_run), limit 2: the oldest goes.
-	require.Equal(t, []string{".last_run", "wallhaven-r1.jpg"}, dirNames(t, dir))
+	// Two downloads (r0, r1), limit 1: the older download goes. ancient.jpg
+	// and .last_run were not downloaded, so they are not counted (spec 023).
+	require.Equal(t, []string{".last_run", "ancient.jpg", "wallhaven-r1.jpg"}, dirNames(t, dir))
 }
 
 func TestWallhavenProcessBlacklistActionRunsBeforeAnyNetworkOrIntervalLogic(t *testing.T) {

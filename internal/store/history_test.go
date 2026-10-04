@@ -2,10 +2,13 @@ package store
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/ushineko/clockwork-orange/internal/imaging"
 )
 
 func openTempHistory(t *testing.T) *History {
@@ -105,4 +108,46 @@ func TestHistoryTimestampUsesInjectableClockAsFloatSeconds(t *testing.T) {
 func TestOpenHistoryFailsWhenParentDirectoryMissing(t *testing.T) {
 	_, err := OpenHistory(filepath.Join(t.TempDir(), "no", "such", "dir", "history.db"))
 	require.Error(t, err)
+}
+
+func TestAdoptGrandfathersPathlessDownloadsOncePerFolder(t *testing.T) {
+	h := openTempHistory(t)
+	img := goldenImage(t, "small_800x600.jpg")
+	_, err := h.db.ExecContext(context.Background(),
+		`INSERT INTO downloads (url_hash, image_hash, source, timestamp) VALUES ('u', ?, 'legacy', 0)`, md5Of(t, img))
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	existing := copyFile(t, img, "existing.jpg")
+	require.NoError(t, os.Rename(existing, filepath.Join(dir, "existing.jpg")))
+	n, err := h.Adopt(dir)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	ok, err := h.Downloaded(filepath.Join(dir, "existing.jpg"))
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	// The row is taken, and the folder is done: a later copy is not adopted.
+	later := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(later, "copy.jpg"), readFile(t, img), 0o600))
+	n, err = h.Adopt(later)
+	require.NoError(t, err)
+	require.Zero(t, n)
+	ok, err = h.Downloaded(filepath.Join(later, "copy.jpg"))
+	require.NoError(t, err)
+	require.False(t, ok)
+}
+
+func md5Of(t *testing.T, path string) string {
+	t.Helper()
+	sum, err := imaging.MD5File(path)
+	require.NoError(t, err)
+	return sum
+}
+
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return b
 }

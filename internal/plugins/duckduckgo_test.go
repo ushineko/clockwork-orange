@@ -374,15 +374,17 @@ func TestDuckDuckGoResetAndRetentionOnlyTouchJPEGs(t *testing.T) {
 	f := newFakeDDG(t)
 	f.addImage("a.png", syntheticPNG(t, 1920, 1080), 1920, 1080)
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "old1.jpg"), []byte("1"))
-	writeFile(t, filepath.Join(dir, "old2.jpg"), []byte("2"))
-	writeFile(t, filepath.Join(dir, "notes.txt"), []byte("keep"))
 	past := fixedNow.Add(-72 * time.Hour)
-	for _, n := range []string{"old1.jpg", "old2.jpg", "notes.txt"} {
+	downloaded(t, h, filepath.Join(dir, "old1.jpg"), past)
+	downloaded(t, h, filepath.Join(dir, "old2.jpg"), past)
+	writeFile(t, filepath.Join(dir, "notes.txt"), []byte("keep"))
+	writeFile(t, filepath.Join(dir, "mine.jpg"), []byte("not downloaded"))
+	for _, n := range []string{"notes.txt", "mine.jpg"} {
 		require.NoError(t, os.Chtimes(filepath.Join(dir, n), past, past))
 	}
 
-	// Retention: max 1 jpg → the two old jpgs go, notes.txt stays.
+	// Retention: max 1 downloaded jpg → the two old downloads go; notes.txt
+	// and the user's own mine.jpg stay (spec 023).
 	_, err := f.plugin(h, bl).Run(context.Background(), map[string]any{"download_dir": dir, "max_files": 1, "force": true}, events.Events{})
 	require.NoError(t, err)
 	names := dirNames(t, dir)
@@ -390,7 +392,8 @@ func TestDuckDuckGoResetAndRetentionOnlyTouchJPEGs(t *testing.T) {
 	require.Contains(t, names, ".last_run")
 	require.NotContains(t, names, "old1.jpg")
 	require.NotContains(t, names, "old2.jpg")
-	require.Len(t, names, 3)
+	require.Contains(t, names, "mine.jpg")
+	require.Len(t, names, 4)
 
 	// Reset wipes everything, including notes.txt, before downloading anew.
 	require.NoError(t, h.Clear())

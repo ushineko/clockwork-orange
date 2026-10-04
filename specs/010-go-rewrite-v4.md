@@ -329,7 +329,8 @@ macOS:
   holds `time.Now().Unix()` as float text; `_should_run` semantics
   including "unknown interval → never", parse error → run, `force` bypass.
   Retention sorts **all** files by mtime and deletes the oldest beyond
-  `max_files` (includes `.last_run`, as in Python). `reset` wipes the dir.
+  `max_files` (includes `.last_run`, as in Python). Superseded by DV16
+  (spec 023). `reset` wipes the dir.
 - R5.4a Base version: the port was measured against 2.9.5; `main` moved to
   2.9.9 while it was built. Of those releases, the second-launch fix and the
   record-before-delete fix were already in the port (R7.19, DV12); the
@@ -717,6 +718,7 @@ empty directory, `history` MD5 vs blacklist SHA-256, inert `debug` /
 | DV12 | Duplicate-content branch in Wallhaven/DDG records the history entry *before* deleting the duplicate file | Python deleted first, then `add_entry` raised on the missing file, so the URL was never recorded and re-downloaded every run |
 | DV13 | Wallhaven API key is redacted from log lines; POSIX single-instance lock fails open on non-contention errors; `DebugLockscreen` reads `$XDG_CONFIG_HOME/kscreenlockerrc` and preserves key case | Security extension "no credentials in logs"; consistency with the Windows fail-open path; that is where `kwriteconfig6` writes |
 | DV14 | `ToRGB`/thumbnail/cover-resize flatten alpha by dropping the channel (Pillow `convert("RGB")` semantics) before scaling | The first Go draft composited through premultiplied RGBA and darkened translucent pixels |
+| DV16 | History moves to `history2.db` (adds the saved path; migrated from `history.db` once). Retention deletes only files recorded at that exact path with unchanged content, existing downloads are adopted on a folder's first pass, and `max_files` ≤ 0 disables retention (spec 023) | 2.9.5 deleted any file in the download folder and treated 0 as "delete all": the data loss reported in #1 |
 
 ---
 

@@ -39,157 +39,127 @@ wallpaper folder") found that this one function explains the report:
 Points 1 and 2 are fixed here. Point 3 is harmless once only downloaded files
 are eligible. Point 4 is the configured behaviour and stays.
 
-### How history identifies a download
+### Why history needs a path
 
-`downloads` holds `url_hash`, `image_hash` (MD5 of the file as saved), `source`
-and `timestamp`. It holds no path. Both plugins call `AddEntry` after the file
-is in its final form (Wallhaven after trimming bars), so the MD5 of a file on
-disk equals its `image_hash` for as long as nobody edits it.
-`History.SeenImage(path)` already performs exactly that lookup.
+`history.db` holds `url_hash`, `image_hash` (MD5 of the file as saved),
+`source` and `timestamp`: what was downloaded, not where it went. A hash-only
+check would reach across directories: a downloaded wallpaper copied into
+another plugin's folder has the same hash and would become deletable there.
+Retention needs the path.
 
-A hash alone does not say *where* the download went. A downloaded wallpaper
-the user copies into their own photo folder has the same hash, and if that
-folder is (or later becomes) a plugin's `download_dir`, a hash-only check
-would make the copy eligible. Retention must not reach across directories, so
-the location has to be recorded too.
-
-`history.db` cannot carry it: the schema golden test compares every
-`sqlite_master` row against the 2.9.x fixture, so even an extra table breaks
-the compatibility contract. The location goes in a separate Go-only store.
+2.9.x compatibility of the history file is given up for this (operator
+decision, 2026-10-03): v4 moves to a new `history2.db` and leaves
+`history.db` as it was.
 
 ## Requirements
 
-- **R1 — A download ledger records where each download went.**
-  `config.StateDir()/downloads.db` (Go-only; 2.9.x never opens it) holds one
-  row per saved download: absolute cleaned path, `image_hash` (the same MD5
-  history stores), plugin name, timestamp; the path is the key. A plugin
-  writes the row in the same step as its `AddEntry` for a saved image, and
-  never for a duplicate or blacklisted file it removes. "Clear history" also
-  clears the ledger.
-- **R1a — Retention is exact to the file.** A file is eligible only if all
-  three hold: its absolute path is in the ledger under the running plugin's
-  name; its current MD5 equals the ledger's `image_hash`; and that hash is in
-  `history.db`. History stays the source of truth for *what* was downloaded,
-  the ledger adds *where*. A copy elsewhere, a file another plugin downloaded,
-  an edited file, and anything the user put in the folder are never eligible,
-  are never deleted by retention, and do not count toward `max_files`.
-- **R1b — Ledger rows for missing files are pruned** during retention, so the
-  ledger does not grow without bound when the user deletes downloads by hand.
-- **R2 — Keep the newest `max_files` downloads.** Among eligible files, the
-  oldest by mtime are removed until `max_files` remain. Ordering and logging
-  are otherwise unchanged.
-- **R3 — 0 disables retention.** `max_files` ≤ 0 means retention is off:
-  nothing is hashed or deleted, and the run logs one info line saying
-  retention is disabled and downloads are kept. The CLI and the GUI's run log
-  both show it, since both render the same event stream.
-- **R4 — Warning dialog in the GUI.** When the Retention Limit of a plugin
-  changes from a positive value to 0, the GUI shows a dialog explaining that
-  retention is now off, that downloads in the folder will accumulate without
-  limit, and that a positive number restores it (deleting only images the app
-  downloaded, oldest first). The dialog informs; it does not ask to undo. It
-  is not shown when a form loads with 0 already saved.
-- **R5 — An empty box is not 0.** An empty or unparseable integer field keeps
-  its last valid value when the form's values are read, so editing another
-  field cannot save a 0 the user did not type.
-- **R6 — Labels say what 0 means.** The `max_files` field description reads
-  "Retention Limit (0 = keep all)" for both plugins.
-- **R7 — `history.db` is untouched.** Its schema and DDL text do not change;
-  2.9.x still reads and writes it. `downloads.db` is new and additive.
-- **R8 — Downloads from before this change are left alone.** They have no
-  ledger row, so retention never deletes them. They stay until the user
-  removes them.
+- **R1 — `history2.db` replaces `history.db`.** Same `downloads` table plus a
+  `path` column (absolute path the file was saved to) and an `adopted_dirs`
+  table. Every saved download records its path. `history import` records
+  without a path, since imported files are the user's.
+- **R2 — Migration on first open.** When `history2.db` does not exist and
+  `history.db` does, every legacy row is copied with no path. The copy is
+  built under a temporary name and renamed, so an interrupted migration is
+  redone. `history.db` is not modified or deleted.
+- **R3 — Existing files are grandfathered.** The first time retention runs on
+  a folder, each regular file in it whose content matches a pathless,
+  non-imported row takes that row's path. Each row is adopted at most once
+  and each folder once, so a later copy of a download is never adopted.
+- **R4 — Retention is exact to the file.** A file is eligible only if its
+  absolute path is recorded and its current MD5 equals the recorded hash.
+  Copies elsewhere, edited downloads, imports, `.last_run` and the user's own
+  files are never deleted and do not count toward `max_files`. Among eligible
+  files the oldest by mtime go first.
+- **R5 — 0 disables retention.** `max_files` ≤ 0: nothing is hashed or
+  deleted, and the run logs `Retention is off (max_files N); keeping every
+  download.` (CLI and GUI render the same event).
+- **R6 — Warning dialog.** When a plugin's Retention Limit changes from a
+  positive value to 0 and stays 0 for 1.2 s, the GUI explains that retention
+  is off, downloads accumulate without limit, and a positive number turns it
+  back on, deleting only images the app downloaded into that folder.
+- **R7 — An empty box is not 0.** An empty or out-of-range integer field
+  reads back its last valid value.
+- **R8 — Labels.** Both plugins describe `max_files` as "Retention Limit
+  (0 = keep all)".
+- **"Clear history"** empties `adopted_dirs` too.
 
-### Deliberate Deviation
+### Deliberate Deviations
 
-Spec 010's table gains **DV16**: retention deletes only files recorded in
-both the download ledger and history at that exact path, and `max_files` ≤ 0
-disables it. 2.9.5 deleted any file in the folder
-(including `.last_run`) and treated 0 as "delete all". Reason: data loss
-reported in #1.
+Spec 010's table gains **DV16**: the history database is `history2.db` with a
+`path` column, migrated from `history.db` once; retention deletes only files
+recorded at that exact path with unchanged content; `max_files` ≤ 0 disables
+it. 2.9.5 deleted any file in the folder (including `.last_run`) and treated 0
+as "delete all". Reason: data loss reported in #1.
 
 ## Acceptance Criteria
 
-- [ ] With a real `history.db`, a real `downloads.db` and a real temp folder:
-      a run with `max_files` 2 over 3 recorded downloads and 2 unrecorded
-      files (one older than every download) deletes the one oldest download
-      and neither unrecorded file (R1a, R2).
-- [ ] No leak between directories: a byte-identical copy of a recorded
-      download, placed in a second plugin's `download_dir`, is not deleted by
-      that plugin's retention, and does not count toward its limit (R1a).
-- [ ] A file Wallhaven downloaded is never eligible for DuckDuckGo's retention
-      when both share a folder, and vice versa (R1a).
-- [ ] Saving an image writes its ledger row; a duplicate or blacklisted file
-      leaves none (R1).
-- [ ] A ledger row whose file is gone is removed by the next retention pass
-      (R1b); "Clear history" empties the ledger (R1).
-- [ ] A file in history but with no ledger row (a pre-023 download) is not
-      deleted (R8).
-- [ ] Wallhaven's `.last_run`, and a non-image file in its folder, survive
-      retention (R1).
-- [ ] A downloaded file whose bytes were changed after download is not deleted
-      (R1).
-- [ ] `max_files` 0 and -1: no file is deleted, and the run emits the
-      "retention disabled" info line (R3).
-- [ ] A run that downloads nothing (fake server returns 503) deletes no
-      unrecorded file (R1).
-- [ ] GUI: clearing the Retention Limit box and then editing another field
-      leaves the saved `max_files` at its previous value (R5, `test` driver).
-- [ ] GUI: changing Retention Limit from 50 to 0 opens the warning dialog once;
-      loading a form whose saved value is already 0 does not (R4, `test`
-      driver).
-- [ ] Both plugin schemas describe `max_files` as "Retention Limit (0 = keep
-      all)" (R6).
-- [ ] The history schema golden test passes unchanged, and 2.9.x fixtures
-      open with no `downloads.db` present (R7).
-- [ ] Spec 010 carries DV16, and its R5.3 retention sentence points to it.
-- [ ] `make test` passes, `make lint` reports 0 issues, `govulncheck` is clean.
+- [x] Retention removes only recorded downloads, oldest first; an older user
+      file and `.last_run` stay (`TestCleanupDeletesOnlyRecordedDownloadsOldestFirst`;
+      plugin-level: `TestDuckDuckGoResetAndRetentionOnlyTouchJPEGs`,
+      `TestWallhavenRetentionRunsAfterDownloadingAndSparesFilesItDidNotDownload`).
+- [x] No leak between directories, and edits are spared
+      (`TestCleanupIgnoresCopiesAndEditsOfDownloads`; live run below).
+- [x] `max_files` 0 and -1 delete nothing and log that retention is off
+      (`TestCleanupWithLimitZeroOrLessDeletesNothing`; live run below).
+- [x] The Python-written `history.db` fixture migrates row for row, reads
+      identically, and is migrated only once
+      (`TestLegacyHistoryIsMigratedOnceWithEveryRow`,
+      `TestPythonWrittenHistoryDBReadsIdenticallyFromGoAfterMigration`).
+- [x] Adoption takes pathless rows once per folder and never a later copy
+      (`TestAdoptGrandfathersPathlessDownloadsOncePerFolder`).
+- [x] Empty integer box reads its last valid value
+      (`TestIntFieldReadsTheLastValidNumberWhenEmpty`).
+- [x] Labels read "Retention Limit (0 = keep all)" (schema tests).
+- [ ] Warning dialog appears when Retention Limit goes to 0 (manual, GUI).
+- [x] Spec 010 carries DV16.
+- [x] `make test` passes, `make lint` reports 0 issues, `govulncheck` is clean.
 
 ## Risks & Assumptions
 
-- **Clearing history makes existing downloads ineligible.** After "Clear
-  history", files downloaded before are no longer known, so retention will not
-  delete them and they accumulate. This is the safe direction: the app cannot
-  tell them from the user's own files. Changing the Clear History
-  confirmation text to say so is out of scope; the PR calls it out.
-- **Pre-023 downloads accumulate once (R8).** Existing installs keep every
-  image downloaded before the upgrade until the user deletes it. Adopting
-  them automatically would mean trusting a filename again; R8 picks safety.
-- **2.9.x and 4.x sharing one machine.** Downloads made by 2.9.x get no ledger
-  row, so 4.x retention leaves them alone (R8 again).
-- **Hashing cost.** Each run with retention on hashes only the files that have
-  a ledger row, once. At the default limits that is tens of files of a few MB each,
-  well under a second; a folder of thousands of user photos costs more, but
-  only reads them.
-- **Assumption: the dialog belongs to the 0 transition only.** Setting a
-  positive limit shows no dialog; the label (R6) covers that direction.
-- **Assumption: negative values behave like 0.** The GUI validator already
-  rejects them; only a hand-edited YAML or `--plugin-config` can supply one.
-- **Out of scope:** resolving a relative `download_dir` against the working
-  directory (audit finding, separate issue if wanted); `reset`, which empties
-  the folder only after an explicit confirmation.
-- **Rollback**: revert the commit. A leftover `downloads.db` is ignored by
-  earlier versions and can be deleted; `history.db` is unchanged.
+- **2.9.x and 4.x no longer share history.** A 2.9.x install on the same
+  machine keeps writing `history.db`, which v4 no longer reads after the
+  migration. Accepted.
+- **Rollback**: reinstall the previous release. It reads `history.db`, which
+  the migration left untouched, so it misses only the downloads made since;
+  those may be fetched again. Delete `history2.db` to rerun the migration
+  after a later upgrade.
+- **Adoption reads each file in a folder once**, the first time retention
+  runs there (measured: 500 files / 704 MB took well under the run's network
+  time).
+- **A copy made before a folder's first adoption** can be adopted in place of
+  the original if it is seen first. Bounded by the one-row-one-file rule.
+- **After "Clear history"** nothing is eligible until new downloads arrive;
+  existing files accumulate. Safe direction.
+- **Out of scope:** relative `download_dir` resolution; the CLI's
+  unconfirmed `--reset`.
 
 ## E2E Test Plan
 
 | Step | Environment | Expected | Covers |
 |---|---|---|---|
-| Copy 3 personal JPEGs (older mtimes) into a scratch folder; set it as DuckDuckGo's `download_dir` with `max_files` 2; `clockwork-orange plugin run duckduckgo_images --force` | Linux desk, installed build | downloads arrive; the 3 personal JPEGs remain; the folder holds those 3 plus at most 2 downloads | R1, R2 |
-| Copy one of those downloads into Wallhaven's `download_dir` (`max_files` 1) and force a Wallhaven run | Linux desk | the copy survives | R1a |
-| Set `max_files` 0 in the GUI | Linux desk | warning dialog appears once; the saved YAML shows `max_files: 0` | R4 |
-| Force another run | Linux desk | log shows retention disabled; no file deleted | R3 |
-| Clear the Retention Limit box, change the interval, wait for autosave | Linux desk | YAML keeps the earlier `max_files` | R5 |
+| Install the dev build over the running v4.4.2 (`./install.sh`), with a 2020-dated user file `zz-mine-test.jpg` in the DuckDuckGo folder; `plugin run duckduckgo_images --force --plugin-config '{"limit":2}'` | Linux desk, live folders (501 files) | migration creates `history2.db` with every row; `Adopted 500`; new downloads saved; the oldest downloads removed to reach 500; `zz-mine-test.jpg` stays | R1–R4 |
+| Copy a DuckDuckGo download into the Wallhaven folder dated 2020; `plugin run wallhaven --force --plugin-config '{"limit":1,"max_files":95}'` | Linux desk | `Adopted 100`; 5 oldest downloads removed; the copy and `.last_run` stay | R3, R4 |
+| `plugin run wallhaven --force --plugin-config '{"max_files":0}'` | Linux desk | "Retention is off"; nothing removed | R5 |
+| GUI: set Retention Limit to 0, then back | Linux desk | dialog once; YAML shows 0, then the new value | R6 |
+
+## E2E Results (2026-10-03, Linux desk, dev build of this branch)
+
+- DuckDuckGo: `history2.db` created with 6612 migrated rows; `Adopted 500
+  existing downloads into retention`; 2 images saved, `Cleaning up 2 old
+  images` removed the two oldest downloads (2026-07-31 15:46:07 and :18);
+  `zz-mine-test.jpg` (2020, oldest file in the folder) and `.last_run` stayed.
+- Wallhaven: `Adopted 100`; 5 oldest downloads removed to reach 95; the
+  2020-dated copy of a DuckDuckGo download and `.last_run` stayed. The 5 test
+  deletions were restored from a hard-link backup afterwards (the live limit
+  is 250).
+- `max_files` 0: `Retention is off (max_files 0); keeping every download.`,
+  97 files before and after.
 
 ## Alternatives Considered
 
-- Considered hash-only eligibility (any file whose MD5 is in history);
-  rejected. It reaches across directories: a copy of a download in another
-  plugin's folder would be eligible.
-- Considered a `path` column or an extra table in `history.db`; rejected. The
-  golden test pins every `sqlite_master` row to the 2.9.x fixture.
-- Considered a manifest file inside each `download_dir`; rejected. It puts a
-  program file in the user's folder (Wallhaven's `*` glob would count it), and
-  a user copying the folder copies the manifest with it.
-- Considered matching the plugins' own file names (`wallhaven-<id>`, MD5 names
-  for DuckDuckGo) instead of history; rejected. A name is not proof of origin,
-  and the issue asks for history as the source of truth.
+- Considered hash-only eligibility; rejected. It reaches across directories.
+- Considered a separate Go-only path ledger next to an untouched
+  `history.db`; rejected by the operator in favour of one migrated store.
+- Considered matching the plugins' file names (`wallhaven-<id>`, URL-MD5
+  names) for adoption; rejected. A name is not proof of origin; content
+  matched against history is.

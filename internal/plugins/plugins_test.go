@@ -124,7 +124,7 @@ func TestWallhavenSchemaMatchesPythonKeysTypesAndDefaults(t *testing.T) {
 	require.Equal(t, TypeInteger, byKey["limit"].Type)
 	require.Equal(t, "Max Downloads per run", byKey["limit"].Description)
 	require.Equal(t, TypeInteger, byKey["max_files"].Type)
-	require.Equal(t, "Retention Limit (Max Files)", byKey["max_files"].Description)
+	require.Equal(t, "Retention Limit (0 = keep all)", byKey["max_files"].Description)
 	require.Equal(t, "API Key (Optional, required for NSFW)", byKey["api_key"].Description)
 	for _, f := range s {
 		require.False(t, f.Required, "wallhaven has no required fields: %s", f.Key)
@@ -165,5 +165,5 @@ func TestDuckDuckGoSchemaMatchesPythonKeysTypesAndDefaults(t *testing.T) {
 	require.Equal(t, TypeInteger, s[3].Type)
 	require.Equal(t, "Max Downloads (HQ)", s[3].Description)
 	require.Equal(t, TypeInteger, s[4].Type)
-	require.Equal(t, "Retention Limit", s[4].Description)
+	require.Equal(t, "Retention Limit (0 = keep all)", s[4].Description)
 }

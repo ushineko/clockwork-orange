@@ -128,7 +128,7 @@ func (*duckduckgo) Schema() []Field {
 			Enum: []string{"Hourly", "Daily", "Weekly"},
 		},
 		{Key: "limit", Type: TypeInteger, Default: 10, Description: "Max Downloads (HQ)"},
-		{Key: "max_files", Type: TypeInteger, Default: 50, Description: "Retention Limit"},
+		{Key: "max_files", Type: TypeInteger, Default: 50, Description: "Retention Limit (0 = keep all)"},
 	}
 }
 
@@ -180,7 +180,7 @@ func (p *duckduckgo) Run(ctx context.Context, cfg map[string]any, ev events.Even
 	}
 
 	ev.Progress(95, "Cleaning up old files...")
-	cleanupOldFiles(downloadDir, "*.jpg", maxFiles, ddgLog, ev)
+	cleanupOldFiles(p.deps.History, downloadDir, "*.jpg", maxFiles, ddgLog, ev)
 
 	ev.Progress(100, "Done!")
 
