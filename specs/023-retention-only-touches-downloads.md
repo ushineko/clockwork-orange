@@ -2,7 +2,7 @@
 
 **Issue**: #38
 
-## Status: INCOMPLETE
+## Status: COMPLETE
 
 - **Priority**: High
 - **Estimated Complexity**: Medium
@@ -10,7 +10,15 @@
 
 ## Executive Summary
 
-*(Filled in before the PR opens.)*
+Retention deleted the oldest files in a plugin's download folder whether or
+not the app downloaded them, and a limit of 0 deleted all of them: the likely
+cause of #1. History moves to `history2.db`, which records where each
+download was saved and is migrated from `history.db` on first open; existing
+files are adopted by content once per folder. Retention now deletes only a
+file recorded at that exact path with unchanged content, and `max_files` 0
+turns it off with a GUI warning. Reviewers should look first at
+`History.Adopt` and `History.Downloaded` in `internal/store/history.go` and at
+`cleanupOldFiles` in `internal/plugins/schedule.go`.
 
 ## Context
 
@@ -110,7 +118,8 @@ as "delete all". Reason: data loss reported in #1.
 - [x] Empty integer box reads its last valid value
       (`TestIntFieldReadsTheLastValidNumberWhenEmpty`).
 - [x] Labels read "Retention Limit (0 = keep all)" (schema tests).
-- [ ] Warning dialog appears when Retention Limit goes to 0 (manual, GUI).
+- [x] Warning dialog appears when Retention Limit goes to 0 (manual, GUI;
+      confirmed by the operator on the desk, 2026-10-03).
 - [x] Spec 010 carries DV16.
 - [x] `make test` passes, `make lint` reports 0 issues, `govulncheck` is clean.
 
