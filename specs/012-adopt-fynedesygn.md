@@ -1,7 +1,6 @@
 # Spec 012: Adopt fynedesygn
 
-> **Note**: This work has no associated issue tracker ticket. The repository
-> is a personal public project without an issue tracker.
+**Issue**: #17
 
 ## Status: COMPLETE (the manual desktop pass, AC9, was verified by the author on 2026-09-19 — issue #17)
 
