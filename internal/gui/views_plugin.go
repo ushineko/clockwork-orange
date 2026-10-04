@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -55,14 +56,19 @@ type entryField struct{ e *widget.Entry }
 
 func (f entryField) value() any { return f.e.Text }
 
-type intField struct{ e *widget.Entry }
+// intField reads back the last valid number typed, so an empty or half-typed
+// box is never saved as 0 when another field's edit saves the block (spec
+// 023: an empty Retention Limit used to save max_files 0).
+type intField struct {
+	e    *widget.Entry
+	last *int
+}
 
 func (f intField) value() any {
-	n, err := strconv.Atoi(strings.TrimSpace(f.e.Text))
-	if err != nil {
-		return 0
+	if n, err := strconv.Atoi(strings.TrimSpace(f.e.Text)); err == nil && n >= 0 && n <= 10000 {
+		return n
 	}
-	return n
+	return *f.last
 }
 
 type selectField struct{ s *widget.Select }
@@ -140,13 +146,18 @@ func (u *ui) fieldWidget(f *pluginForm, field plugins.Field, block map[string]an
 	case plugins.TypeInteger:
 		e := widget.NewEntry()
 		e.Validator = intRange(0, 10000)
-		e.SetText(fmt.Sprintf("%v", intOf(current)))
+		last := intOf(current)
+		e.SetText(fmt.Sprintf("%v", last))
 		e.OnChanged = func(s string) {
 			if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && n >= 0 && n <= 10000 {
+				if field.Key == "max_files" && n == 0 && last > 0 {
+					u.warnRetentionOff(e)
+				}
+				last = n
 				f.changed(field.Key, n)
 			}
 		}
-		f.fields[field.Key] = intField{e}
+		f.fields[field.Key] = intField{e, &last}
 		return widgets.FixedWidth(e, 120)
 	case plugins.TypeStringList:
 		st := newSearchTerms(field.Suggestions, func(v []map[string]any) { f.changed(field.Key, v) })
@@ -238,6 +249,25 @@ func (f *pluginForm) values() map[string]any {
 		out[key] = w.value()
 	}
 	return out
+}
+
+// warnRetentionOff explains, once the box has settled on 0, that retention is
+// now off (spec 023 R4). The wait lets "20" pass through "0" on the way to
+// "30" without a dialog.
+func (u *ui) warnRetentionOff(e *widget.Entry) {
+	time.AfterFunc(1200*time.Millisecond, func() {
+		fyne.Do(func() {
+			if strings.TrimSpace(e.Text) != "0" || u.sh == nil {
+				return
+			}
+			body := widget.NewLabel("A Retention Limit of 0 turns retention off. Nothing in the download " +
+				"folder will be deleted, and downloads will accumulate there without limit.\n\n" +
+				"Set a positive number to turn it back on. Retention only ever deletes images this app " +
+				"downloaded into that folder, oldest first; your own files are left alone.")
+			body.Wrapping = fyne.TextWrapWord
+			dialogs.ShowDetail(u.sh.Window, "Retention is off", body, 460, 260)
+		})
+	})
 }
 
 // valueOr is the block's value for key, else the schema default.

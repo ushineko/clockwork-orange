@@ -149,3 +149,15 @@ func TestLocalPluginHasNoDownloadButton(t *testing.T) {
 	require.Nil(t, findButton(wh, "Download now"), "and the Configuration tab's only when it is")
 	require.True(t, findButton(wh, "Apply blacklist (0)").Disabled(), "nothing marked, nothing to apply")
 }
+
+func TestIntFieldReadsTheLastValidNumberWhenEmpty(t *testing.T) {
+	// Spec 023: an empty Retention Limit must not save max_files 0 when
+	// another field's edit saves the block.
+	last := 250
+	f := intField{widget.NewEntry(), &last}
+	require.Equal(t, 250, f.value())
+	f.e.SetText("12")
+	require.Equal(t, 12, f.value())
+	f.e.SetText("0")
+	require.Equal(t, 0, f.value())
+}

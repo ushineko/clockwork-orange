@@ -52,9 +52,12 @@ func useUTC(t *testing.T) {
 	t.Cleanup(func() { time.Local = prev })
 }
 
-func TestPythonWrittenHistoryDBReadsIdenticallyFromGo(t *testing.T) {
+func TestPythonWrittenHistoryDBReadsIdenticallyFromGoAfterMigration(t *testing.T) {
 	want := loadExpected(t).History
-	h, err := OpenHistory(copyGoldenDB(t, "history.db"))
+	legacy := copyGoldenDB(t, "history.db")
+	path := filepath.Join(filepath.Dir(legacy), HistoryFileName)
+	require.NoError(t, migrateLegacyHistory(legacy, path))
+	h, err := OpenHistory(path)
 	require.NoError(t, err)
 	defer func() { _ = h.Close() }()
 
@@ -121,16 +124,35 @@ func schemaOf(t *testing.T, path string) []string {
 	return out
 }
 
-func TestGoWrittenHistoryDBHasByteIdenticalSchemaToPython(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.db")
+func TestLegacyHistoryIsMigratedOnceWithEveryRow(t *testing.T) {
+	// history2.db replaces history.db (spec 023): the Python-written fixture
+	// is copied over row for row, with no paths, and only the first time.
+	legacy := copyGoldenDB(t, "history.db")
+	dir := filepath.Dir(legacy)
+	path := filepath.Join(dir, HistoryFileName)
+	require.NoError(t, migrateLegacyHistory(legacy, path))
+
 	h, err := OpenHistory(path)
 	require.NoError(t, err)
-	// sqlite_sequence appears on the first AUTOINCREMENT insert, as it did
-	// for the Python fixture.
-	_, err = h.AddEntry("https://example.com/a.jpg", goldenImage(t, "landscape_1920x1080.png"), "wallhaven")
+	stats, err := h.Stats()
 	require.NoError(t, err)
+	want := loadExpected(t)
+	require.Equal(t, want.History.Stats.TotalRecords, stats.TotalRecords)
+	require.Equal(t, want.History.Stats.UniqueImages, stats.UniqueImages)
+	seen, err := h.SeenURL("https://example.com/a.jpg")
+	require.NoError(t, err)
+	require.True(t, seen)
+	require.NoError(t, h.Clear())
 	require.NoError(t, h.Close())
-	require.Equal(t, schemaOf(t, copyGoldenDB(t, "history.db")), schemaOf(t, path))
+
+	// A second open finds history2.db and leaves it as it is.
+	require.NoError(t, migrateLegacyHistory(legacy, path))
+	h, err = OpenHistory(path)
+	require.NoError(t, err)
+	defer func() { _ = h.Close() }()
+	stats, err = h.Stats()
+	require.NoError(t, err)
+	require.Zero(t, stats.TotalRecords)
 }
 
 func TestGoWrittenBlacklistDBHasByteIdenticalSchemaToPython(t *testing.T) {

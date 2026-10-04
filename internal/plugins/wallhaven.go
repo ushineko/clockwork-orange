@@ -98,7 +98,7 @@ func (*wallhaven) Schema() []Field {
 			Enum: []string{"Hourly", "Daily", "Weekly"},
 		},
 		{Key: "limit", Type: TypeInteger, Description: "Max Downloads per run", Default: 10},
-		{Key: "max_files", Type: TypeInteger, Description: "Retention Limit (Max Files)", Default: 100},
+		{Key: "max_files", Type: TypeInteger, Description: "Retention Limit (0 = keep all)", Default: 100},
 	}
 }
 
@@ -143,7 +143,7 @@ func (p *wallhaven) Run(ctx context.Context, cfg map[string]any, ev events.Event
 	}
 
 	ev.Progress(95, "Cleaning up old files...")
-	cleanupOldFiles(downloadDir, "*", maxFiles, wallhavenLog, ev)
+	cleanupOldFiles(p.deps.History, downloadDir, "*", maxFiles, wallhavenLog, ev)
 
 	ev.Progress(100, "Done!")
 	return Result{Path: downloadDir}, nil

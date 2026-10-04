@@ -1,12 +1,14 @@
 /*
 Package store holds the two SQLite files the plugins share (spec 010 R5.5,
-R5.6): history.db, which stops a URL or an image being downloaded twice, and
-blacklist.db, which remembers images the user rejected.
+R5.6): history2.db, which stops a URL or an image being downloaded twice and
+records where each download was saved, and blacklist.db, which remembers
+images the user rejected.
 
-Both files are opened with modernc.org/sqlite (D5: pure Go, CGO-free) and use
-the exact DDL plugins/history.py and plugins/blacklist.py issued, whitespace
-included, so a database written by either implementation reads identically in
-the other (R5.7). The golden tests under tests/golden/db pin that.
+Both files are opened with modernc.org/sqlite (D5: pure Go, CGO-free).
+blacklist.db uses the exact DDL plugins/blacklist.py issued, whitespace
+included, so either implementation reads it identically (R5.7). history2.db
+is v4's own (spec 023, DV16); the 2.9.x history.db is migrated into it once.
+The golden tests under tests/golden/db pin both.
 */
 package store
 

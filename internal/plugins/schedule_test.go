@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ushineko/clockwork-orange/internal/events"
+	"github.com/ushineko/clockwork-orange/internal/store"
 )
 
 func writeLastRun(t *testing.T, dir string, at time.Time) {
@@ -103,43 +104,55 @@ func touch(t *testing.T, path string, mtime time.Time) {
 	require.NoError(t, os.Chtimes(path, mtime, mtime))
 }
 
-func TestCleanupWithStarPatternEvictsOldestFilesIncludingTheLastRunMarker(t *testing.T) {
-	// Wallhaven's retention iterates every file, so .last_run competes with
-	// the wallpapers and is deleted when it is among the oldest. Ported as-is.
-	dir := t.TempDir()
-	base := fixedNow
-	touch(t, filepath.Join(dir, lastRunFile), base.Add(-4*time.Hour))
-	touch(t, filepath.Join(dir, "a.jpg"), base.Add(-3*time.Hour))
-	touch(t, filepath.Join(dir, "b.jpg"), base.Add(-2*time.Hour))
-	touch(t, filepath.Join(dir, "c.jpg"), base.Add(-1*time.Hour))
-	require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0o750))
-
-	cleanupOldFiles(dir, "*", 2, "[T]", events.Events{})
-
-	require.Equal(t, []string{"b.jpg", "c.jpg", "sub"}, dirNames(t, dir), "directories are not counted or removed")
+// downloaded writes a file with its own content and records it in history
+// as a download, the way a plugin's AddEntry does.
+func downloaded(t *testing.T, h *store.History, path string, mtime time.Time) {
+	t.Helper()
+	writeFile(t, path, []byte("image "+path))
+	_, err := h.AddEntry("https://example.com/"+filepath.Base(path), path, "t")
+	require.NoError(t, err)
+	require.NoError(t, os.Chtimes(path, mtime, mtime))
 }
 
-func TestCleanupWithJpgPatternLeavesOtherFilesAlone(t *testing.T) {
+func TestCleanupDeletesOnlyRecordedDownloadsOldestFirst(t *testing.T) {
+	h, _ := testStores(t)
 	dir := t.TempDir()
-	base := fixedNow
-	touch(t, filepath.Join(dir, lastRunFile), base.Add(-5*time.Hour))
-	touch(t, filepath.Join(dir, "old.jpg"), base.Add(-4*time.Hour))
-	touch(t, filepath.Join(dir, "keep.png"), base.Add(-3*time.Hour))
-	touch(t, filepath.Join(dir, "new.jpg"), base.Add(-1*time.Hour))
+	touch(t, filepath.Join(dir, "mine-oldest.jpg"), fixedNow.Add(-9*time.Hour))
+	touch(t, filepath.Join(dir, lastRunFile), fixedNow.Add(-8*time.Hour))
+	downloaded(t, h, filepath.Join(dir, "a.jpg"), fixedNow.Add(-3*time.Hour))
+	downloaded(t, h, filepath.Join(dir, "b.jpg"), fixedNow.Add(-2*time.Hour))
+	downloaded(t, h, filepath.Join(dir, "c.jpg"), fixedNow.Add(-1*time.Hour))
 
-	rec := newRecorder()
-	cleanupOldFiles(dir, "*.jpg", 1, "[T]", rec.events())
+	cleanupOldFiles(h, dir, "*", 2, "[T]", events.Events{})
 
-	require.Equal(t, []string{".last_run", "keep.png", "new.jpg"}, dirNames(t, dir))
-	require.True(t, rec.hasLogContaining("Removed old.jpg"))
+	require.Equal(t, []string{".last_run", "b.jpg", "c.jpg", "mine-oldest.jpg"}, dirNames(t, dir))
 }
 
-func TestCleanupDoesNothingAtOrBelowTheLimit(t *testing.T) {
-	dir := t.TempDir()
-	touch(t, filepath.Join(dir, "a.jpg"), fixedNow)
-	touch(t, filepath.Join(dir, "b.jpg"), fixedNow)
-	cleanupOldFiles(dir, "*", 2, "[T]", events.Events{})
-	require.Len(t, dirNames(t, dir), 2)
+func TestCleanupIgnoresCopiesAndEditsOfDownloads(t *testing.T) {
+	h, _ := testStores(t)
+	dl, other := t.TempDir(), t.TempDir()
+	downloaded(t, h, filepath.Join(dl, "a.jpg"), fixedNow.Add(-2*time.Hour))
+	downloaded(t, h, filepath.Join(other, "b.jpg"), fixedNow.Add(-2*time.Hour))
+	// A byte-identical copy of a.jpg in another folder, and b.jpg edited.
+	writeFile(t, filepath.Join(other, "a-copy.jpg"), []byte("image "+filepath.Join(dl, "a.jpg")))
+	writeFile(t, filepath.Join(other, "b.jpg"), []byte("edited"))
+
+	cleanupOldFiles(h, other, "*", 1, "[T]", events.Events{})
+	cleanupOldFiles(h, other, "*", 1, "[T]", events.Events{})
+
+	require.Equal(t, []string{"a-copy.jpg", "b.jpg"}, dirNames(t, other))
+}
+
+func TestCleanupWithLimitZeroOrLessDeletesNothing(t *testing.T) {
+	for _, limit := range []int{0, -1} {
+		h, _ := testStores(t)
+		dir := t.TempDir()
+		downloaded(t, h, filepath.Join(dir, "a.jpg"), fixedNow)
+		rec := newRecorder()
+		cleanupOldFiles(h, dir, "*", limit, "[T]", rec.events())
+		require.Equal(t, []string{"a.jpg"}, dirNames(t, dir))
+		require.True(t, rec.hasLogContaining("Retention is off"))
+	}
 }
 
 func TestResetDirRemovesFilesAndSubdirectoriesButKeepsTheDirectory(t *testing.T) {
