@@ -1,8 +1,6 @@
 # Spec 010: Clockwork Orange v4.0 — Native Go Rewrite
 
-> **Note**: This work has no associated issue tracker ticket (personal public
-> GitHub repository, no tracker). Consider creating a GitHub issue for
-> traceability.
+**Issue**: #16
 
 ## Status: COMPLETE (shipped and cut over at v4.1.1; the four manual and host-environment-gated criteria were verified by the author on 2026-09-19 — issue #16)
 

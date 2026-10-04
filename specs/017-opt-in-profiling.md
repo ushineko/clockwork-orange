@@ -2,10 +2,6 @@
 
 **Issue**: #18
 
-> **Note**: This work has no associated issue tracker ticket (personal public
-> GitHub repository, no tracker). Consider creating a GitHub issue for
-> traceability.
-
 ## Status: COMPLETE
 
 - **Priority**: Medium — a diagnostic, for an open memory question
