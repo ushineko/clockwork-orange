@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -17,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/fsnotify/fsnotify"
+	"github.com/ushineko/fynedesygn/dragout"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/core"
@@ -52,6 +54,7 @@ type reviewModel struct {
 
 	// live widgets, nil when the section is not on screen
 	preview  *canvas.Image
+	drag     *dragout.Source
 	info     *widget.Label
 	applyBtn *widget.Button
 
@@ -168,6 +171,15 @@ func (r *reviewModel) markedPaths() []string {
 		}
 	}
 	return out
+}
+
+// dragPaths is what dragging the preview out of the window offers: the
+// image on screen, or nothing (spec 024).
+func (r *reviewModel) dragPaths() []string {
+	if p := r.current(); p != "" && r.err == "" {
+		return []string{p}
+	}
+	return nil
 }
 
 // current is the image on screen, or "".
@@ -307,16 +319,25 @@ func abs(n int) int {
 const previewMinHeight = 320
 
 // widget builds the review pane: the info line over the preview, which fills
-// the rest of the tab.
+// the rest of the tab. Dragging the preview drags the image file out of the
+// window as a copy (spec 024).
 func (r *reviewModel) widget(u *ui) fyne.CanvasObject {
 	r.preview = canvas.NewImageFromResource(nil)
 	r.preview.FillMode = canvas.ImageFillContain
 	r.preview.SetMinSize(fyne.NewSize(0, previewMinHeight))
 	r.info = widget.NewLabel("")
 	r.info.Truncation = fyne.TextTruncateEllipsis
+	r.drag = dragout.New(r.preview, r.dragPaths)
+	r.drag.OnFailed = func(err error) {
+		// Unsupported (Windows and macOS for now) does what it did before
+		// the drag existed: nothing.
+		if !errors.Is(err, dragout.ErrUnsupported) {
+			u.sh.Report("Dragging the image", err)
+		}
+	}
 	r.draw(u)
 	r.watch(u)
-	return container.NewBorder(r.info, nil, nil, nil, r.preview)
+	return container.NewBorder(r.info, nil, nil, nil, r.drag)
 }
 
 // draw shows the current image (decoded off the UI thread) and the panel.
@@ -499,7 +520,7 @@ func (r *reviewModel) detach() {
 		_ = r.watcher.Close()
 		r.watcher = nil
 	}
-	r.preview, r.info, r.applyBtn = nil, nil, nil
+	r.preview, r.drag, r.info, r.applyBtn = nil, nil, nil, nil
 }
 
 /*
