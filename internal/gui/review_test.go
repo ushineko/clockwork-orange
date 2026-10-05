@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"errors"
 	"image"
 	"image/color"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"github.com/stretchr/testify/require"
+	"github.com/ushineko/fynedesygn/dragout"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/plugins"
@@ -163,4 +165,39 @@ func TestReviewKeysAreIgnoredOnTheConfigurationTab(t *testing.T) {
 	u.pluginTab = 1
 	u.onTypedKey(&fyne.KeyEvent{Name: fyne.KeyRight})
 	require.Equal(t, 1, u.review.index)
+}
+
+// Dragging the preview offers the image on screen, follows the arrow keys,
+// and offers nothing when there is nothing to show (spec 024 R1).
+func TestReviewDragOffersTheImageOnScreen(t *testing.T) {
+	u, _, _ := testUI(t)
+	dir, want := reviewDir(t, 2)
+	r := &reviewModel{plugin: "local", dir: dir, marked: map[int]bool{}}
+	r.scan()
+	require.Equal(t, []string{want[0]}, r.dragPaths())
+	r.handleKey(u, fyne.KeyRight)
+	require.Equal(t, []string{want[1]}, r.dragPaths())
+
+	empty := &reviewModel{dir: t.TempDir(), marked: map[int]bool{}}
+	empty.scan()
+	require.Nil(t, empty.dragPaths())
+	missing := &reviewModel{dir: "/nonexistent/review", marked: map[int]bool{}}
+	missing.scan()
+	require.Nil(t, missing.dragPaths())
+}
+
+// A platform with no drag source does what it did before: nothing, and no
+// banner. Any other failure is reported (spec 024 R4).
+func TestReviewDragReportsOnlyRealFailures(t *testing.T) {
+	u, _, _ := testUI(t)
+	dir, _ := reviewDir(t, 1)
+	r := &reviewModel{plugin: "local", dir: dir, marked: map[int]bool{}, cache: newPreviewCache()}
+	r.scan()
+	r.widget(u)
+	defer r.detach()
+
+	r.drag.OnFailed(dragout.ErrUnsupported)
+	require.Empty(t, u.sh.FlashText())
+	r.drag.OnFailed(errors.New("no seat"))
+	require.Contains(t, u.sh.FlashText(), "no seat")
 }
