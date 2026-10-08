@@ -8,7 +8,8 @@ maintainers will do with it.
 
 ## TL;DR
 
-- Only elected maintainers merge. See [MAINTAINERS.md](MAINTAINERS.md).
+- Only elected maintainers merge, and a contributor PR needs a maintainer's
+  approving review. See [MAINTAINERS.md](MAINTAINERS.md).
 - AI-written and hand-written PRs are both accepted, and both get the same
   review. Either may be rejected if it does not meet the standards below.
 - Every PR needs tests **and**, for anything touching hardware or device
@@ -21,9 +22,14 @@ maintainers will do with it.
 ## Who merges
 
 Merge rights belong to the maintainers listed in
-[MAINTAINERS.md](MAINTAINERS.md), and to nobody else. No contributor — human or
-agent — merges their own PR, and no PR lands without a maintainer's approving
-review.
+[MAINTAINERS.md](MAINTAINERS.md), and to nobody else. A PR from anyone who is
+not a maintainer — human or agent — needs an approving review from a maintainer
+before it lands, and the maintainer does the merging.
+
+Maintainers merge their own work. These are small projects with a short
+maintainer list, and a rule that forced a second maintainer's sign-off on every
+change would simply stop work. The review requirement is there to gate
+contributions coming in, not to make maintainers wait on each other.
 
 Maintainers are elected, not self-appointed. The process, the current roster,
 and how to be considered are all in [MAINTAINERS.md](MAINTAINERS.md).

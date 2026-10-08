@@ -16,14 +16,16 @@ None.
 
 ## What a maintainer may do
 
-- Merge a pull request, after an approving review from a maintainer who is not
-  its author.
+- Merge a pull request from a contributor, after reviewing and approving it.
+- Merge their own work, without waiting for a second maintainer's sign-off.
 - Modify a contributor's PR before merging.
 - Hold a PR pending changes, or close it as out of scope or out of direction.
 - Cut a release and tag it.
 
-No contributor merges their own PR. No PR lands without a maintainer's
-approving review, and that includes PRs opened by a maintainer.
+A PR from anyone who is not a maintainer needs a maintainer's approving review
+before it lands. Maintainers merge their own work directly: the review
+requirement gates contributions coming in, and is not a two-person rule between
+maintainers.
 
 ## How maintainers are elected
 
