@@ -149,6 +149,16 @@ type CycleResult struct {
 func Cycle(ctx context.Context, req CycleRequest) (CycleResult, error) {
 	d := req.deps()
 	d.ensurePlatform(req.Events)
+	res, err := cycleSources(ctx, req)
+	if err != nil {
+		return res, err
+	}
+	return res, setFromSources(ctx, d.Platform, req.Mode, res.Sources, req.Events)
+}
+
+// cycleSources is the first half of Cycle: the fixed sources, or in dynamic
+// mode the reloaded config and what its enabled plugins produced.
+func cycleSources(ctx context.Context, req CycleRequest) (CycleResult, error) {
 	res := CycleResult{Sources: req.Sources}
 	if len(req.Sources) == 0 {
 		loaded, err := LoadConfig(ctx, req.Request)
@@ -165,11 +175,11 @@ func Cycle(ctx context.Context, req CycleRequest) (CycleResult, error) {
 			return res, fmt.Errorf("%w for %s mode", ErrNoEnabledPlugins, modeWord(req.Mode))
 		}
 	}
-	return res, setFromSources(ctx, d.Platform, req.Mode, res.Sources, req.Events)
+	return res, nil
 }
 
 // setFromSources dispatches on mode over a source list.
-func setFromSources(ctx context.Context, p platform.Platform, mode Mode, sources []string, ev events.Events) error {
+func setFromSources(ctx context.Context, p engine.Setter, mode Mode, sources []string, ev events.Events) error {
 	switch mode {
 	case ModeDual:
 		return engine.SetDualFromSources(ctx, p, sources, ev)
@@ -233,8 +243,22 @@ func RunLoop(ctx context.Context, req LoopRequest) error {
 		req.Events.Debugf("Starting %s continuous mode with %s interval", modeWord(req.Mode), req.Wait)
 	}
 
+	controlChanged, closeControl, err := WatchRotationControl(ctx)
+	if err != nil {
+		req.Events.Warnf("Rotation control watcher unavailable, pause and skip need a restart: %v", err)
+	} else {
+		defer closeControl()
+	}
+	_, ctl, _ := LoadRotation()
+	lastSkip := ctl.Skip
+
+	skip := false
 	for {
-		res, err := Cycle(ctx, CycleRequest{Request: req.Request, Mode: req.Mode, Sources: req.Sources})
+		res, err := Rotate(ctx, RotateRequest{
+			CycleRequest: CycleRequest{Request: req.Request, Mode: req.Mode, Sources: req.Sources},
+			Rotator:      RotatorDaemon,
+			Skip:         skip,
+		})
 		if err != nil && ctx.Err() == nil {
 			req.Events.Errorf("%v", err)
 		}
@@ -252,11 +276,84 @@ func RunLoop(ctx context.Context, req LoopRequest) error {
 			wait = time.Duration(config.DefaultWaitGUI) * time.Second
 		}
 		req.Events.Debugf("Waiting %s before next change...", wait)
-		if config.WaitForNextCycle(ctx, wait, changed, debounce) {
-			req.Events.Debugf("Config change detected, interrupting wait cycle")
-		}
+		skip = waitForRotation(ctx, req, wait, changed, controlChanged, debounce, &lastSkip)
 		if ctx.Err() != nil {
 			return nil
+		}
+	}
+}
+
+// controlDebounce coalesces the writes of one pause, resume or skip. It is
+// short: the user is looking at the screen waiting for the change.
+const controlDebounce = 200 * time.Millisecond
+
+/*
+waitForRotation sleeps until the next change is due and reports whether that
+change is a skip (spec 026 R3). A config change ends the wait as the timer
+does. A control change ends it only for a skip; otherwise it re-reads whether
+everything is pinned, and pausing stops the clock while resuming restarts it
+at the full wait. The time of the next change is recorded for the status
+display each time it is decided.
+*/
+func waitForRotation(ctx context.Context, req LoopRequest, wait time.Duration, configChanged, controlChanged <-chan struct{}, debounce time.Duration, lastSkip *int) bool {
+	paused := RotationPaused(ctx, req.Request, req.Mode)
+	deadline := time.Now().Add(wait)
+	for {
+		var next *time.Time
+		var due <-chan time.Time
+		var timer *time.Timer
+		if !paused {
+			at := deadline
+			next = &at
+			timer = time.NewTimer(time.Until(deadline))
+			due = timer.C
+		}
+		if err := SetNextChange(RotatorDaemon, req.Mode, next); err != nil {
+			req.Events.Warnf("Could not record the next change: %v", err)
+		}
+		skip, done := func() (bool, bool) {
+			if timer != nil {
+				defer timer.Stop()
+			}
+			select {
+			case <-ctx.Done():
+				return false, true
+			case <-due:
+				return false, true
+			case _, ok := <-configChanged:
+				if !ok {
+					configChanged = nil
+					return false, false
+				}
+				config.DrainBurst(ctx, configChanged, debounce)
+				req.Events.Debugf("Config change detected, interrupting wait cycle")
+				return false, true
+			case _, ok := <-controlChanged:
+				if !ok {
+					controlChanged = nil
+					return false, false
+				}
+				config.DrainBurst(ctx, controlChanged, controlDebounce)
+				_, ctl, err := LoadRotation()
+				if err != nil {
+					req.Events.Warnf("%v", err)
+					return false, false
+				}
+				if ctl.Skip != *lastSkip {
+					*lastSkip = ctl.Skip
+					req.Events.Debugf("Skip requested")
+					return true, true
+				}
+				nowPaused := RotationPaused(ctx, req.Request, req.Mode)
+				if paused && !nowPaused {
+					deadline = time.Now().Add(wait)
+				}
+				paused = nowPaused
+				return false, false
+			}
+		}()
+		if done {
+			return skip
 		}
 	}
 }

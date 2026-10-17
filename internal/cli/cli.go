@@ -118,6 +118,7 @@ func NewApp(o Options) *App {
 	addRootFlags(root, a, g)
 	root.AddCommand(
 		newServiceCmd(a, g),
+		newWallpaperCmd(a, g),
 		newBlacklistCmd(a, g),
 		newHistoryCmd(a, g),
 		newPluginsCmd(a, g),

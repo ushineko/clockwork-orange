@@ -560,7 +560,8 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 	where := widget.NewLabel(fmt.Sprintf("  %d image(s) in %s", len(rv.images), rv.dir))
 	where.Importance = widget.LowImportance
 	where.Truncation = fyne.TextTruncateEllipsis
-	toolbar := container.NewBorder(nil, nil, container.NewHBox(apply, rescan), hint, where)
+	rv.pinBtn = u.pinButton(rv)
+	toolbar := container.NewBorder(nil, nil, container.NewHBox(apply, rv.pinBtn, rescan), hint, where)
 	reviewTab := container.NewBorder(toolbar, nil, nil, nil, rv.widget(u))
 	// Only the selected tab carries its real content; the other holds an
 	// empty box. AppTabs sizes itself to its tallest item, so with both

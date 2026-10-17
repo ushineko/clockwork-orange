@@ -105,13 +105,14 @@ func (u *ui) buildService() fyne.CanvasObject {
 	// way to stop it in sight. The status scroller is the shell's, so the 5 s
 	// poll's rebuild leaves it where the reader put it (fynedesygn spec 054).
 	controls := container.NewVBox(
-		widgets.Card("Control", toolbar),
+		widgets.Card("Control", toolbar, u.wallpaperControls()),
 		u.journalControls(),
 	)
 	return u.sh.VSplit(logSplitKey, logSplitOffset,
 		container.NewBorder(nil, controls, nil, nil,
 			u.sh.VScroll(sectionService, container.NewVBox(
 				head,
+				u.wallpaperCard(),
 				widgets.Card("Status", status, detailsPane),
 			))),
 		u.journalPaneWidget("Service log", nil),
@@ -247,7 +248,8 @@ func (u *ui) buildActivity() fyne.CanvasObject {
 			"every plugin run. The timer fires on the interval in Settings while the window is "+
 			"open or in the tray.")
 	return u.sh.VSplit(logSplitKey, logSplitOffset,
-		container.NewVScroll(container.NewVBox(head)),
+		container.NewBorder(nil, widgets.Card("Control", u.wallpaperControls()), nil, nil,
+			u.sh.VScroll(sectionActivity, container.NewVBox(head, u.wallpaperCard()))),
 		u.journalPaneWidget("Application activity", func() {
 			paneEvents(u.activity).Infof("Activity log cleared by user")
 		}),
