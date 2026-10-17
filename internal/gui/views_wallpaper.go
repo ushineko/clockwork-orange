@@ -141,7 +141,12 @@ func nextChangeText(r core.RotationStatusResult, now time.Time) string {
 	case r.State.NextChange == nil:
 		return "Next change: not scheduled"
 	}
-	left := max(r.State.NextChange.Sub(now), 0).Round(time.Second)
+	left := r.State.NextChange.Sub(now).Round(time.Second)
+	if left <= 0 {
+		// The rotator is running its plugins; the card reloads when it
+		// records the change.
+		return "Changing now…"
+	}
 	return fmt.Sprintf("Next change in %d:%02d", int(left.Minutes()), int(left.Seconds())%60)
 }
 

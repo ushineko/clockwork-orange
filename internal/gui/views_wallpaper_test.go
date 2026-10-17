@@ -105,3 +105,14 @@ func TestThePinMenuPinsTheReviewedImage(t *testing.T) {
 	require.Equal(t, map[int]string{1: img}, ctl.Desktop)
 	require.Contains(t, fp.set, img)
 }
+
+// The countdown never sits at 0:00 while the rotator works.
+func TestTheCountdownSaysChangingAtZero(t *testing.T) {
+	now := time.Now()
+	due := now.Add(-time.Second)
+	r := core.RotationStatusResult{Running: true, State: core.RotationState{NextChange: &due}}
+	require.Equal(t, "Changing now…", nextChangeText(r, now))
+	later := now.Add(61 * time.Second)
+	r.State.NextChange = &later
+	require.Equal(t, "Next change in 1:01", nextChangeText(r, now))
+}
