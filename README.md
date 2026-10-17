@@ -48,6 +48,34 @@ Download the `.deb` from the releases page and install it with `apt install
 ./clockwork-orange_*.deb`. It depends on the KDE tools `qdbus6` and
 `kwriteconfig6`, which Plasma 6 provides.
 
+### Installer (Linux and Windows)
+
+The releases page has a self-contained installer for each platform:
+`clockwork-orange-<version>-linux-amd64-installer` and
+`…-windows-amd64-installer.exe`, built with
+[fynstall](https://github.com/ushineko/fynstall).
+
+- **From the desktop**, it opens a wizard. **From a terminal**, it asks on
+  the command line, and `--yes` takes the defaults.
+- **Where it installs:**
+  - by default, for you alone, in `~/.local/share/io.ushineko.clockwork-orange`
+    on Linux or `%LOCALAPPDATA%\Programs` on Windows;
+  - "Everyone on this computer" installs to `/opt` or Program Files, and asks
+    for an administrator once.
+- **What it adds:** the launcher entry (Start Menu on Windows), the icons,
+  and both programs on `PATH`.
+- **No graphics libraries** (a server, a slim container)? Use the
+  `-cli-installer` instead.
+- **Removing it:** `<install directory>/uninstall`, or Settings > Apps on
+  Windows. It removes what the installer added and leaves your
+  configuration, images and databases.
+- **The systemd service** is not part of the install. Turn it on from the
+  window's Service section, or with `clockwork-orange service install`.
+
+If you also have the Arch or Debian package, both copies are installed. The
+one found first on `PATH` runs: `~/.local/bin` usually comes before
+`/usr/bin`.
+
 ### From source (Linux)
 
     git clone https://github.com/ushineko/clockwork-orange
@@ -63,7 +91,8 @@ they are.
 
 ### Windows and macOS
 
-Download the zip from the releases page. The Windows zip holds
+Besides the Windows installer above, the releases page has a zip for each.
+The Windows zip holds
 `clockwork-orange.exe` and `clockwork-orange-gui.exe`; the macOS zip holds
 `Clockwork Orange.app`. On both, running the program with no arguments opens
 the window.

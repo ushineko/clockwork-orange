@@ -1,0 +1,52 @@
+# The fynstall installer (spec 025). `make installer` renders this into
+# build/installer/ with the version from .tag and the payload staged beside
+# it, so payload paths are relative to that staging directory, not to this
+# file. The PKGBUILDs, packaging/debian and install.sh install the same files;
+# keep them in step by hand until fynstall can stage a package
+# (ushineko/fynstall#55).
+app:
+  id: io.ushineko.clockwork-orange
+  name: Clockwork Orange
+  version: "@VERSION@"
+  publisher: ushineko
+  icon: icon.png
+
+install:
+  # Per user by default; "Everyone on this computer" installs under /opt
+  # (Linux) or Program Files (Windows) and asks for an administrator once.
+  scopes: [user, system]
+
+payload:
+  - src: "{os}-{arch}/clockwork-orange{exe}"
+    dst: "bin/clockwork-orange{exe}"
+    mode: "0755"
+  - src: "{os}-{arch}/clockwork-orange-gui{exe}"
+    dst: "bin/clockwork-orange-gui{exe}"
+    mode: "0755"
+  - src: README.md
+    dst: README.md
+  - src: LICENSE
+    dst: LICENSE
+
+integration:
+  path_links:
+    - "bin/clockwork-orange{exe}"
+    - "bin/clockwork-orange-gui{exe}"
+  desktop:
+    # The ID must stay the app ID: Fyne sets the Wayland app_id from it and
+    # the compositor finds the window's icon through the entry of that name.
+    - name: Clockwork Orange
+      generic_name: Wallpaper manager
+      comment: Wallpaper and lock screen manager
+      exec: "bin/clockwork-orange-gui{exe}"
+      categories: [Graphics]
+      keywords: [wallpaper, desktop, background, lockscreen, kde, plasma]
+      startup_notify: true
+
+# No `service` action: the program installs its own systemd user unit from
+# the Service section or `clockwork-orange service install`, and a unit with
+# two owners would be restored by the uninstaller over the program's rewrite
+# (spec 025 R2).
+
+# The one target staged; stage.sh fills it in.
+targets: ["@TARGET@"]

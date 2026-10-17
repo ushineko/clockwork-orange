@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # Installs the clockwork-orange command line/daemon and, unless told otherwise,
-# the desktop window with its launcher entry and icon. Idempotent: safe to
-# re-run.
+# the desktop window with its launcher entry and icon, from this checkout.
+# Idempotent: safe to re-run. To install a release instead, use the fynstall
+# installer from the releases page (`make installer` builds one from here).
 #
 # Nothing here touches your wallpapers, your config file or the history and
 # blacklist databases. It builds from this checkout and copies four files into

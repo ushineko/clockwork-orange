@@ -39,6 +39,43 @@ jobs:
     - name: Build GUI
       run: make build-gui
 
+  build-linux-installer:
+    name: Build Linux Installer (fynstall)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        check-latest: true
+    - name: Install Fyne build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev wayland-protocols
+    - name: Build the installers
+      run: |
+        # A release installer is the plain version; the Makefile would add a
+        # -dev suffix on a shallow checkout that cannot see the tag.
+        if [ "${GITHUB_REF_TYPE}" = tag ]; then export VERSION=$(tr -d 'v[:space:]' < .tag); fi
+        make installer
+    - name: Install, run and uninstall (CLI installer, temp HOME)
+      run: |
+        # The runner has no KDE tools, so --self-test is gated on Arch as for
+        # the deb; this checks the install, the binary and the removal.
+        T=$(mktemp -d)
+        HOME=$T ./dist/clockwork-orange-*-linux-amd64-cli-installer --cli --yes --dir "$T/app"
+        "$T/app/bin/clockwork-orange" version
+        test -L "$T/.local/bin/clockwork-orange"
+        test -f "$T/.local/share/applications/io.ushineko.clockwork-orange.desktop"
+        HOME=$T "$T/app/uninstall" --yes
+        test ! -e "$T/app"
+        test ! -e "$T/.local/bin/clockwork-orange"
+        test ! -e "$T/.local/share/applications/io.ushineko.clockwork-orange.desktop"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: linux-installer
+        path: dist/*-installer
+
   build-arch:
     name: Build Arch Package
     runs-on: ubuntu-latest
@@ -157,12 +194,27 @@ jobs:
         $proc = Start-Process -FilePath ".\dist\clockwork-orange.exe" -ArgumentList "--self-test" -Wait -PassThru -NoNewWindow
         if ($proc.ExitCode -ne 0) { throw "self-test failed with exit code $($proc.ExitCode)" }
         .\dist\clockwork-orange.exe version
+    - name: Build the Windows installer (fynstall)
+      shell: bash
+      run: |
+        export PATH="$(cygpath -u '${{ steps.msys2.outputs.msys2-location }}')/ucrt64/bin:$PATH"
+        export CGO_ENABLED=1
+        # One pin for the builder: the Makefile's.
+        FV=$(sed -n 's/^FYNSTALL_VERSION?=//p' Makefile)
+        ./packaging/fynstall/stage.sh "$APP_VERSION" windows/amd64 dist build/installer
+        go run "github.com/ushineko/fynstall/cmd/fynstall@$FV" validate -c build/installer/fynstall.yaml
+        go run "github.com/ushineko/fynstall/cmd/fynstall@$FV" build -c build/installer/fynstall.yaml -o dist/installer --with-cli-only
+        ls dist/installer
     - name: Zip
       run: Compress-Archive -Path dist\clockwork-orange.exe, dist\clockwork-orange-gui.exe, README.md, LICENSE -DestinationPath dist\clockwork-orange-windows-amd64.zip
     - uses: actions/upload-artifact@v4
       with:
         name: windows-zip
         path: dist/clockwork-orange-windows-amd64.zip
+    - uses: actions/upload-artifact@v4
+      with:
+        name: windows-installer
+        path: dist/installer/*-installer.exe
 
   build-macos:
     name: Build macOS App
@@ -238,7 +290,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [test-go, build-arch, build-deb, build-windows, build-macos]
+    needs: [test-go, build-linux-installer, build-arch, build-deb, build-windows, build-macos]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
