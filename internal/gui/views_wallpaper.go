@@ -31,7 +31,7 @@ const (
 wallpaperCard is the status card of the Service section (Activity on Windows
 and macOS): a tile per monitor and one for the lock screen, each a thumbnail
 over the target's name and the file, and a line with the time of the next
-change and the two controls that act on it, Pause/Resume and Skip.
+change led by the two controls that act on it, Pause/Resume and Skip.
 
 The controls live in this card, not with the service's Start and Stop: they
 hold and change the wallpaper, whoever is rotating it, and beside the
@@ -56,7 +56,9 @@ func (u *ui) wallpaperCard() fyne.CanvasObject {
 	u.nextChange = widget.NewLabel("")
 	u.nextChange.TextStyle = fyne.TextStyle{Bold: true}
 	u.drawNextChange(time.Now())
-	footer := container.NewBorder(nil, nil, nil, u.wallpaperControls(), u.nextChange)
+	// The controls lead the line and the countdown follows them, so they
+	// read as one statement: "[Pause] [Skip] Next change in 2:41".
+	footer := container.NewBorder(nil, nil, u.wallpaperControls(), nil, u.nextChange)
 	if len(tiles) == 0 {
 		return widgets.Card("Wallpaper",
 			widgets.Dim("No wallpaper has been recorded yet. The next change records one; Skip makes it now."),
@@ -150,8 +152,8 @@ func (u *ui) drawNextChange(now time.Time) {
 }
 
 /*
-wallpaperControls is Pause/Resume and Skip, at the end of the Wallpaper card's
-countdown line. Pause shows while nothing is pinned and Resume while anything
+wallpaperControls is Pause/Resume and Skip, at the start of the Wallpaper
+card's countdown line. Pause shows while nothing is pinned and Resume while anything
 is, one button whose label changes, so the line never changes width.
 */
 func (u *ui) wallpaperControls() fyne.CanvasObject {

@@ -135,7 +135,8 @@ the last known images and the pins.
     name with "pinned" when it is pinned, and the file name. The full path
     and the image's age are the tile's tip. Under the tiles: "Next change in
     m:ss", or "Paused", or "Not rotating";
-  - Pause/Resume and Skip sit in the Wallpaper card, on the countdown line.
+  - Pause/Resume and Skip sit in the Wallpaper card, leading the countdown
+    line.
     The first version put them in the affixed Control card beside Start and
     Stop, and in review they read as controls of the service;
   - the card updates when `rotation.json` changes, and the countdown ticks
