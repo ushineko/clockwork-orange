@@ -31,7 +31,11 @@ const (
 wallpaperCard is the status card of the Service section (Activity on Windows
 and macOS): a tile per monitor and one for the lock screen, each a thumbnail
 over the target's name and the file, and a line with the time of the next
-change.
+change and the two controls that act on it, Pause/Resume and Skip.
+
+The controls live in this card, not with the service's Start and Stop: they
+hold and change the wallpaper, whoever is rotating it, and beside the
+service's verbs they read as controls of the service.
 
 Tiles are one fixed size in a wrapping grid, the thumbnail has its size
 whether it has loaded or not, and the next-change line is one label whose
@@ -52,14 +56,15 @@ func (u *ui) wallpaperCard() fyne.CanvasObject {
 	u.nextChange = widget.NewLabel("")
 	u.nextChange.TextStyle = fyne.TextStyle{Bold: true}
 	u.drawNextChange(time.Now())
+	footer := container.NewBorder(nil, nil, nil, u.wallpaperControls(), u.nextChange)
 	if len(tiles) == 0 {
 		return widgets.Card("Wallpaper",
 			widgets.Dim("No wallpaper has been recorded yet. The next change records one; Skip makes it now."),
-			u.nextChange)
+			footer)
 	}
 	line := widget.NewLabel("X").MinSize().Height
 	grid := container.NewGridWrap(fyne.NewSize(thumbW, thumbH+2*line), tiles...)
-	return widgets.Card("Wallpaper", grid, u.nextChange)
+	return widgets.Card("Wallpaper", grid, footer)
 }
 
 // shownTile is one target: thumbnail, name with pin marker, file.
@@ -145,9 +150,9 @@ func (u *ui) drawNextChange(now time.Time) {
 }
 
 /*
-wallpaperControls is Pause/Resume and Skip, affixed with the section's other
-controls. Pause shows while anything rotates and Resume while anything is
-pinned, one button whose label changes: the toolbar never changes width.
+wallpaperControls is Pause/Resume and Skip, at the end of the Wallpaper card's
+countdown line. Pause shows while nothing is pinned and Resume while anything
+is, one button whose label changes, so the line never changes width.
 */
 func (u *ui) wallpaperControls() fyne.CanvasObject {
 	u.loadRotation()

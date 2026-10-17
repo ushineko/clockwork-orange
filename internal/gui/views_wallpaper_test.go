@@ -53,6 +53,9 @@ func TestTheServiceSectionShowsTheWallpaperAndHoldsItsSize(t *testing.T) {
 	require.Contains(t, text, "b.jpg")
 	require.Regexp(t, `Next change in [45]:\d\d`, text)
 	require.NotNil(t, findButton(running, "Pause"))
+	u.rotationOK = false
+	require.NotNil(t, findButton(u.wallpaperCard(), "Pause"), "the wallpaper's controls are in its card")
+	require.NotNil(t, findButton(u.wallpaperCard(), "Skip"))
 	runningSize := running.MinSize()
 
 	st.NextChange = nil
