@@ -9,9 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -46,13 +46,6 @@ func loadKDEGolden(t *testing.T, mine []string) kdeGolden {
 		return out
 	}
 	g.Single, g.Multi, g.Lockscreen, g.Reload = subst(g.Single), subst(g.Multi), subst(g.Lockscreen), subst(g.Reload)
-	// DV17: the one place the scripts depart from the Python oracle.
-	live := func(argv []string) []string {
-		out := append([]string(nil), argv...)
-		out[len(out)-1] = strings.ReplaceAll(out[len(out)-1], "desktops()", LiveDesktopsJS)
-		return out
-	}
-	g.Single, g.Multi = live(g.Single), live(g.Multi)
 	return g
 }
 
@@ -66,122 +59,198 @@ func goldenFiles(t *testing.T) []string {
 	}
 }
 
-func TestKDEScriptsReproduceThePythonTextByteForByte(t *testing.T) {
+// fakePlasma is plasmashell with a fixed set of screens: it records every
+// SetImage and answers Image from what was set.
+type fakePlasma struct {
+	mu       sync.Mutex
+	screens  int
+	images   map[int]string
+	sets     []string // "screen=path"
+	reloads  int
+	err      error
+	changes  chan int
+	reloadEr error
+}
+
+func newFakePlasma(screens int) *fakePlasma {
+	return &fakePlasma{screens: screens, images: map[int]string{}, changes: make(chan int, 4)}
+}
+
+func (f *fakePlasma) SetImage(_ context.Context, screen int, path string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return f.err
+	}
+	f.sets = append(f.sets, fmt.Sprintf("%d=%s", screen, path))
+	if screen < f.screens {
+		f.images[screen] = path
+	}
+	return nil
+}
+
+func (f *fakePlasma) Image(_ context.Context, screen int) (string, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return "", false, f.err
+	}
+	if screen >= f.screens {
+		return "", false, nil
+	}
+	return f.images[screen], true, nil
+}
+
+func (f *fakePlasma) Changes(context.Context) (<-chan int, error) { return f.changes, nil }
+
+func (f *fakePlasma) ReloadScreenSaver(context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reloads++
+	return f.reloadEr
+}
+
+func (f *fakePlasma) setCalls() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.sets...)
+}
+
+func onPlasma(r Runner, pl Plasma) (*LinuxPlatform, func() []string) {
+	ev, lines := captureEvents()
+	return &LinuxPlatform{Runner: r, Events: ev, Plasma: pl}, lines
+}
+
+// The kwriteconfig6 argv is still the 2.9.5 one, byte for byte.
+func TestKwriteconfigArgvIsThePythonOne(t *testing.T) {
 	mine := goldenFiles(t)
 	g := loadKDEGolden(t, mine)
-	require.Equal(t, g.Single[4], KDESingleScript(mine[0]))
-	require.Equal(t, g.Multi[4], KDEMultiScript(mine[:2]))
 	require.Equal(t, g.Lockscreen, KwriteconfigArgs(mine[2]))
 }
 
-func TestSetWallpaperSendsTheGoldenQdbusArgv(t *testing.T) {
+// R1: one image goes to every screen, one setWallpaper per screen; no
+// process is started.
+func TestSetWallpaperSetsEveryScreenOverDBus(t *testing.T) {
 	mine := goldenFiles(t)
-	g := loadKDEGolden(t, mine)
 	r := &FakeRunner{}
-	p := New(r)
+	pl := newFakePlasma(2)
+	p, _ := onPlasma(r, pl)
 	require.NoError(t, p.SetWallpaper(context.Background(), mine[0]))
-	require.Equal(t, [][]string{g.Single}, r.Calls())
+	require.Equal(t, []string{"0=" + mine[0], "1=" + mine[0]}, pl.setCalls())
+	require.Empty(t, r.Calls(), "no qdbus6")
 }
 
-func TestSetWallpaperMultiSendsTheGoldenQdbusArgv(t *testing.T) {
+// R1: screen i gets paths[i % len]; missing files are skipped first.
+func TestSetWallpaperMultiAssignsImagesByScreen(t *testing.T) {
+	mine := goldenFiles(t)
+	pl := newFakePlasma(3)
+	p, lines := onPlasma(&FakeRunner{}, pl)
+	ctx := context.Background()
+	require.NoError(t, p.SetWallpaperMulti(ctx, []string{mine[0], "/nonexistent/a.png", mine[1]}))
+	require.Equal(t, []string{"0=" + mine[0], "1=" + mine[1], "2=" + mine[0]}, pl.setCalls())
+	require.Contains(t, strings.Join(lines(), "\n"), "[ERROR] File does not exist: /nonexistent/a.png")
+
+	require.EqualError(t, p.SetWallpaperMulti(ctx, []string{"/nonexistent/a.png"}), "no valid image paths found")
+	require.EqualError(t, p.SetWallpaperMulti(ctx, nil), "no image paths provided")
+}
+
+// A path with quotes and backslashes goes to Plasma as it is: there is no
+// script left for it to break out of (DV18).
+func TestAPathIsPassedVerbatim(t *testing.T) {
+	dir := resolvedTempDir(t)
+	weird := touch(t, dir, `we"ird\name.png`)
+	pl := newFakePlasma(1)
+	p, _ := onPlasma(&FakeRunner{}, pl)
+	require.NoError(t, p.SetWallpaper(context.Background(), weird))
+	require.Equal(t, []string{"0=" + weird}, pl.setCalls())
+}
+
+func TestSetWallpaperRefusesMissingFileWithoutCallingPlasma(t *testing.T) {
+	pl := newFakePlasma(1)
+	p, lines := onPlasma(&FakeRunner{}, pl)
+	err := p.SetWallpaper(context.Background(), "/nonexistent/x.png")
+	require.ErrorContains(t, err, "file does not exist")
+	require.Empty(t, pl.setCalls())
+	require.Contains(t, strings.Join(lines(), "\n"), "[ERROR] File does not exist: /nonexistent/x.png")
+}
+
+func TestSetWallpaperReportsAPlasmaFailure(t *testing.T) {
+	mine := goldenFiles(t)
+	pl := newFakePlasma(1)
+	p, _ := onPlasma(&FakeRunner{}, pl)
+	require.NoError(t, p.SetWallpaper(context.Background(), mine[0]))
+	pl.err = errors.New("org.freedesktop.DBus.Error.ServiceUnknown")
+	require.ErrorContains(t, p.SetWallpaperOn(context.Background(), 0, mine[0]), "ServiceUnknown")
+}
+
+// R2: screens are counted by asking each for its wallpaper until one has
+// none; no screen or no bus is one monitor.
+func TestMonitorCountProbesScreens(t *testing.T) {
+	ctx := context.Background()
+	p, _ := onPlasma(&FakeRunner{}, newFakePlasma(2))
+	require.Equal(t, 2, p.MonitorCount(ctx))
+	p, _ = onPlasma(&FakeRunner{}, newFakePlasma(40))
+	require.Equal(t, maxScreens, p.MonitorCount(ctx))
+	p, _ = onPlasma(&FakeRunner{}, newFakePlasma(0))
+	require.Equal(t, 1, p.MonitorCount(ctx))
+	down := newFakePlasma(2)
+	down.err = errors.New("no session bus")
+	p, lines := onPlasma(&FakeRunner{}, down)
+	require.Equal(t, 1, p.MonitorCount(ctx))
+	require.Contains(t, strings.Join(lines(), "\n"), "[DEBUG] Failed to detect monitor count")
+}
+
+// R3: one screen is set and the others are not touched.
+func TestSetWallpaperOnTouchesOneScreen(t *testing.T) {
+	mine := goldenFiles(t)
+	pl := newFakePlasma(2)
+	p, _ := onPlasma(&FakeRunner{}, pl)
+	require.NoError(t, p.SetWallpaperOn(context.Background(), 1, mine[1]))
+	require.Equal(t, []string{"1=" + mine[1]}, pl.setCalls())
+}
+
+// R4: a wallpaperChanged signal arrives as the screen and its image.
+func TestWatchWallpapersReportsTheChangedScreensImage(t *testing.T) {
+	pl := newFakePlasma(2)
+	pl.images[1] = "/pics/new.jpg"
+	p, _ := onPlasma(&FakeRunner{}, pl)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch, err := p.WatchWallpapers(ctx)
+	require.NoError(t, err)
+	pl.changes <- 1
+	require.Equal(t, ScreenImage{Screen: 1, Path: "/pics/new.jpg"}, <-ch)
+}
+
+func TestPathFromImageURLDecodesWhatKDEWrites(t *testing.T) {
+	require.Equal(t, "/a/b c.jpg", PathFromImageURL("file:///a/b%20c.jpg"))
+	require.Equal(t, "/a/b.jpg", PathFromImageURL("file:///a/b.jpg"))
+	require.Equal(t, "/plain", PathFromImageURL("/plain"))
+}
+
+// R5: the lock screen is kwriteconfig6, then the reload over D-Bus, whose
+// failure does not fail the set.
+func TestSetLockscreenWritesTheKeyThenReloadsOverDBus(t *testing.T) {
 	mine := goldenFiles(t)
 	g := loadKDEGolden(t, mine)
 	r := &FakeRunner{}
-	require.NoError(t, New(r).SetWallpaperMulti(context.Background(), mine[:2]))
-	require.Equal(t, [][]string{g.Multi}, r.Calls())
-}
-
-func TestSetLockscreenSendsGoldenKwriteconfigThenBestEffortReload(t *testing.T) {
-	mine := goldenFiles(t)
-	g := loadKDEGolden(t, mine)
-	r := &FakeRunner{Handler: func(_ context.Context, argv []string) (string, string, error) {
-		if argv[0] == "qdbus6" {
-			return "", "Service 'org.freedesktop.ScreenSaver' does not exist.", errors.New("exit status 1")
-		}
-		return "", "", nil
-	}}
-	require.NoError(t, New(r).SetLockscreen(context.Background(), mine[2]), "reload failure must not fail the set")
-	require.Equal(t, [][]string{g.Lockscreen, g.Reload}, r.Calls())
+	pl := newFakePlasma(1)
+	pl.reloadEr = errors.New("ScreenSaver not running")
+	p, _ := onPlasma(r, pl)
+	require.NoError(t, p.SetLockscreen(context.Background(), mine[2]), "reload failure must not fail the set")
+	require.Equal(t, [][]string{g.Lockscreen}, r.Calls())
+	require.Equal(t, 1, pl.reloads)
 }
 
 func TestSetLockscreenFailsWhenKwriteconfigFails(t *testing.T) {
 	mine := goldenFiles(t)
 	r := &FakeRunner{Err: errors.New("exit status 1"), Stderr: "nope"}
-	err := New(r).SetLockscreen(context.Background(), mine[2])
+	pl := newFakePlasma(1)
+	p, _ := onPlasma(r, pl)
+	err := p.SetLockscreen(context.Background(), mine[2])
 	require.ErrorContains(t, err, "kwriteconfig6 failed")
 	require.ErrorContains(t, err, "nope")
-	require.Len(t, r.Calls(), 1, "no reload after a failed write")
-}
-
-func TestPathsWithQuotesAndBackslashesCannotBreakOutOfTheScript(t *testing.T) {
-	dir := resolvedTempDir(t)
-	p := touch(t, dir, `we"ird\name.png`)
-	r := &FakeRunner{}
-	require.NoError(t, New(r).SetWallpaper(context.Background(), p))
-	script := r.Calls()[0][4]
-	want := `d.writeConfig("Image", "file://` + dir + `/we\"ird\\name.png");`
-	require.Contains(t, script, want)
-	require.NoError(t, New(r).SetWallpaperMulti(context.Background(), []string{p}))
-	require.Contains(t, r.Calls()[1][4], `var images = ["file://`+dir+`/we\"ird\\name.png"];`)
-}
-
-func TestSetWallpaperRefusesMissingFileWithoutCallingQdbus(t *testing.T) {
-	r := &FakeRunner{}
-	ev, lines := captureEvents()
-	err := NewWithEvents(r, ev).SetWallpaper(context.Background(), "/nonexistent/x.png")
-	require.ErrorContains(t, err, "file does not exist")
-	require.Empty(t, r.Calls())
-	require.Contains(t, strings.Join(lines(), "\n"), "[ERROR] File does not exist: /nonexistent/x.png")
-}
-
-func TestSetWallpaperReportsMissingQdbusAndNonZeroExitWithStderr(t *testing.T) {
-	mine := goldenFiles(t)
-	ctx := context.Background()
-
-	notFound := &FakeRunner{Err: fmt.Errorf("qdbus6: %w", exec.ErrNotFound)}
-	require.EqualError(t, New(notFound).SetWallpaper(ctx, mine[0]), "qdbus6 not found")
-
-	failed := &FakeRunner{Err: errors.New("exit status 1"), Stderr: "Cannot find 'org.kde.plasmashell'\n"}
-	err := New(failed).SetWallpaper(ctx, mine[0])
-	require.ErrorContains(t, err, "qdbus6 failed")
-	require.ErrorContains(t, err, "Cannot find 'org.kde.plasmashell'")
-	require.EqualError(t, New(notFound).SetWallpaperMulti(ctx, mine[:2]), "qdbus6 not found")
-}
-
-func TestSetWallpaperMultiSkipsMissingFilesAndFailsOnlyWhenNoneRemain(t *testing.T) {
-	mine := goldenFiles(t)
-	r := &FakeRunner{}
-	ev, lines := captureEvents()
-	p := NewWithEvents(r, ev)
-	ctx := context.Background()
-
-	require.NoError(t, p.SetWallpaperMulti(ctx, []string{mine[0], "/nonexistent/a.png", mine[1]}))
-	script := r.Calls()[0][4]
-	require.Contains(t, script, `"file://`+mine[0]+`", "file://`+mine[1]+`"`)
-	require.NotContains(t, script, "nonexistent")
-	require.Contains(t, strings.Join(lines(), "\n"), "[ERROR] File does not exist: /nonexistent/a.png")
-
-	r.Reset()
-	require.EqualError(t, p.SetWallpaperMulti(ctx, []string{"/nonexistent/a.png"}), "no valid image paths found")
-	require.EqualError(t, p.SetWallpaperMulti(ctx, nil), "no image paths provided")
-	require.Empty(t, r.Calls())
-}
-
-func TestMonitorCountParsesPlasmaOutputAndFallsBackToOne(t *testing.T) {
-	ctx := context.Background()
-	r := &FakeRunner{Stdout: "3\n"}
-	require.Equal(t, 3, New(r).MonitorCount(ctx))
-	require.Equal(t, [][]string{{"qdbus6", "org.kde.plasmashell", "/PlasmaShell",
-		"org.kde.PlasmaShell.evaluateScript", "print(" + LiveDesktopsJS + ".length)"}}, r.Calls())
-
-	ev, lines := captureEvents()
-	require.Equal(t, 1, NewWithEvents(&FakeRunner{Stdout: "undefined\n"}, ev).MonitorCount(ctx))
-	require.Equal(t, 1, NewWithEvents(&FakeRunner{Stdout: "0\n"}, ev).MonitorCount(ctx), "no live desktop is still one monitor")
-	require.Equal(t, 1, NewWithEvents(&FakeRunner{Err: fmt.Errorf("x: %w", exec.ErrNotFound)}, ev).MonitorCount(ctx))
-	require.Equal(t, 1, NewWithEvents(&FakeRunner{Err: errors.New("exit status 1")}, ev).MonitorCount(ctx))
-	joined := strings.Join(lines(), "\n")
-	require.Contains(t, joined, "[DEBUG] qdbus6 not found, assuming 1 monitor")
-	require.Contains(t, joined, "[DEBUG] Failed to detect monitor count")
+	require.Zero(t, pl.reloads, "no reload after a failed write")
 }
 
 func TestDebugLockscreenDumpsSectionsAndFindsTheNestedImageKey(t *testing.T) {

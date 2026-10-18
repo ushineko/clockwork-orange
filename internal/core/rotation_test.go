@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/engine"
 	"github.com/ushineko/clockwork-orange/internal/events"
+	"github.com/ushineko/clockwork-orange/internal/platform"
 )
 
 func seedEngine(t *testing.T) {
@@ -281,4 +283,58 @@ func TestPinRefusesBadPaths(t *testing.T) {
 		err := RotationPin(context.Background(), PinRequest{Request: Request{Deps: d}, Path: bad, Monitor: 0})
 		require.ErrorContains(t, err, bad)
 	}
+}
+
+// screenFake is the fake desktop with per-screen sets and reads (spec 028).
+type screenFake struct {
+	*fakePlatform
+	on    []string
+	shows map[int]string
+}
+
+func (s *screenFake) SetWallpaperOn(_ context.Context, screen int, path string) error {
+	s.on = append(s.on, fmt.Sprintf("%d=%s", screen, path))
+	return nil
+}
+
+func (s *screenFake) WallpaperOf(_ context.Context, screen int) (string, error) {
+	return s.shows[screen], nil
+}
+
+// Spec 028 R3: on a platform that sets one screen, pinning monitor 2 sets
+// screen 1 alone; the record of monitor 1 comes from the desktop.
+func TestAPinSetsOneScreenWhereThePlatformCan(t *testing.T) {
+	d, fp, _ := testDeps(t, 2)
+	sf := &screenFake{fakePlatform: fp, shows: map[int]string{0: "/pics/there.jpg"}}
+	d.Platform = sf
+	img := filepath.Join(imageDir(t, 1), "imga.jpg")
+
+	require.NoError(t, RotationPin(context.Background(), PinRequest{Request: Request{Deps: d}, Path: img, Monitor: 1}))
+
+	require.Equal(t, []string{"1=" + img}, sf.on)
+	require.Zero(t, fp.sets(), "no full-desktop set")
+	require.Equal(t, []string{"/pics/there.jpg", img}, shownDesktop(t))
+}
+
+// Spec 028 R4: a change made outside the program is recorded, and drops a
+// pin on that monitor; the program's own change is a no-op.
+func TestADesktopChangeIsRecordedAndDropsThePin(t *testing.T) {
+	seedEngine(t)
+	d, _, _ := testDeps(t, 2)
+	dir := imageDir(t, 6)
+	rotate(t, d, ModeDesktop, dir, false)
+	img := filepath.Join(dir, "imgf.jpg")
+	pin(t, d, img, 0)
+	var logs []string
+	ev := events.Events{OnLog: func(_ events.Level, m string) { logs = append(logs, m) }}
+
+	require.NoError(t, NoteDesktopWallpaper(platform.ScreenImage{Screen: 0, Path: img}, ev))
+	require.Empty(t, logs, "the program's own image is not news")
+
+	require.NoError(t, NoteDesktopWallpaper(platform.ScreenImage{Screen: 0, Path: "/pics/chosen-in-kde.jpg"}, ev))
+	require.Equal(t, "/pics/chosen-in-kde.jpg", shownDesktop(t)[0])
+	_, ctl, err := LoadRotation()
+	require.NoError(t, err)
+	require.False(t, ctl.Pinned())
+	require.Contains(t, logs, "Monitor 1 is no longer pinned")
 }

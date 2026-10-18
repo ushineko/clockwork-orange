@@ -22,7 +22,8 @@ DV10: when the daemon holds the cycling lock, the timer stays idle and the
 status bar says so, instead of both of them changing the wallpaper every
 period, as 2.9.x did when a user ran the GUI beside the service.
 
-It watches rotation-control.json as the daemon does (spec 026 R3): a skip
+It follows the desktop's own wallpaper changes while it is the rotator (spec
+028 R4), and watches rotation-control.json as the daemon does (spec 026 R3): a skip
 fires at once and restarts the interval, and a resume after a full pause
 restarts it too. While it is the rotator it records the time of its next
 change for the Wallpaper card.
@@ -66,6 +67,7 @@ func (t *wallpaperTimer) start(u *ui) {
 		defer closeControl()
 		_, ctl, _ := core.LoadRotation()
 		lastSkip := ctl.Skip
+		desktop := core.WatchDesktop(ctx, u.request())
 		paused := core.RotationPaused(ctx, u.request(), mode)
 
 		next := time.NewTimer(firstFireDelay)
@@ -90,6 +92,17 @@ func (t *wallpaperTimer) start(u *ui) {
 					t.fire(u, false)
 				}
 				reset(interval)
+			case img, ok := <-desktop:
+				if !ok {
+					desktop = nil
+					continue
+				}
+				// The daemon follows the desktop itself while it rotates.
+				if !core.DaemonRunning() {
+					if err := core.NoteDesktopWallpaper(img, paneEvents(u.activity)); err != nil {
+						paneEvents(u.activity).Warnf("%v", err)
+					}
+				}
 			case _, ok := <-control:
 				if !ok {
 					control = nil

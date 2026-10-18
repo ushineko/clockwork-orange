@@ -87,7 +87,9 @@ func SelfTest(ctx context.Context, req SelfTestRequest) SelfTestResult {
 	add("image codecs", err, "png encode/decode; jpeg, gif, bmp, tiff, webp registered")
 
 	if runtime.GOOS == "linux" {
-		for _, tool := range []string{"qdbus6", "kwriteconfig6", "systemctl"} {
+		// The desktop is set over D-Bus (spec 028); kwriteconfig6 is the
+		// lock screen's, systemctl the service's.
+		for _, tool := range []string{"kwriteconfig6", "systemctl"} {
 			p, err := exec.LookPath(tool)
 			add(tool, err, p)
 		}

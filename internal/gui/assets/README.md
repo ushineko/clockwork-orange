@@ -45,8 +45,8 @@ entry, the icons and the systemd user unit.
 ### Debian and Ubuntu
 
 Download the `.deb` from the releases page and install it with `apt install
-./clockwork-orange_*.deb`. It depends on the KDE tools `qdbus6` and
-`kwriteconfig6`, which Plasma 6 provides.
+./clockwork-orange_*.deb`. It recommends the KDE tool `kwriteconfig6`,
+which Plasma 6 provides, for the lock screen.
 
 ### From source (Linux)
 

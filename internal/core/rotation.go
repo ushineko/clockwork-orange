@@ -353,10 +353,15 @@ func ValidatePinPath(path string) error {
 	return nil
 }
 
-// RotationPin puts the image on its target at once and records the pin, so it
-// works with nothing rotating and holds when rotation starts (R5). The other
-// monitors keep the images rotation.json says they have; a monitor with no
-// record gets the pinned image too, since the platform sets all of them.
+/*
+RotationPin puts the image on its target at once and records the pin, so it
+works with nothing rotating and holds when rotation starts (R5).
+
+A platform that sets one screen (platform.ScreenSetter, spec 028) touches only
+the pinned one. Elsewhere every monitor is set: the others keep the images
+rotation.json says they have, and a monitor with no record gets the pinned
+image too.
+*/
 func RotationPin(ctx context.Context, req PinRequest) error {
 	if err := ValidatePinPath(req.Path); err != nil {
 		return err
@@ -395,9 +400,24 @@ func RotationPin(ctx context.Context, req PinRequest) error {
 			}
 		}
 		var err error
-		if req.Monitor == AllMonitors || n == 1 {
+		one, oneScreen := p.(platform.ScreenSetter)
+		switch {
+		case req.Monitor == AllMonitors || n == 1:
 			err = p.SetWallpaper(ctx, req.Path)
-		} else {
+		case oneScreen:
+			err = one.SetWallpaperOn(ctx, req.Monitor, req.Path)
+			// What the others show, for the record, from the desktop
+			// itself where the record has nothing.
+			if r, ok := p.(platform.WallpaperReader); ok {
+				for i := range n {
+					if i != req.Monitor && (i >= len(st.Desktop) || !regularFile(st.Desktop[i].Path)) {
+						if path, rerr := r.WallpaperOf(ctx, i); rerr == nil && path != "" {
+							images[i] = path
+						}
+					}
+				}
+			}
+		default:
 			err = p.SetWallpaperMulti(ctx, images)
 		}
 		if err != nil {
@@ -715,4 +735,48 @@ func RotationTargets(ctx context.Context, req Request) RotationTargetsResult {
 	}
 	res.Lockscreen = setsLockscreen(mode) && d.Platform.LockscreenSupported()
 	return res
+}
+
+// --- the desktop's own changes (spec 028 R4) -----------------------------------
+
+// WatchDesktop reports the image each monitor shows as it changes, on a
+// platform that can say (platform.WallpaperWatcher); nil elsewhere, which a
+// select never receives from.
+func WatchDesktop(ctx context.Context, req Request) <-chan platform.ScreenImage {
+	d := req.deps()
+	d.ensurePlatform(req.Events)
+	w, ok := d.Platform.(platform.WallpaperWatcher)
+	if !ok {
+		return nil
+	}
+	ch, err := w.WatchWallpapers(ctx)
+	if err != nil {
+		req.Events.Warnf("Wallpaper changes made outside clockwork-orange will not show: %v", err)
+		return nil
+	}
+	return ch
+}
+
+/*
+NoteDesktopWallpaper records what the desktop says a monitor shows. The
+rotator calls it between its own changes, so an image it set itself is
+already in rotation.json and nothing happens. Anything else was set outside
+this program: it is recorded, and a pin on that monitor is dropped, because
+the user chose something else.
+*/
+func NoteDesktopWallpaper(img platform.ScreenImage, ev events.Events) error {
+	return updateRotation(func(st *RotationState, ctl *RotationControl) (bool, bool, error) {
+		if img.Screen < 0 || img.Screen >= len(st.Desktop) || st.Desktop[img.Screen].Path == img.Path {
+			return false, false, nil
+		}
+		st.Desktop[img.Screen] = Shown{Path: img.Path, Since: time.Now()}
+		ev.Infof("Monitor %d was changed outside clockwork-orange: %s", img.Screen+1, img.Path)
+		pin := ctl.Desktop[img.Screen]
+		if pin == "" || pin == img.Path {
+			return true, false, nil
+		}
+		delete(ctl.Desktop, img.Screen)
+		ev.Infof("Monitor %d is no longer pinned", img.Screen+1)
+		return true, true, nil
+	})
 }

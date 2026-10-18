@@ -6,19 +6,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/ushineko/clockwork-orange/internal/events"
 )
 
-// LinuxPlatform drives KDE Plasma 6 through qdbus6 and kwriteconfig6
-// (R4.1-R4.4). Events receives the "[DEBUG]"/"[ERROR]" lines the Python
-// module printed.
+// LinuxPlatform drives KDE Plasma 6: the desktop through plasmashell's D-Bus
+// interface (spec 028), the lock screen through kwriteconfig6 (R4.4). Events
+// receives the "[DEBUG]"/"[ERROR]" lines the Python module printed.
 type LinuxPlatform struct {
 	Runner Runner
 	Events events.Events
+	// Plasma is the plasmashell D-Bus client; nil means the session bus.
+	Plasma Plasma
 }
 
 // New returns the KDE Plasma implementation for this host.
@@ -40,91 +40,40 @@ const (
 	kwriteconfig = "kwriteconfig6"
 )
 
-// kdeEvaluateArgs is the qdbus6 argv that runs script inside plasmashell.
-func kdeEvaluateArgs(script string) []string {
-	return []string{qdbus6, "org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript", script}
+func (p *LinuxPlatform) plasma() Plasma {
+	if p.Plasma == nil {
+		return busPlasma{}
+	}
+	return p.Plasma
 }
 
-// screensaverReloadArgs is the best-effort kscreenlocker reload (R4.4).
-func screensaverReloadArgs() []string {
-	return []string{qdbus6, "org.freedesktop.ScreenSaver", "/ScreenSaver", "configure"}
-}
+// maxScreens bounds the probe in MonitorCount.
+const maxScreens = 16
 
 /*
-LiveDesktopsJS is the desktop containments on screens that exist, in screen
-order (DV17). It stands where the Python scripts said desktops(): Plasma also
-keeps a containment for a screen that is no longer connected, with a screen
-index at or past screenCount, and counting it gave the user a monitor that
-does not exist and handed it one of the images. Sorting by screen makes
-monitor N screen N-1, whatever order the containments were created in.
+MonitorCount implements Platform (R4.1, spec 028 R2): Plasma's screens,
+counted by asking each screen number for its wallpaper until one answers with
+nothing. 1 when the session bus or plasmashell is unavailable, or no screen
+answers.
 */
-const LiveDesktopsJS = `desktops().filter(function (d) { return d.screen >= 0 && d.screen < screenCount; })` +
-	`.sort(function (a, b) { return a.screen - b.screen; })`
-
-// MonitorCount implements Platform (R4.1): the number of live desktops, or 1
-// when qdbus6 is missing, fails, prints something that is not an int, or
-// reports none.
 func (p *LinuxPlatform) MonitorCount(ctx context.Context) int {
-	stdout, _, err := p.Runner.Run(ctx, qdbus6, "org.kde.plasmashell", "/PlasmaShell",
-		"org.kde.PlasmaShell.evaluateScript", "print("+LiveDesktopsJS+".length)")
-	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			p.Events.Debugf("qdbus6 not found, assuming 1 monitor")
+	n := 0
+	for ; n < maxScreens; n++ {
+		_, exists, err := p.plasma().Image(ctx, n)
+		if err != nil {
+			p.Events.Debugf("Failed to detect monitor count, assuming 1: %v", err)
 			return 1
 		}
-		p.Events.Debugf("Failed to detect monitor count: %v", err)
+		if !exists {
+			break
+		}
+	}
+	if n == 0 {
+		p.Events.Debugf("Plasma reports no screen, assuming 1 monitor")
 		return 1
 	}
-	count, err := strconv.Atoi(strings.TrimSpace(stdout))
-	if err != nil {
-		p.Events.Debugf("Failed to detect monitor count: %v", err)
-		return 1
-	}
-	if count < 1 {
-		p.Events.Debugf("Plasma reports no desktop on a live screen, assuming 1 monitor")
-		return 1
-	}
-	p.Events.Debugf("Detected %d monitors", count)
-	return count
-}
-
-// KDESingleScript is the plasmashell script that sets one image on every
-// desktop (R4.2). The text, including its leading newline and indentation,
-// is byte-identical to platform_utils.py for paths without characters that
-// JSStringEscape has to touch, except that desktops() is LiveDesktopsJS
-// (DV17).
-func KDESingleScript(path string) string {
-	return `
-    ` + LiveDesktopsJS + `.forEach(d => {
-        d.currentConfigGroup = Array("Wallpaper",
-                                     "org.kde.image",
-                                     "General");
-        d.writeConfig("Image", "file://` + JSStringEscape(path) + `");
-        d.reloadConfig();
-    });
-    `
-}
-
-// KDEMultiScript is the plasmashell script that assigns images[i % len] to
-// live desktop i (R4.3), byte-identical to platform_utils.py for plain paths
-// except that desktops() is LiveDesktopsJS (DV17).
-func KDEMultiScript(paths []string) string {
-	quoted := make([]string, len(paths))
-	for i, p := range paths {
-		quoted[i] = `"file://` + JSStringEscape(p) + `"`
-	}
-	return `
-    var allDesktops = ` + LiveDesktopsJS + `;
-    var images = [` + strings.Join(quoted, ", ") + `];
-
-    for (var i = 0; i < allDesktops.length; i++) {
-        var d = allDesktops[i];
-        d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");
-        var img = images[i % images.length];
-        d.writeConfig("Image", img);
-        d.reloadConfig();
-    }
-    `
+	p.Events.Debugf("Detected %d monitors", n)
+	return n
 }
 
 // KwriteconfigArgs is the kwriteconfig6 argv that writes the lock-screen
@@ -135,23 +84,7 @@ func KwriteconfigArgs(path string) []string {
 		"--key", "Image", "file://" + path}
 }
 
-// runQdbus runs a plasmashell script and translates the two failure modes
-// the Python distinguished: missing binary and non-zero exit (with stderr).
-func (p *LinuxPlatform) runQdbus(ctx context.Context, script string) error {
-	argv := kdeEvaluateArgs(script)
-	_, stderr, err := p.Runner.Run(ctx, argv[0], argv[1:]...)
-	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			p.Events.Errorf("qdbus6 not found")
-			return errors.New("qdbus6 not found")
-		}
-		p.Events.Errorf("qdbus6 failed: %s", strings.TrimSpace(stderr))
-		return fmt.Errorf("qdbus6 failed: %w: %s", err, strings.TrimSpace(stderr))
-	}
-	return nil
-}
-
-// SetWallpaper implements Platform (R4.2).
+// SetWallpaper implements Platform (R4.2): the image on every screen.
 func (p *LinuxPlatform) SetWallpaper(ctx context.Context, path string) error {
 	abs := resolvePath(path)
 	p.Events.Debugf("Setting KDE wallpaper from path: %s", abs)
@@ -159,11 +92,12 @@ func (p *LinuxPlatform) SetWallpaper(ctx context.Context, path string) error {
 		p.Events.Errorf("File does not exist: %s", abs)
 		return errNotExist(abs)
 	}
-	return p.runQdbus(ctx, KDESingleScript(abs))
+	return p.setScreens(ctx, []string{abs})
 }
 
-// SetWallpaperMulti implements Platform (R4.3). Missing files are logged and
-// skipped; it is an error only when none remain.
+// SetWallpaperMulti implements Platform (R4.3): screen i gets
+// paths[i % len]. Missing files are logged and skipped; it is an error only
+// when none remain.
 func (p *LinuxPlatform) SetWallpaperMulti(ctx context.Context, paths []string) error {
 	if len(paths) == 0 {
 		return errors.New("no image paths provided")
@@ -181,7 +115,68 @@ func (p *LinuxPlatform) SetWallpaperMulti(ctx context.Context, paths []string) e
 		return errors.New("no valid image paths found")
 	}
 	p.Events.Debugf("Setting wallpapers for multiple monitors: %v", resolved)
-	return p.runQdbus(ctx, KDEMultiScript(resolved))
+	return p.setScreens(ctx, resolved)
+}
+
+// setScreens gives screen i images[i % len], on every screen there is.
+func (p *LinuxPlatform) setScreens(ctx context.Context, images []string) error {
+	var errs []error
+	for i := range p.MonitorCount(ctx) {
+		if err := p.plasma().SetImage(ctx, i, images[i%len(images)]); err != nil {
+			p.Events.Errorf("%v", err)
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// SetWallpaperOn implements ScreenSetter (spec 028 R3): one screen, the
+// others untouched.
+func (p *LinuxPlatform) SetWallpaperOn(ctx context.Context, screen int, path string) error {
+	abs := resolvePath(path)
+	if !fileExists(abs) {
+		p.Events.Errorf("File does not exist: %s", abs)
+		return errNotExist(abs)
+	}
+	p.Events.Debugf("Setting KDE wallpaper on screen %d: %s", screen, abs)
+	return p.plasma().SetImage(ctx, screen, abs)
+}
+
+// WallpaperOf implements WallpaperReader: "" when the screen does not exist
+// or shows something other than an image.
+func (p *LinuxPlatform) WallpaperOf(ctx context.Context, screen int) (string, error) {
+	path, _, err := p.plasma().Image(ctx, screen)
+	return path, err
+}
+
+// WatchWallpapers implements WallpaperWatcher (spec 028 R4): every
+// wallpaperChanged signal, with the image the screen now shows.
+func (p *LinuxPlatform) WatchWallpapers(ctx context.Context) (<-chan ScreenImage, error) {
+	screens, err := p.plasma().Changes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(chan ScreenImage, 16)
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case screen := <-screens:
+				path, exists, err := p.plasma().Image(ctx, screen)
+				if err != nil || !exists || path == "" {
+					continue
+				}
+				select {
+				case out <- ScreenImage{Screen: screen, Path: path}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	return out, nil
 }
 
 // SetLockscreen implements Platform (R4.4): kwriteconfig6 writes the key,
@@ -196,7 +191,6 @@ func (p *LinuxPlatform) SetLockscreen(ctx context.Context, path string) error {
 		p.Events.Errorf("Failed to set lockscreen: %v", err)
 		return fmt.Errorf("kwriteconfig6 failed: %w: %s", err, strings.TrimSpace(stderr))
 	}
-	reload := screensaverReloadArgs()
-	_, _, _ = p.Runner.Run(ctx, reload[0], reload[1:]...)
+	_ = p.plasma().ReloadScreenSaver(ctx)
 	return nil
 }

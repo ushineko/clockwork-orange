@@ -99,10 +99,10 @@ jobs:
         clockwork-orange-gui --version
         # The KDE tools the self-test probes are Recommends; the runner has no
         # Plasma. Run the full self-test only where they installed.
-        if command -v qdbus6 >/dev/null && command -v kwriteconfig6 >/dev/null; then
+        if command -v kwriteconfig6 >/dev/null; then
           clockwork-orange --self-test
         else
-          echo "qdbus6/kwriteconfig6 not on this runner; self-test gated on Arch instead"
+          echo "kwriteconfig6 not on this runner; self-test gated on Arch instead"
         fi
     - uses: actions/upload-artifact@v4
       with:
