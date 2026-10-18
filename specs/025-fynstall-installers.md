@@ -146,8 +146,12 @@ are.
       tag.
 - [x] R5 `./install.sh --dry-run` runs unchanged; only the header comment
       differs.
-- [ ] R6 Live, Plasma 6 Wayland: after a wizard install the launcher entry
-      shows the icon, and the running window's taskbar icon is the app's.
+- [x] R6 Live, Plasma 6.8 Wayland, checked by the user: a wizard install
+      from Dolphin worked, and the launcher entry and the window's taskbar
+      both show the app's icon. Running the installer a second time hit two
+      fynstall bugs: a repair refuses its own `PATH` links (fynstall#56), and
+      the wizard truncates the blocking error in a window that cannot be
+      resized (fynstall#57).
       This is the human local test: the wizard install puts links in
       `~/.local/bin` over the `install.sh` binaries, which fynstall backs up
       and restores on uninstall.
