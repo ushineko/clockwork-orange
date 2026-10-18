@@ -46,6 +46,13 @@ func loadKDEGolden(t *testing.T, mine []string) kdeGolden {
 		return out
 	}
 	g.Single, g.Multi, g.Lockscreen, g.Reload = subst(g.Single), subst(g.Multi), subst(g.Lockscreen), subst(g.Reload)
+	// DV17: the one place the scripts depart from the Python oracle.
+	live := func(argv []string) []string {
+		out := append([]string(nil), argv...)
+		out[len(out)-1] = strings.ReplaceAll(out[len(out)-1], "desktops()", LiveDesktopsJS)
+		return out
+	}
+	g.Single, g.Multi = live(g.Single), live(g.Multi)
 	return g
 }
 
@@ -165,10 +172,11 @@ func TestMonitorCountParsesPlasmaOutputAndFallsBackToOne(t *testing.T) {
 	r := &FakeRunner{Stdout: "3\n"}
 	require.Equal(t, 3, New(r).MonitorCount(ctx))
 	require.Equal(t, [][]string{{"qdbus6", "org.kde.plasmashell", "/PlasmaShell",
-		"org.kde.PlasmaShell.evaluateScript", "print(desktops().length)"}}, r.Calls())
+		"org.kde.PlasmaShell.evaluateScript", "print(" + LiveDesktopsJS + ".length)"}}, r.Calls())
 
 	ev, lines := captureEvents()
 	require.Equal(t, 1, NewWithEvents(&FakeRunner{Stdout: "undefined\n"}, ev).MonitorCount(ctx))
+	require.Equal(t, 1, NewWithEvents(&FakeRunner{Stdout: "0\n"}, ev).MonitorCount(ctx), "no live desktop is still one monitor")
 	require.Equal(t, 1, NewWithEvents(&FakeRunner{Err: fmt.Errorf("x: %w", exec.ErrNotFound)}, ev).MonitorCount(ctx))
 	require.Equal(t, 1, NewWithEvents(&FakeRunner{Err: errors.New("exit status 1")}, ev).MonitorCount(ctx))
 	joined := strings.Join(lines(), "\n")

@@ -719,6 +719,7 @@ empty directory, `history` MD5 vs blacklist SHA-256, inert `debug` /
 | DV13 | Wallhaven API key is redacted from log lines; POSIX single-instance lock fails open on non-contention errors; `DebugLockscreen` reads `$XDG_CONFIG_HOME/kscreenlockerrc` and preserves key case | Security extension "no credentials in logs"; consistency with the Windows fail-open path; that is where `kwriteconfig6` writes |
 | DV14 | `ToRGB`/thumbnail/cover-resize flatten alpha by dropping the channel (Pillow `convert("RGB")` semantics) before scaling | The first Go draft composited through premultiplied RGBA and darkened translucent pixels |
 | DV16 | History moves to `history2.db` (adds the saved path; migrated from `history.db` once). Retention deletes only files recorded at that exact path with unchanged content, existing downloads are adopted on a folder's first pass, and `max_files` ≤ 0 disables retention (spec 023) | 2.9.5 deleted any file in the download folder and treated 0 as "delete all": the data loss reported in #1 |
+| DV17 | On KDE, monitors are the desktop containments on a live screen (`0 ≤ screen < screenCount`), in screen order; the single and multi scripts set only those (spec 027) | `desktops()` also lists containments Plasma keeps for disconnected screens, so 2.9.5 counted a monitor that did not exist and gave it an image |
 
 ---
 
