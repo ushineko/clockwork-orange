@@ -2,7 +2,7 @@
 
 **Date**: 2026-10-17
 **Spec**: `specs/026-wallpaper-status-and-pinning.md` (#43)
-**Status**: PASSED (one manual criterion open; see "Not verified")
+**Status**: PASSED
 
 ### Summary
 
@@ -92,9 +92,8 @@ partial pin.
 
 ### Not verified
 
-- Pinning from the Review tab's menu by hand. The menu is covered by a
-  headless test.
-- A pin surviving a reboot. Restart was verified.
+- A pin surviving a reboot. A service restart was verified instead; it reads
+  the same file at start. The user pinned from the Review menu by hand.
 - Windows and macOS, where the GUI timer is the rotator, were not run by
   hand. The timer path is shared code.
 

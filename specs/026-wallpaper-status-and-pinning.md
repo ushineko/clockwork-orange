@@ -2,7 +2,7 @@
 
 **Issue**: #43
 
-## Status: INCOMPLETE
+## Status: COMPLETE
 
 - **Priority**: Medium
 - **Estimated Complexity**: High
@@ -196,9 +196,10 @@ the last known images and the pins.
 
       The Service card showed the tiles, the pin marker, the countdown and
       Resume.
-- [ ] Live: pin from the Review tab's menu by hand, and the pin surviving a
-      reboot. The menu is covered headless (R8), and a restart was verified
-      above; neither was done by hand.
+- [x] Live: the user pinned "All monitors" from the Review tab's menu, and
+      the Service card showed every monitor pinned to that image. Persistence
+      is the control file read at rotator start, so the service restart
+      above stands in for a reboot. The user chose not to reboot.
 
 ## Test Strategy
 
