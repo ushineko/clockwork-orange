@@ -142,8 +142,9 @@ are.
       - `build-linux-installer` passed: install, run, uninstall;
       - `build-windows` built the Windows wizard installer, the CLI-only
         installer and their uninstallers (artifact `windows-installer`).
-- [ ] R4 The installers are attached to a release. This happens at the next
-      tag.
+- [x] R4 The v4.7.0 release carries
+      `clockwork-orange-4.7.0-linux-amd64-installer`, `-cli-installer` and
+      the two `windows-amd64` `.exe` installers (run 39086291148).
 - [x] R5 `./install.sh --dry-run` runs unchanged; only the header comment
       differs.
 - [x] R6 Live, Plasma 6.8 Wayland, checked by the user: a wizard install
