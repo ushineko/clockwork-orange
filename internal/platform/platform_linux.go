@@ -50,11 +50,23 @@ func screensaverReloadArgs() []string {
 	return []string{qdbus6, "org.freedesktop.ScreenSaver", "/ScreenSaver", "configure"}
 }
 
-// MonitorCount implements Platform (R4.1): plasmashell's desktops().length,
-// or 1 when qdbus6 is missing, fails or prints something that is not an int.
+/*
+LiveDesktopsJS is the desktop containments on screens that exist, in screen
+order (DV17). It stands where the Python scripts said desktops(): Plasma also
+keeps a containment for a screen that is no longer connected, with a screen
+index at or past screenCount, and counting it gave the user a monitor that
+does not exist and handed it one of the images. Sorting by screen makes
+monitor N screen N-1, whatever order the containments were created in.
+*/
+const LiveDesktopsJS = `desktops().filter(function (d) { return d.screen >= 0 && d.screen < screenCount; })` +
+	`.sort(function (a, b) { return a.screen - b.screen; })`
+
+// MonitorCount implements Platform (R4.1): the number of live desktops, or 1
+// when qdbus6 is missing, fails, prints something that is not an int, or
+// reports none.
 func (p *LinuxPlatform) MonitorCount(ctx context.Context) int {
 	stdout, _, err := p.Runner.Run(ctx, qdbus6, "org.kde.plasmashell", "/PlasmaShell",
-		"org.kde.PlasmaShell.evaluateScript", "print(desktops().length)")
+		"org.kde.PlasmaShell.evaluateScript", "print("+LiveDesktopsJS+".length)")
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			p.Events.Debugf("qdbus6 not found, assuming 1 monitor")
@@ -68,6 +80,10 @@ func (p *LinuxPlatform) MonitorCount(ctx context.Context) int {
 		p.Events.Debugf("Failed to detect monitor count: %v", err)
 		return 1
 	}
+	if count < 1 {
+		p.Events.Debugf("Plasma reports no desktop on a live screen, assuming 1 monitor")
+		return 1
+	}
 	p.Events.Debugf("Detected %d monitors", count)
 	return count
 }
@@ -75,10 +91,11 @@ func (p *LinuxPlatform) MonitorCount(ctx context.Context) int {
 // KDESingleScript is the plasmashell script that sets one image on every
 // desktop (R4.2). The text, including its leading newline and indentation,
 // is byte-identical to platform_utils.py for paths without characters that
-// JSStringEscape has to touch.
+// JSStringEscape has to touch, except that desktops() is LiveDesktopsJS
+// (DV17).
 func KDESingleScript(path string) string {
 	return `
-    desktops().forEach(d => {
+    ` + LiveDesktopsJS + `.forEach(d => {
         d.currentConfigGroup = Array("Wallpaper",
                                      "org.kde.image",
                                      "General");
@@ -89,14 +106,15 @@ func KDESingleScript(path string) string {
 }
 
 // KDEMultiScript is the plasmashell script that assigns images[i % len] to
-// desktop i (R4.3), byte-identical to platform_utils.py for plain paths.
+// live desktop i (R4.3), byte-identical to platform_utils.py for plain paths
+// except that desktops() is LiveDesktopsJS (DV17).
 func KDEMultiScript(paths []string) string {
 	quoted := make([]string, len(paths))
 	for i, p := range paths {
 		quoted[i] = `"file://` + JSStringEscape(p) + `"`
 	}
 	return `
-    var allDesktops = desktops();
+    var allDesktops = ` + LiveDesktopsJS + `;
     var images = [` + strings.Join(quoted, ", ") + `];
 
     for (var i = 0; i < allDesktops.length; i++) {
