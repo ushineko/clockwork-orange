@@ -15,12 +15,17 @@ import (
 /*
 wallpaperTimer is the in-process rotation (R7.12): the first change 2 s after
 start, then every default_wait seconds, skipped while a change is already in
-progress. The change is the same core.Cycle the CLI runs (DV2), so the GUI
-and the daemon select images by one rule.
+progress. The change is the same core.Rotate the daemon runs (DV2), so the GUI
+and the daemon select images by one rule and honour the same pins.
 
 DV10: when the daemon holds the cycling lock, the timer stays idle and the
 status bar says so, instead of both of them changing the wallpaper every
 period, as 2.9.x did when a user ran the GUI beside the service.
+
+It watches rotation-control.json as the daemon does (spec 026 R3): a skip
+fires at once and restarts the interval, and a resume after a full pause
+restarts it too. While it is the rotator it records the time of its next
+change for the Wallpaper card.
 */
 type wallpaperTimer struct {
 	mu      sync.Mutex
@@ -45,27 +50,87 @@ func (t *wallpaperTimer) start(u *ui) {
 	t.stop = make(chan struct{})
 	stop := t.stop
 	interval := time.Duration(waitSeconds(u.doc)) * time.Second
+	mode := core.ResolveMode(u.doc, false, false)
 	paneEvents(u.activity).Infof("Wallpaper timer: every %d seconds", waitSeconds(u.doc))
 	go func() {
-		first := time.NewTimer(firstFireDelay)
-		defer first.Stop()
-		select {
-		case <-stop:
-			return
-		case <-first.C:
-			t.fire(u)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go func() {
+			<-stop
+			cancel()
+		}()
+		control, closeControl, err := core.WatchRotationControl(ctx)
+		if err != nil {
+			paneEvents(u.activity).Warnf("Pause and skip from elsewhere will not reach the timer: %v", err)
 		}
-		tick := time.NewTicker(interval)
-		defer tick.Stop()
+		defer closeControl()
+		_, ctl, _ := core.LoadRotation()
+		lastSkip := ctl.Skip
+		paused := core.RotationPaused(ctx, u.request(), mode)
+
+		next := time.NewTimer(firstFireDelay)
+		defer next.Stop()
+		reset := func(d time.Duration) {
+			if !next.Stop() {
+				select {
+				case <-next.C:
+				default:
+				}
+			}
+			next.Reset(d)
+			t.recordNext(u, mode, time.Now().Add(d), paused)
+		}
+		t.recordNext(u, mode, time.Now().Add(firstFireDelay), paused)
 		for {
 			select {
 			case <-stop:
 				return
-			case <-tick.C:
-				t.fire(u)
+			case <-next.C:
+				if !paused {
+					t.fire(u, false)
+				}
+				reset(interval)
+			case _, ok := <-control:
+				if !ok {
+					control = nil
+					continue
+				}
+				_, ctl, err := core.LoadRotation()
+				if err != nil {
+					continue
+				}
+				nowPaused := core.RotationPaused(ctx, u.request(), mode)
+				switch {
+				case ctl.Skip != lastSkip:
+					lastSkip = ctl.Skip
+					paused = nowPaused
+					t.fire(u, true)
+					reset(interval)
+				case paused && !nowPaused:
+					paused = false
+					reset(interval)
+				case nowPaused != paused:
+					paused = nowPaused
+					t.recordNext(u, mode, time.Time{}, paused)
+				}
 			}
 		}
 	}()
+}
+
+// recordNext writes the next change into rotation.json while this window is
+// the rotator; with the daemon cycling, the file is the daemon's to write.
+func (t *wallpaperTimer) recordNext(u *ui, mode core.Mode, at time.Time, paused bool) {
+	if core.DaemonRunning() {
+		return
+	}
+	var next *time.Time
+	if !paused && !at.IsZero() {
+		next = &at
+	}
+	if err := core.SetNextChange(core.RotatorGUI, mode, next); err != nil {
+		paneEvents(u.activity).Warnf("Could not record the next change: %v", err)
+	}
 }
 
 // rearm restarts the timer with the interval the document now carries. Called
@@ -86,12 +151,12 @@ func (t *wallpaperTimer) halt() {
 }
 
 /*
-fire runs one cycle, unless one is already running or the daemon holds the
+fire runs one rotation, unless one is already running or the daemon holds the
 lock. Its log lines stream into the activity pane; the result is not flashed,
 because a banner every five minutes on a window that is usually in the tray
 is noise, and the pane says what happened.
 */
-func (t *wallpaperTimer) fire(u *ui) {
+func (t *wallpaperTimer) fire(u *ui, skip bool) {
 	t.mu.Lock()
 	if t.running {
 		t.mu.Unlock()
@@ -123,7 +188,11 @@ func (t *wallpaperTimer) fire(u *ui) {
 	stop := u.activity.Pump()
 	defer stop()
 	mode := core.ResolveMode(u.doc, false, false)
-	_, err := core.Cycle(context.Background(), core.CycleRequest{Request: u.requestWithEvents(ev), Mode: mode})
+	_, err := core.Rotate(context.Background(), core.RotateRequest{
+		CycleRequest: core.CycleRequest{Request: u.requestWithEvents(ev), Mode: mode},
+		Rotator:      core.RotatorGUI,
+		Skip:         skip,
+	})
 	if err != nil {
 		ev.Errorf("%v", err)
 		return
@@ -195,6 +264,10 @@ func (u *ui) quit() {
 // itself (no tray) and ShowAndRun returned.
 func (u *ui) shutdown() {
 	u.timer.halt()
+	if u.stopRotation != nil {
+		u.stopRotation()
+		u.stopRotation = nil
+	}
 	if u.tickStop != nil {
 		u.tickStop()
 		u.tickStop = nil

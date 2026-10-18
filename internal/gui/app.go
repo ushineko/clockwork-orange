@@ -16,6 +16,7 @@ package gui
 
 import (
 	"fmt"
+	"image"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -73,6 +74,14 @@ type ui struct {
 	blOK      bool
 	history   store.HistoryStats
 	histOK    bool
+	// rotation is what is on screen and what is pinned (spec 026); thumbs
+	// are its thumbnails by path, and nextChange the countdown line the 1 s
+	// tick redraws without a rebuild.
+	rotation     core.RotationStatusResult
+	rotationOK   bool
+	thumbs       map[string]image.Image
+	nextChange   *widget.Label
+	stopRotation func()
 	// plugins is the registry with schemas, fetched once: it needs no store
 	// and does not change while the window is open.
 	plugins []core.PluginInfo
@@ -478,6 +487,7 @@ func (u *ui) onStart(s *shell.Shell) {
 	}
 	u.loadService()
 	u.startPolling()
+	u.stopRotation = u.watchRotation()
 	u.timer.start(u)
 	u.notify("Clockwork Orange", "Application started")
 }
@@ -490,7 +500,7 @@ func (u *ui) onStart(s *shell.Shell) {
 // The activity log is deliberately not part of this: F5 while a plugin runs
 // must not throw away the output it has produced so far.
 func (u *ui) onInvalidate(s *shell.Shell) {
-	u.docOK, u.serviceOK, u.blOK, u.histOK = false, false, false, false
+	u.docOK, u.serviceOK, u.blOK, u.histOK, u.rotationOK = false, false, false, false, false
 	if !s.OnScreen() {
 		return
 	}
@@ -588,6 +598,9 @@ func Actions() []string {
 		// Service (Linux): the status line, the toolbar and the journal pane
 		"service status", "service start", "service stop", "service restart",
 		"service install", "service uninstall", "service logs",
+		// Service and Activity: the Wallpaper card and its Pause/Resume and
+		// Skip; the Review tab's Pin menu (spec 026)
+		"wallpaper status", "wallpaper pause", "wallpaper resume", "wallpaper skip", "wallpaper pin",
 		// Plugin sections: the enable check and every schema field (plugins
 		// list), Download Now / Reset & Run (plugin run), and review mode's
 		// Apply Blacklist (blacklist add)

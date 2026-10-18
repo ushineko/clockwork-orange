@@ -126,7 +126,7 @@ func TestTheControlsThatNeedOneCarryATip(t *testing.T) {
 	u, _, _ := testUI(t)
 
 	svc := fynetest.Tips(u.buildService())
-	require.Len(t, svc, 2, "Install and Uninstall, and not the three that do what they say")
+	require.Len(t, svc, 3, "Install, Uninstall and Pause, and not the four that do what they say")
 	require.Contains(t, strings.Join(svc, "\n"), "systemd user unit")
 	require.Contains(t, strings.Join(svc, "\n"), "are not touched")
 

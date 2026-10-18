@@ -46,11 +46,15 @@ type fakePlatform struct {
 	mu   sync.Mutex
 	set  []string
 	lock []string
+	// monitors is how many desktops it reports; zero means one.
+	monitors int
 }
 
-func (*fakePlatform) Name() string                     { return "fake" }
-func (*fakePlatform) MonitorCount(context.Context) int { return 1 }
-func (*fakePlatform) LockscreenSupported() bool        { return true }
+func (*fakePlatform) Name() string { return "fake" }
+func (f *fakePlatform) MonitorCount(context.Context) int {
+	return max(f.monitors, 1)
+}
+func (*fakePlatform) LockscreenSupported() bool { return true }
 func (f *fakePlatform) SetWallpaper(_ context.Context, p string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

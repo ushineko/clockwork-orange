@@ -117,9 +117,9 @@ func selectCandidate(source string, ev events.Events) string {
 	return candidates[Rand.IntN(len(candidates))]
 }
 
-// pickAvoiding draws one image, retrying up to dedupAttempts times while the
+// PickAvoiding draws one image, retrying up to dedupAttempts times while the
 // draw is in avoid (R3.3).
-func pickAvoiding(sources, avoid []string, ev events.Events) (string, error) {
+func PickAvoiding(sources, avoid []string, ev events.Events) (string, error) {
 	img, err := RandomImageFromSources(sources, ev)
 	if err != nil {
 		return "", err
@@ -148,7 +148,7 @@ func contains(list []string, s string) bool {
 func PickDistinct(sources []string, n int, ev events.Events) ([]string, error) {
 	images := make([]string, 0, n)
 	for range n {
-		img, err := pickAvoiding(sources, images, ev)
+		img, err := PickAvoiding(sources, images, ev)
 		if err != nil {
 			if len(images) == 0 {
 				return nil, err
@@ -163,7 +163,7 @@ func PickDistinct(sources []string, n int, ev events.Events) ([]string, error) {
 // PickLockscreenDistinct draws the lock-screen image, retrying while it
 // collides with any desktop image (R3.3).
 func PickLockscreenDistinct(sources, avoid []string, ev events.Events) (string, error) {
-	return pickAvoiding(sources, avoid, ev)
+	return PickAvoiding(sources, avoid, ev)
 }
 
 // SetRandomFromSources sets one random image per monitor (R3.3,
@@ -186,7 +186,7 @@ func SetDualFromSources(ctx context.Context, s Setter, sources []string, ev even
 	n := s.MonitorCount(ctx)
 	desktop := make([]string, 0, n)
 	for range n {
-		img, err := pickAvoiding(sources, desktop, ev)
+		img, err := PickAvoiding(sources, desktop, ev)
 		if err != nil {
 			return err
 		}

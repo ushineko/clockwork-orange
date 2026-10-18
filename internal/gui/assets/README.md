@@ -87,6 +87,8 @@ edits to the configuration file within two seconds.
 Every operation the window offers is also a subcommand:
 
     clockwork-orange service install|uninstall|start|stop|restart|status|logs
+    clockwork-orange wallpaper status|pause|resume|skip
+    clockwork-orange wallpaper pin FILE [--monitor N | --all | --lockscreen]
     clockwork-orange plugins list
     clockwork-orange plugin run wallhaven [--force] [--reset]
     clockwork-orange history stats|clear|import [DIR]
@@ -103,15 +105,20 @@ was wrong. Log lines go to stderr with `[DEBUG]`, `[INFO]`, `[WARN]` and
 `clockwork-orange-gui` (or "Clockwork Orange" in the application menu). The
 sections, top to bottom:
 
-- **Service** (Linux): the systemd unit's state, start/stop/restart,
-  install/uninstall, and the journal tail. On Windows and macOS this is
-  **Activity**, the log of what the window's own timer has done.
+- **Service** (Linux): the wallpaper on each monitor and the lock screen,
+  with the time to the next change; Pause (holds what is on screen until
+  Resume, across restarts) and Skip (a new wallpaper now); the systemd
+  unit's state, start/stop/restart, install/uninstall, and the journal tail.
+  On Windows and macOS this is **Activity**: the same wallpaper card and
+  controls, and the log of what the window's own timer has done.
 - **Local**, **Wallhaven**, **Duckduckgo Images**: one section per plugin.
   Each has an enable switch, a form generated from the plugin's settings,
   Download Now and Reset & Run (which open a progress window with the log and
   a preview of each saved image), and a review of the plugin's folder: the
   arrow keys move through the images newest first, Space marks one, Apply
-  Blacklist deletes the marked images and records their hashes.
+  Blacklist deletes the marked images and records their hashes, and Pin shows
+  the image on a monitor, every monitor or the lock screen and holds it there
+  until Resume.
 - **History**: how many downloads and unique images are recorded, Reset, and
   Scan & Import to record files already on disk.
 - **Blacklist**: the blocked images with thumbnails, a filter, and Remove

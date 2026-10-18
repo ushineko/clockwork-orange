@@ -112,6 +112,7 @@ func (u *ui) buildService() fyne.CanvasObject {
 		container.NewBorder(nil, controls, nil, nil,
 			u.sh.VScroll(sectionService, container.NewVBox(
 				head,
+				u.wallpaperCard(),
 				widgets.Card("Status", status, detailsPane),
 			))),
 		u.journalPaneWidget("Service log", nil),
@@ -247,7 +248,7 @@ func (u *ui) buildActivity() fyne.CanvasObject {
 			"every plugin run. The timer fires on the interval in Settings while the window is "+
 			"open or in the tray.")
 	return u.sh.VSplit(logSplitKey, logSplitOffset,
-		container.NewVScroll(container.NewVBox(head)),
+		u.sh.VScroll(sectionActivity, container.NewVBox(head, u.wallpaperCard())),
 		u.journalPaneWidget("Application activity", func() {
 			paneEvents(u.activity).Infof("Activity log cleared by user")
 		}),

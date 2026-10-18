@@ -57,6 +57,7 @@ type reviewModel struct {
 	drag     *dragout.Source
 	info     *widget.Label
 	applyBtn *widget.Button
+	pinBtn   *widget.Button
 
 	// cache holds the scaled previews; seq drops a load that finished after
 	// the user moved on.
