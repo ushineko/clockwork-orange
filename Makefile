@@ -152,6 +152,19 @@ release: build-all ## Package dist/ into per-target tar.gz archives with SHA256S
 pkg-deb: build build-gui ## Build the Debian package from this checkout (needs dpkg-deb)
 	./packaging/debian/build.sh
 
+# fynstall builds the installers (spec 025). Pinned to a release, the way the
+# linter is: a released builder needs no checkout, and an installer is tied to
+# the fynstall that built it.
+FYNSTALL_VERSION?=v0.1.1
+FYNSTALL=go run github.com/ushineko/fynstall/cmd/fynstall@$(FYNSTALL_VERSION)
+INSTALLER_STAGE=build/installer
+
+.PHONY: installer
+installer: build build-gui ## Build the Linux installers (wizard and CLI-only) into dist/ with fynstall
+	./packaging/fynstall/stage.sh "$(VERSION)" "$$(go env GOOS)/$$(go env GOARCH)" bin $(INSTALLER_STAGE)
+	$(FYNSTALL) validate -c $(INSTALLER_STAGE)/fynstall.yaml
+	$(FYNSTALL) build -c $(INSTALLER_STAGE)/fynstall.yaml -o dist --with-cli-only
+
 .PHONY: pkg-arch
 pkg-arch: ## Build the Arch Linux package from this checkout (needs makepkg)
 	@# BUILDDIR outside the tree: makepkg's pkg/ is unreadable to `go test ./...`
