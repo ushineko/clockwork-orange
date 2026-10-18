@@ -138,8 +138,12 @@ are.
 
       The launcher entry passes `desktop-file-validate`, and quotes an
       install path with a space.
-- [ ] R4 The CI job passes on the PR, and the Windows installer is built
-      there and attached to a release.
+- [x] R4 CI on PR #46:
+      - `build-linux-installer` passed: install, run, uninstall;
+      - `build-windows` built the Windows wizard installer, the CLI-only
+        installer and their uninstallers (artifact `windows-installer`).
+- [ ] R4 The installers are attached to a release. This happens at the next
+      tag.
 - [x] R5 `./install.sh --dry-run` runs unchanged; only the header comment
       differs.
 - [ ] R6 Live, Plasma 6 Wayland: after a wizard install the launcher entry
