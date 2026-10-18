@@ -412,9 +412,8 @@ func TestSelfTestExitsZeroWhenEveryProbePassesAndOneWhenOneFails(t *testing.T) {
 	h := newHarness(t)
 	res := h.run("--self-test", "--offline")
 	require.Contains(t, res.stdout, "[OK]   sqlite")
-	_, noQdbus := exec.LookPath("qdbus6")
 	_, noKwrite := exec.LookPath("kwriteconfig6")
-	if runtime.GOOS == "linux" && (noQdbus != nil || noKwrite != nil) {
+	if runtime.GOOS == "linux" && noKwrite != nil {
 		// A CI runner without Plasma: the KDE tool probes fail by design,
 		// which is the second half of this test, not a bug in the first.
 		require.Equal(t, cli.ExitFailure, res.code, res.stdout)
@@ -427,10 +426,11 @@ func TestSelfTestExitsZeroWhenEveryProbePassesAndOneWhenOneFails(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the fault-injected probe is the KDE tool lookup, Linux only")
 	}
-	t.Setenv("PATH", t.TempDir()) // qdbus6/kwriteconfig6/systemctl vanish
+	t.Setenv("PATH", t.TempDir()) // kwriteconfig6/systemctl vanish
 	res = h.run("--self-test", "--offline")
 	require.Equal(t, cli.ExitFailure, res.code)
-	require.Contains(t, res.stdout, "[FAIL] qdbus6")
+	require.Contains(t, res.stdout, "[FAIL] kwriteconfig6")
+	require.NotContains(t, res.stdout, "qdbus6", "the desktop needs no qdbus6 (spec 028)")
 	require.Contains(t, res.stdout, "All passed: false")
 	require.Empty(t, res.stderr, "the verdict is on stdout; nothing else to say")
 }

@@ -704,7 +704,7 @@ empty directory, `history` MD5 vs blacklist SHA-256, inert `debug` /
 
 | # | Deviation | Rationale |
 |---|-----------|-----------|
-| DV1 | JS-string-escape the file path interpolated into the KDE `evaluateScript` payload | Project security extension "validate paths"; a `"` in a path currently breaks the script |
+| DV1 | JS-string-escape the file path interpolated into the KDE `evaluateScript` payload (KDE desktop superseded by DV18: no script remains; `JSStringEscape` still guards the macOS AppleScript) | Project security extension "validate paths"; a `"` in a path currently breaks the script |
 | DV2 | GUI timer uses the shared engine (all image extensions, per-monitor de-dup) instead of the separate `*.jpg`/`*.png`-only worker | CLI/GUI parity rule; removes a second selection algorithm |
 | DV3 | Atomic config writes (temp + rename) and a process-wide write mutex | Removes the write-storm race between auto-save, migration persist and `auto_update_logs` save |
 | DV4 | Delete the temp file after a URL-sourced set succeeds | v2.9.x leaked one file per run |
@@ -720,6 +720,7 @@ empty directory, `history` MD5 vs blacklist SHA-256, inert `debug` /
 | DV14 | `ToRGB`/thumbnail/cover-resize flatten alpha by dropping the channel (Pillow `convert("RGB")` semantics) before scaling | The first Go draft composited through premultiplied RGBA and darkened translucent pixels |
 | DV16 | History moves to `history2.db` (adds the saved path; migrated from `history.db` once). Retention deletes only files recorded at that exact path with unchanged content, existing downloads are adopted on a folder's first pass, and `max_files` ≤ 0 disables retention (spec 023) | 2.9.5 deleted any file in the download folder and treated 0 as "delete all": the data loss reported in #1 |
 | DV17 | On KDE, monitors are the desktop containments on a live screen (`0 ≤ screen < screenCount`), in screen order; the single and multi scripts set only those (spec 027) | `desktops()` also lists containments Plasma keeps for disconnected screens, so 2.9.5 counted a monitor that did not exist and gave it an image |
+| DV18 | On KDE the desktop is set and read over D-Bus with plasmashell's `setWallpaper`/`wallpaper(screen)`, one call per screen, and screens are counted by probing `wallpaper(n)`; the screen locker's reload is a D-Bus call. No `qdbus6`, no `evaluateScript`. This supersedes DV1 and DV17 for the desktop (spec 028) | Native per-screen API: no script to escape paths into, one monitor set without rewriting the others, and the desktop's own changes visible through `wallpaperChanged` |
 
 ---
 

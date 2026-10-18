@@ -4,8 +4,9 @@ wallpaper and lock-screen setters, the systemd service controls, and the
 single-instance lock, one implementation per OS behind build tags.
 
 Everything that shells out goes through Runner, so tests substitute FakeRunner
-and assert the exact argv that would have reached qdbus6, kwriteconfig6,
-systemctl, journalctl, du or osascript. ExecRunner is the production Runner.
+and assert the exact argv that would have reached kwriteconfig6, systemctl,
+journalctl, du or osascript. On KDE the desktop itself goes over D-Bus to
+plasmashell (spec 028) through the Plasma interface, which tests fake. ExecRunner is the production Runner.
 
 Logging: the Python module printed "[DEBUG]"/"[ERROR]" lines to stdout. Here
 each concrete Platform and Service carries an exported Events field
@@ -80,6 +81,30 @@ type Service interface {
 	Install(ctx context.Context) error
 	Uninstall(ctx context.Context) error
 	Logs(ctx context.Context, lines int) string
+}
+
+// ScreenSetter is a platform that can set one monitor without touching the
+// others (spec 028 R3). Linux has it; the others set every monitor.
+type ScreenSetter interface {
+	SetWallpaperOn(ctx context.Context, screen int, path string) error
+}
+
+// WallpaperReader is a platform that can say what one monitor shows (spec
+// 028): Linux reads it from plasmashell.
+type WallpaperReader interface {
+	WallpaperOf(ctx context.Context, screen int) (string, error)
+}
+
+// ScreenImage is the image one monitor now shows.
+type ScreenImage struct {
+	Screen int
+	Path   string
+}
+
+// WallpaperWatcher is a platform that reports wallpapers changed by anyone,
+// this program included (spec 028 R4). The channel closes when ctx ends.
+type WallpaperWatcher interface {
+	WatchWallpapers(ctx context.Context) (<-chan ScreenImage, error)
 }
 
 // Lock is a held single-instance lock (R4.8, R4.11, DV10).

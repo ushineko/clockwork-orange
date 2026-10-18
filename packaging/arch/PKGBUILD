@@ -15,9 +15,10 @@ url="https://github.com/ushineko/clockwork-orange"
 license=('MIT')
 # The daemon is static. The window is Fyne over GLFW, built with both the X11
 # and the Wayland back end, so it needs OpenGL, X11 and Wayland at run time.
-# qt6-tools provides qdbus6 and kconfig provides kwriteconfig6, which the KDE
-# platform layer shells out to (spec 010 R4).
-depends=('libgl' 'libx11' 'libxcursor' 'libxrandr' 'libxinerama' 'libxi' 'libxxf86vm' 'libxkbcommon' 'wayland' 'qt6-tools' 'kconfig')
+# kconfig provides kwriteconfig6, which the lock screen shells out to (spec 010
+# R4). The desktop goes over D-Bus to plasmashell (spec 028), so qt6-tools'
+# qdbus6 is no longer needed.
+depends=('libgl' 'libx11' 'libxcursor' 'libxrandr' 'libxinerama' 'libxi' 'libxxf86vm' 'libxkbcommon' 'wayland' 'kconfig')
 makedepends=('go' 'git' 'gcc' 'pkgconf' 'mesa' 'wayland-protocols')
 provides=("${pkgname%-git}")
 conflicts=("${pkgname%-git}")

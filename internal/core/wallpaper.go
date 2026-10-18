@@ -251,6 +251,7 @@ func RunLoop(ctx context.Context, req LoopRequest) error {
 	}
 	_, ctl, _ := LoadRotation()
 	lastSkip := ctl.Skip
+	desktop := WatchDesktop(ctx, req.Request)
 
 	skip := false
 	for {
@@ -276,11 +277,18 @@ func RunLoop(ctx context.Context, req LoopRequest) error {
 			wait = time.Duration(config.DefaultWaitGUI) * time.Second
 		}
 		req.Events.Debugf("Waiting %s before next change...", wait)
-		skip = waitForRotation(ctx, req, wait, changed, controlChanged, debounce, &lastSkip)
+		skip = waitForRotation(ctx, req, wait, rotationEvents{changed, controlChanged, desktop}, debounce, &lastSkip)
 		if ctx.Err() != nil {
 			return nil
 		}
 	}
+}
+
+// rotationEvents is what ends or changes the loop's wait: a config change,
+// a control change, and the desktop's own wallpaper changes.
+type rotationEvents struct {
+	config, control <-chan struct{}
+	desktop         <-chan platform.ScreenImage
 }
 
 // controlDebounce coalesces the writes of one pause, resume or skip. It is
@@ -295,7 +303,8 @@ everything is pinned, and pausing stops the clock while resuming restarts it
 at the full wait. The time of the next change is recorded for the status
 display each time it is decided.
 */
-func waitForRotation(ctx context.Context, req LoopRequest, wait time.Duration, configChanged, controlChanged <-chan struct{}, debounce time.Duration, lastSkip *int) bool {
+func waitForRotation(ctx context.Context, req LoopRequest, wait time.Duration, in rotationEvents, debounce time.Duration, lastSkip *int) bool {
+	configChanged, controlChanged := in.config, in.control
 	paused := RotationPaused(ctx, req.Request, req.Mode)
 	deadline := time.Now().Add(wait)
 	for {
@@ -328,6 +337,17 @@ func waitForRotation(ctx context.Context, req LoopRequest, wait time.Duration, c
 				config.DrainBurst(ctx, configChanged, debounce)
 				req.Events.Debugf("Config change detected, interrupting wait cycle")
 				return false, true
+			case img, ok := <-in.desktop:
+				if !ok {
+					in.desktop = nil
+					return false, false
+				}
+				// A pin it drops rewrites the control file, which the
+				// next turn of this loop handles.
+				if err := NoteDesktopWallpaper(img, req.Events); err != nil {
+					req.Events.Warnf("%v", err)
+				}
+				return false, false
 			case _, ok := <-controlChanged:
 				if !ok {
 					controlChanged = nil
