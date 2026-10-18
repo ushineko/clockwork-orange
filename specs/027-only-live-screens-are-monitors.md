@@ -2,7 +2,7 @@
 
 **Issue**: #47
 
-## Status: INCOMPLETE
+## Status: COMPLETE
 
 - **Priority**: Medium
 - **Estimated Complexity**: Low
@@ -50,8 +50,9 @@ byte-identical to the Python. That makes it a deliberate deviation.
 - [x] R1/R2 Live, this Plasma 6 session (two screens, one orphaned
       containment): the expression yields containments 43 and 44 on screens
       0 and 1, n=2.
-- [ ] Live: after reinstall and a service restart, `wallpaper status` lists
-      two monitors and the orphan's image is not changed.
+- [x] Live: after reinstall and a service restart, `wallpaper status` lists
+      two monitors. A skip changed containments 43 and 44 and left 54's image
+      as it was.
 - [x] R4 DV17 row added.
 
 ## Risks & Assumptions
