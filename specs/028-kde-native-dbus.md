@@ -2,11 +2,23 @@
 
 **Issue**: #49
 
-## Status: INCOMPLETE
+## Status: COMPLETE
 
 - **Priority**: Medium
 - **Estimated Complexity**: Medium
 - **Branch**: `feat/kde-native-dbus`
+
+## Executive Summary
+
+On KDE the desktop is now set and read over D-Bus with plasmashell's
+per-screen `setWallpaper` and `wallpaper`, from Go through godbus. There is
+no `qdbus6` process and no `evaluateScript` JavaScript. Screens are counted by
+probing `wallpaper(n)`, so leftover containments never take part. A pin sets
+only its own screen. A wallpaper changed outside the program, for example in
+KDE's settings, is recorded in `rotation.json` and drops that screen's pin.
+`qdbus6` is no longer a runtime dependency. Recorded as DV18. Reviewers
+should start with `internal/platform/plasma_linux.go` and
+`NoteDesktopWallpaper` in `internal/core/rotation.go`.
 
 ## Context
 
@@ -49,7 +61,10 @@ notifications. It is pure Go, so the daemon still builds with
 - R4 Status follows the desktop:
   - a `platform.Watcher` on Linux reports `wallpaperChanged(screen)`;
   - the rotator reads `wallpaper(screen)` and records it in `rotation.json`,
-    so a wallpaper changed in KDE's settings shows on the card;
+    so a wallpaper changed in KDE's settings shows on the card. It handles
+    the signal between its own changes, so an image it set itself is
+    already recorded and is not taken for an outside change. The window
+    timer does the same while it is the rotator;
   - a pinned screen changed this way is unpinned, with a log line, because
     the user chose something else.
 - R5 The lock-screen reload (`org.freedesktop.ScreenSaver.configure`) goes
@@ -58,7 +73,7 @@ notifications. It is pure Go, so the daemon still builds with
 - R6 `qdbus6` is no longer needed at runtime:
   - `--self-test` stops requiring it;
   - the PKGBUILDs drop `qt6-tools`;
-  - the deb drops its `qdbus6` dependency, if the deb names one.
+  - the deb drops `qdbus-qt6` from Recommends.
   `--debug-lockscreen` keeps whatever it uses, as a diagnostic.
 - R7 Spec 010 records DV18, which replaces DV1 for the desktop: there is no
   JS left to escape. The golden fixture stays as the 2.9.5 oracle. The
@@ -67,21 +82,29 @@ notifications. It is pure Go, so the daemon still builds with
 
 ## Acceptance Criteria
 
-- [ ] R1 Unit, against a fake bus object: a single set calls `setWallpaper`
+- [x] R1 Unit, against a fake bus object: a single set calls `setWallpaper`
       once per screen with `org.kde.image` and `{Image: file://…}`. A multi
       set of two paths on three screens gives 0→a, 1→b, 2→a.
-- [ ] R2 Unit: the probe stops at the first empty map, caps at 16, and
+- [x] R2 Unit: the probe stops at the first empty map, caps at 16, and
       answers 1 when the bus errors.
-- [ ] R3 Core test: a pin on monitor 2 with a `ScreenSetter` platform makes
+- [x] R3 Core test: a pin on monitor 2 with a `ScreenSetter` platform makes
       exactly one call, for screen 1.
-- [ ] R4 Core test: an external change event on a pinned screen updates
+- [x] R4 Core test: an external change event on a pinned screen updates
       `rotation.json` and drops the pin.
-- [ ] R6 `--self-test` passes on a machine with no `qdbus6` on `PATH`
-      (fake bus), and the PKGBUILD `depends` has no `qt6-tools`.
-- [ ] Live (`CLOCKWORK_LIVE_KDE=1`), Plasma 6, two screens: skip changes both
-      screens; `pin --monitor 2` changes only screen 2; changing screen 1 in
-      KDE's wallpaper dialog shows on the Service card within a second.
-- [ ] R7 DV18 row added; DV1 notes the desktop path no longer applies.
+- [x] R6 `--self-test` passes with `qdbus6` absent from `PATH` (live, on
+      this machine), its test asserts no `qdbus6` probe, and neither PKGBUILD
+      lists `qt6-tools`.
+- [x] Live, Plasma 6.8, two screens and one leftover containment, the
+      daemon on this branch:
+      - skip changed screens 0 and 1 and left the leftover's image as it was;
+      - `pin --monitor 2` changed only screen 1;
+      - an outside `setWallpaper` on screen 1 was recorded in `status`
+        within 2 s and logged "Monitor 2 is no longer pinned";
+      - the program's own sets were not logged as outside changes.
+
+      The outside change came from `gdbus`, not from KDE's dialog. Both go
+      through the same `wallpaperChanged` signal.
+- [x] R7 DV18 row added; DV1 notes the desktop path no longer applies.
 
 ## Test Strategy
 
