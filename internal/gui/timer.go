@@ -131,9 +131,17 @@ func (t *wallpaperTimer) start(u *ui) {
 	}()
 }
 
-// recordNext writes the next change into rotation.json while this window is
-// the rotator; with the daemon cycling, the file is the daemon's to write.
+/*
+recordNext writes the next change into rotation.json while this window is
+the rotator; with the daemon cycling, the file is the daemon's to write.
+
+It then reloads the card itself (spec 029 R1). Every change, skip and pause
+the timer makes ends here, and the card is in this process: waiting for the
+file watcher to report a write this window made is what left the card a
+change behind on macOS.
+*/
 func (t *wallpaperTimer) recordNext(u *ui, mode core.Mode, at time.Time, paused bool) {
+	defer fyne.Do(u.rotationChanged)
 	if core.DaemonRunning() {
 		return
 	}
@@ -239,9 +247,13 @@ func (u *ui) setupTray() {
 	d.SetSystemTrayIcon(appIcon())
 }
 
-// showWindow brings the window back from the tray.
+// showWindow brings the window back from the tray, reloading the card when a
+// change arrived while it was hidden (spec 029 R2).
 func (u *ui) showWindow() {
 	u.hiddenToTray = false
+	if !u.rotationOK {
+		u.rotationChanged()
+	}
 	if u.sh.Window != nil {
 		u.sh.Window.Show()
 		u.sh.Window.RequestFocus()

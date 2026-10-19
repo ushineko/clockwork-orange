@@ -76,9 +76,11 @@ type ui struct {
 	histOK    bool
 	// rotation is what is on screen and what is pinned (spec 026); thumbs
 	// are its thumbnails by path, and nextChange the countdown line the 1 s
-	// tick redraws without a rebuild.
+	// tick redraws without a rebuild. rotationSeq numbers the loads, so one
+	// that finishes late does not replace a newer one.
 	rotation     core.RotationStatusResult
 	rotationOK   bool
+	rotationSeq  int
 	thumbs       map[string]image.Image
 	nextChange   *widget.Label
 	stopRotation func()
