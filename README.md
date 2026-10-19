@@ -278,6 +278,8 @@ notes.
 
 ### Unreleased
 
+### v4.7.1 (2026-10-19)
+
 - The Wallpaper card in Activity (macOS, Windows) now shows the new image
   and countdown as soon as the window changes the wallpaper. It could fall a
   change behind and read "Changing now…" until a Skip, which then showed the
