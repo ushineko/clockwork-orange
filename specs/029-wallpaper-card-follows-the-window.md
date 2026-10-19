@@ -102,7 +102,9 @@ replace a newer one.
      not the one replaced (R1, R4).
   3. Close the window to the tray, wait through a change, reopen from the
      tray. Expected: the card shows the current image (R2).
-- Results: pending, to be run on the Mac after the release.
+- Results: 2026-10-19, release v4.7.1 on the affected Mac. The maintainer
+  reports the card now follows the desktop; the lag and the stuck
+  "Changing now…" are gone.
 
 ### Prod visibility
 
