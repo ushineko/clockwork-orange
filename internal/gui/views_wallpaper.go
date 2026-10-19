@@ -206,24 +206,49 @@ func (u *ui) loadRotation() {
 		return
 	}
 	u.rotationOK = true
+	u.rotationSeq++
+	seq := u.rotationSeq
 	run := func() {
 		res, err := core.RotationStatus(context.Background(), u.request())
-		fyne.Do(func() {
-			if err != nil {
-				u.sh.Report("Read the wallpaper status", err)
-			}
-			u.rotation = res
-			u.forgetThumbs()
-			if u.showsWallpaper() {
-				u.sh.Refresh()
-			}
-		})
+		fyne.Do(func() { u.applyRotation(seq, res, err) })
 	}
 	if !u.sh.OnScreen() {
 		run()
 		return
 	}
 	go run()
+}
+
+/*
+applyRotation puts a finished load on the card, unless a load was started
+after it (spec 029 R3). Loads run off the UI thread and can finish in any
+order; without this, a read taken before a change could land after the read
+taken after it and put the previous wallpaper back.
+*/
+func (u *ui) applyRotation(seq int, res core.RotationStatusResult, err error) {
+	if seq != u.rotationSeq {
+		return
+	}
+	if err != nil {
+		u.sh.Report("Read the wallpaper status", err)
+	}
+	u.rotation = res
+	u.forgetThumbs()
+	if u.showsWallpaper() {
+		u.sh.Refresh()
+	}
+}
+
+/*
+rotationChanged marks the card's state stale and reloads it while the card is
+on screen. Hidden to the tray it only marks it: showWindow reloads a stale
+card (spec 029 R2), and a section switch rebuilds it.
+*/
+func (u *ui) rotationChanged() {
+	u.rotationOK = false
+	if u.showsWallpaper() && !u.hiddenToTray {
+		u.loadRotation()
+	}
 }
 
 // showsWallpaper reports whether the section on screen has the card.
@@ -235,7 +260,10 @@ func (u *ui) showsWallpaper() bool {
 /*
 watchRotation reloads the card whenever rotation.json is replaced, and ticks
 the countdown once a second. The rotator writes the file after every change
-and every pause, so the card follows the daemon without polling it.
+and every pause, so the card follows the daemon without polling it. The
+window's own timer does not rely on this: it reloads the card itself after
+each change (recordNext), because the watcher has been seen not to report the
+window's own writes on macOS (spec 029).
 */
 func (u *ui) watchRotation() func() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -252,12 +280,7 @@ func (u *ui) watchRotation() func() {
 			case <-ctx.Done():
 				return
 			case <-changed:
-				fyne.Do(func() {
-					u.rotationOK = false
-					if u.showsWallpaper() && !u.hiddenToTray {
-						u.loadRotation()
-					}
-				})
+				fyne.Do(u.rotationChanged)
 			case now := <-tick.C:
 				fyne.Do(func() {
 					if u.showsWallpaper() && !u.hiddenToTray {

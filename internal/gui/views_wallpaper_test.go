@@ -116,3 +116,64 @@ func TestTheCountdownSaysChangingAtZero(t *testing.T) {
 	r.State.NextChange = &later
 	require.Equal(t, "Next change in 1:01", nextChangeText(r, now))
 }
+
+// shownPath is the image the card's state has for monitor 1.
+func shownPath(u *ui) string {
+	if len(u.rotation.State.Desktop) == 0 {
+		return ""
+	}
+	return u.rotation.State.Desktop[0].Path
+}
+
+// Spec 029 R1: the window's timer reloads the card itself after it rotates.
+// No watcher runs here, so the card can only follow through recordNext.
+func TestTheCardFollowsTheWindowsOwnRotation(t *testing.T) {
+	u, _, _ := testUI(t)
+	past := time.Now().Add(-time.Minute)
+	st := core.RotationState{Rotator: core.RotatorGUI, Mode: "desktop", NextChange: &past,
+		Desktop: []core.Shown{{Path: "/pics/a.jpg", Since: past}}}
+	writeRotation(t, st, core.RotationControl{})
+	u.loadRotation()
+	require.Equal(t, "/pics/a.jpg", shownPath(u))
+
+	// What Rotate records, then the timer's reschedule.
+	st.Desktop = []core.Shown{{Path: "/pics/b.jpg", Since: time.Now()}}
+	writeRotation(t, st, core.RotationControl{})
+	next := time.Now().Add(5 * time.Minute)
+	u.timer.recordNext(u, core.ModeDefault, next, false)
+
+	require.Equal(t, "/pics/b.jpg", shownPath(u), "the card shows the new image")
+	require.NotNil(t, u.rotation.State.NextChange)
+	require.WithinDuration(t, next, *u.rotation.State.NextChange, time.Second, "and the new countdown")
+}
+
+// Spec 029 R2: a change while hidden to the tray marks the card stale; showing
+// the window loads it.
+func TestShowingTheWindowReloadsAStaleCard(t *testing.T) {
+	u, _, _ := testUI(t)
+	st := core.RotationState{Rotator: core.RotatorGUI, Mode: "desktop",
+		Desktop: []core.Shown{{Path: "/pics/a.jpg", Since: time.Now()}}}
+	writeRotation(t, st, core.RotationControl{})
+	u.loadRotation()
+
+	u.hiddenToTray = true
+	st.Desktop = []core.Shown{{Path: "/pics/c.jpg", Since: time.Now()}}
+	writeRotation(t, st, core.RotationControl{})
+	u.rotationChanged()
+	require.False(t, u.rotationOK, "marked stale")
+	require.Equal(t, "/pics/a.jpg", shownPath(u), "but not loaded while hidden")
+
+	u.showWindow()
+	require.Equal(t, "/pics/c.jpg", shownPath(u))
+}
+
+// Spec 029 R3: a load that finishes after a newer one started is discarded.
+func TestALateLoadDoesNotReplaceANewerOne(t *testing.T) {
+	u, _, _ := testUI(t)
+	older := core.RotationStatusResult{State: core.RotationState{Desktop: []core.Shown{{Path: "/pics/old.jpg"}}}}
+	newer := core.RotationStatusResult{State: core.RotationState{Desktop: []core.Shown{{Path: "/pics/new.jpg"}}}}
+	u.rotationSeq = 2 // two loads started; the second finishes first
+	u.applyRotation(2, newer, nil)
+	u.applyRotation(1, older, nil)
+	require.Equal(t, "/pics/new.jpg", shownPath(u))
+}
