@@ -264,6 +264,20 @@ interfaces; `internal/plugins` the three sources; `internal/config`,
 `internal/store`, `internal/imaging`, `internal/engine` the rest.
 `specs/010-go-rewrite-v4.md` is the design of record.
 
+## Changelog
+
+Kept from v4.7.0 onwards. Releases before it have no notes and none are
+invented for them: a changelog written afterwards from commit messages
+says what was touched, not what changed for anyone using it, and reads as
+a record when it is a guess.
+
+Every change worth telling a user about adds a line here under
+`### Unreleased`, in the same commit as the change. Releasing renames that
+heading to the version and its date, and those lines become the release
+notes.
+
+### Unreleased
+
 ## Licence
 
 MIT. See LICENSE.

@@ -145,6 +145,18 @@ confirm with `AskUserQuestion`, update `.tag`, run `./release_version.sh`,
 then verify the tag on GitHub and the Actions build. The CI `release` job
 refuses a tag that differs from `.tag`.
 
+**Every change worth telling a user about adds a line to the README's
+changelog** under `### Unreleased`, in the same commit as the change.
+Releasing renames that heading to the version and its date.
+
+**The release notes are those lines, reflowed.** GitHub renders a newline
+in release notes as a line break, so a changelog wrapped for a plain file
+arrives as ragged half-lines: each bullet goes up as one long line and the
+browser wraps it. Seventy-five releases here went out with no notes at all
+before this was written down, and across the other repositories a hundred
+and seventy-seven went out hard-wrapped. Check the rendered page after
+publishing, not the file.
+
 ---
 
 ## Security Extensions
