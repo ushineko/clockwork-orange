@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -137,6 +138,9 @@ func nextChangeText(r core.RotationStatusResult, now time.Time) string {
 	case r.Paused:
 		return "Paused. Resume to rotate again."
 	case !r.Running:
+		if runtime.GOOS != "linux" {
+			return "Not rotating: no window timer is running."
+		}
 		return "Not rotating: the service is stopped and no window timer is running."
 	case r.State.NextChange == nil:
 		return "Next change: not scheduled"

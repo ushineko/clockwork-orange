@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -337,4 +338,30 @@ func TestADesktopChangeIsRecordedAndDropsThePin(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ctl.Pinned())
 	require.Contains(t, logs, "Monitor 1 is no longer pinned")
+}
+
+// Probes of a free lock must read free however many run at once. A probe
+// takes the lock for an instant, so unserialised probes (the timer after a
+// Skip, the status redraw) saw each other's hold as a daemon and the card
+// said "Not rotating" while the timer ran.
+func TestConcurrentLockProbesReadFree(t *testing.T) {
+	t.Setenv("CLOCKWORK_LOCK_DIR", t.TempDir())
+	var wg sync.WaitGroup
+	var falsePositives atomic.Int32
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 300 {
+				if DaemonRunning() {
+					falsePositives.Add(1)
+				}
+				if GUIRunning() {
+					falsePositives.Add(1)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	require.Zero(t, falsePositives.Load(), "a free lock was reported held")
 }

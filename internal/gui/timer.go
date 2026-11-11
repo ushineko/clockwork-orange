@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"time"
 
@@ -201,7 +202,7 @@ func (t *wallpaperTimer) fire(u *ui, skip bool) {
 	})
 	ev := paneEvents(u.activity)
 	if held {
-		ev.Infof("The service holds the cycling lock; the window's timer is idle")
+		ev.Infof("%s", lockHeldMessage())
 		fyne.Do(u.activity.Draw)
 		return
 	}
@@ -219,6 +220,15 @@ func (t *wallpaperTimer) fire(u *ui, skip bool) {
 		return
 	}
 	ev.Infof("Wallpaper changed")
+}
+
+// lockHeldMessage says who holds the cycling lock. Only Linux has a service;
+// elsewhere the holder is another clockwork-orange process (e.g. `run`).
+func lockHeldMessage() string {
+	if runtime.GOOS == "linux" {
+		return "The service is already changing the wallpaper; this window's timer is skipping this cycle"
+	}
+	return "Another clockwork-orange process is already changing the wallpaper; this window's timer is skipping this cycle"
 }
 
 // --- tray and lifecycle (R7.11) ---------------------------------------------

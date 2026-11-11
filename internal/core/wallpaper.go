@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
@@ -378,9 +379,16 @@ func waitForRotation(ctx context.Context, req LoopRequest, wait time.Duration, i
 	}
 }
 
+// probeMu serializes this process's lock probes. A probe takes the lock for an
+// instant to see whether it is free, so two probes at once (the timer after a
+// skip, the status redraw) read each other's hold as another process's.
+var probeMu sync.Mutex
+
 // DaemonRunning reports whether a cycling loop holds the daemon lock (DV10);
 // the GUI consults it before starting its own timer.
 func DaemonRunning() bool {
+	probeMu.Lock()
+	defer probeMu.Unlock()
 	lock, ok := platform.TryLock(daemonLockID)
 	if ok {
 		lock.Release()

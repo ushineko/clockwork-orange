@@ -542,7 +542,7 @@ func (u *ui) statusSegments() []fyne.CanvasObject {
 		segs = append(segs, widgets.Sep(), widgets.Dim("service"), svc)
 	}
 	if u.timer.daemonHeld {
-		segs = append(segs, widgets.Sep(), widgets.StatusText("timer idle: the daemon is cycling", fd.StatusInfo))
+		segs = append(segs, widgets.Sep(), widgets.StatusText("timer paused: another process is cycling", fd.StatusInfo))
 	}
 	return segs
 }
