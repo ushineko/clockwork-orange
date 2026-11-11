@@ -258,6 +258,8 @@ func RotationStatus(_ context.Context, _ Request) (RotationStatusResult, error) 
 
 // GUIRunning reports whether a window holds the GUI single-instance lock.
 func GUIRunning() bool {
+	probeMu.Lock()
+	defer probeMu.Unlock()
 	lock, ok := platform.TryLock(guiLockID)
 	if ok {
 		lock.Release()

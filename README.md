@@ -278,6 +278,11 @@ notes.
 
 ### Unreleased
 
+- The Wallpaper card in Activity no longer flips to "Not rotating" after a
+  Skip while the window's timer is running (macOS, Windows). The window's own
+  lock checks could collide and read as a second process. On those platforms
+  the message no longer mentions a service (#55).
+
 ### v4.7.1 (2026-10-19)
 
 - The Wallpaper card in Activity (macOS, Windows) now shows the new image
