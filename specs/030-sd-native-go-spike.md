@@ -16,10 +16,12 @@ Pendra-AI/stable-diffusion-go and ardanlabs/malina both generate images on CPU
 and on the RTX 4090 over Vulkan, both embed and load their library with
 `CGO_ENABLED=0`, and both build in seconds. gosd works on CPU only, and only
 against its exact pinned library; seasonjs crashes on every library tried.
-malina is the recommended base because it already ships a model catalog,
-pinned and verified library installs, and resumable downloads; its prebuilt
-Linux libraries need glibc 2.43, which is the open question. Reviewers should
-read "Findings" first, then "Follow-up spec outline".
+Decision (operator): standardize on malina, with no fallback implemented. It
+ships a model catalog, pinned and verified library installs, and resumable
+downloads. Its prebuilt Linux libraries need glibc 2.43; the operator states
+the project's own binaries and GUI already require that glibc, so this is
+accepted. Pendra is recorded as a possible later fallback only. Reviewers
+should read "Findings" first, then "Follow-up spec outline".
 
 ## Context
 
@@ -281,16 +283,18 @@ go-getter's `ProgressTracker`, not a channel.
 
 | Candidate | Verdict | Reason |
 |---|---|---|
-| malina | **adopt** as the base | Works on CPU and Vulkan, pinned and verified library install, model catalog with resume, release 1.2.2 dated the day of the spike. Costs: needs Go 1.27 (module `go 1.27.0`, main module is `go 1.25.0`), its prebuilt Linux libraries need glibc 2.43, and `pkg/download` pulls in go-getter. |
-| Pendra | **hold** as the fallback | Works on CPU and Vulkan; one self-contained library, glibc 2.34, ABI checks, checksummed releases. No model catalog, CUDA needs a CUDA 13 runtime, and its pinned stable-diffusion.cpp build is 57 builds behind malina's. |
+| malina | **adopt** (decided: the single stack) | Works on CPU and Vulkan, pinned and verified library install, model catalog with resume, release 1.2.2 dated the day of the spike. Costs: needs Go 1.27 (module `go 1.27.0`, main module is `go 1.25.0`), its prebuilt Linux libraries need glibc 2.43, and `pkg/download` pulls in go-getter. |
+| Pendra | **hold**: secondary option for a possible later fallback; not to be implemented now | Works on CPU and Vulkan; one self-contained library, glibc 2.34, ABI checks, checksummed releases. No model catalog, CUDA needs a CUDA 13 runtime, and its pinned stable-diffusion.cpp build is 57 builds behind malina's. |
 | gosd | **reject** | Vulkan release SIGILLs on the pinned version; every other version segfaults; CPU only worked in one combination. |
 | seasonjs | **reject** | Crashes on every library tried; no pinned library; Linux library not shipped. |
 
-The open question is the glibc floor: malina's upstream libraries need 2.43
-(Ubuntu 26.04), which excludes Debian 12/13 and Ubuntu 22.04–24.04 packages.
-Two ways out, to be decided in the plugin spec: build stable-diffusion.cpp in CI
-at malina's pinned version against an older glibc and embed that, or use
-Pendra's binding and libraries (glibc 2.34) and port malina's catalog idea.
+**glibc floor (resolved by the operator).** malina's upstream libraries need
+glibc 2.43 (Ubuntu 26.04), which excludes Debian 12/13 and Ubuntu 22.04–24.04.
+The operator states that this project's built binaries and GUI already require
+at least that glibc, so the floor adds no new restriction. That statement was
+not re-checked in this spike; the plugin spec should confirm it against the
+packaged artifacts. Pendra (glibc 2.34) stays on record as a later fallback
+if the floor ever becomes a problem; nothing for it is built.
 
 Not covered: Windows and macOS (Metal, Windows Vulkan/CUDA), SDXL or newer
 models, image-to-image, upscaling, memory use under the daemon, and CUDA with a
@@ -314,7 +318,7 @@ CUDA 13 runtime installed.
 5. **GUI**: model list with size and licence, download progress popup (not
    inline, per the no-reflow rule), device picker, first-run shader-compile
    notice.
-6. **Decide the glibc floor** before packaging for Debian and Arch.
+6. **Confirm the glibc floor** against the packaged artifacts (decision: accepted).
 7. **Integration test**: an env-gated `CLOCKWORK_LIVE_SD=1` test that generates
    one image from a small model through the real library.
 
