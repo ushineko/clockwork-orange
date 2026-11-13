@@ -275,7 +275,7 @@ func (p *stableDiffusion) generate(ctx context.Context, cfg map[string]any, libD
 	var lastErr error
 	for i := range limit {
 		if err := ctx.Err(); err != nil {
-			return made, err
+			return made, fmt.Errorf("stopped after %d image(s): %w", made, err)
 		}
 		mu.Lock()
 		imageIdx = i
@@ -319,15 +319,15 @@ func (p *stableDiffusion) save(img image.Image, dir string, i int, ev events.Eve
 	path := filepath.Join(dir, name)
 	f, err := os.Create(path) //nolint:gosec // dir is the configured download dir
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("create %s: %w", path, err)
 	}
 	if err := png.Encode(f, img); err != nil {
 		_ = f.Close()
 		_ = os.Remove(path)
-		return false, err
+		return false, fmt.Errorf("encode %s: %w", name, err)
 	}
 	if err := f.Close(); err != nil {
-		return false, err
+		return false, fmt.Errorf("close %s: %w", path, err)
 	}
 	hash, err := imaging.SHA256File(path)
 	if err != nil {

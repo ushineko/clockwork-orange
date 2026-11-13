@@ -38,7 +38,7 @@ LDFLAGS=-w -s -X $(MODULE)/internal/buildinfo.Version=$(VERSION) -X $(MODULE)/in
 FYNE_TAGS?=migrated_fynedo
 
 LINT_NAME?=golangci-lint
-LINT_VERSION?=v2.12.2
+LINT_VERSION?=v2.15.0
 LINT_PROGRAM=$(LINT_NAME)-$(LINT_VERSION)
 
 # Release asset coordinates for the pinned linter version.
@@ -77,7 +77,7 @@ setup: install-lint ## Setup system for local development
 # whose GOROOT is 1.27. go.mod deliberately carries no `toolchain` line (R1.1),
 # so the pin lives here instead, matching the Go that this linter release was
 # built with. Bump it together with LINT_VERSION.
-LINT_GO_TOOLCHAIN?=go1.26.0
+LINT_GO_TOOLCHAIN?=go1.27.0
 
 .PHONY: lint
 lint: export GOTOOLCHAIN = $(LINT_GO_TOOLCHAIN)
@@ -100,7 +100,7 @@ coverage: ## Run all tests and open a coverage report in the default browser
 	@rm -f coverage.out
 
 .PHONY: build
-build: ## Build the CLI/daemon for the host platform (no CGO: the daemon needs no display)
+build: ## Build the CLI/daemon for the host platform (no CGO: the daemon needs no display; dynamically linked against glibc on Linux)
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -ldflags='$(LDFLAGS)' -trimpath -o bin/clockwork-orange ./cmd/clockwork-orange
 

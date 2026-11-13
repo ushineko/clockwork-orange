@@ -101,7 +101,7 @@ issue and the link when convenient — but a new spec should start from one.
 - Runtime tools on Linux: KDE Plasma 6 (`qdbus6`, `kwriteconfig6`), systemd
   user session.
 - `make test` runs `go test -race -tags parity ./...`; `make lint` runs the
-  pinned golangci-lint with `config/.golangci-v2.12.2.yml`.
+  pinned golangci-lint with `config/.golangci-v2.15.0.yml`.
 - Live integration tests are env-gated: `CLOCKWORK_LIVE_KDE=1`,
   `CLOCKWORK_LIVE_NET=1`, `CLOCKWORK_LIVE_SYSTEMD=1`.
 

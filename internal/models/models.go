@@ -209,7 +209,7 @@ func (s Store) fetch(ctx context.Context, m Model, part string, ev events.Events
 func (s Store) download(ctx context.Context, m Model, part string, have int64, ev events.Events) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.File.URL, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("download %s: %w", m.File.Name, err)
 	}
 	if have > 0 {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", have))
@@ -226,7 +226,7 @@ func (s Store) download(ctx context.Context, m Model, part string, have int64, e
 	if err != nil {
 		return fmt.Errorf("download %s: %w", m.File.Name, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	flags := os.O_CREATE | os.O_WRONLY
 	switch resp.StatusCode {
 	case http.StatusPartialContent:
@@ -244,13 +244,16 @@ func (s Store) download(ctx context.Context, m Model, part string, have int64, e
 	}
 	out, err := os.OpenFile(part, flags, 0o600) //nolint:gosec // path built from the catalog
 	if err != nil {
-		return err
+		return fmt.Errorf("open %s: %w", part, err)
 	}
 	if err := copyWithProgress(ctx, out, resp.Body, have, m, ev); err != nil {
 		_ = out.Close() // the partial file stays for the next resume
 		return err
 	}
-	return out.Close()
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", part, err)
+	}
+	return nil
 }
 
 func copyWithProgress(ctx context.Context, dst io.Writer, src io.Reader, have int64, m Model, ev events.Events) error {
@@ -261,7 +264,7 @@ func copyWithProgress(ctx context.Context, dst io.Writer, src io.Reader, have in
 		n, rerr := src.Read(buf)
 		if n > 0 {
 			if _, err := dst.Write(buf[:n]); err != nil {
-				return err
+				return fmt.Errorf("write %s: %w", m.File.Name, err)
 			}
 			have += int64(n)
 			pct := int(have * 98 / m.File.Size) // 98: leave room for verification
@@ -277,7 +280,7 @@ func copyWithProgress(ctx context.Context, dst io.Writer, src io.Reader, have in
 			return fmt.Errorf("download %s: %w", m.File.Name, rerr)
 		}
 		if err := ctx.Err(); err != nil {
-			return err
+			return fmt.Errorf("download %s: %w", m.File.Name, err)
 		}
 	}
 }
@@ -285,9 +288,9 @@ func copyWithProgress(ctx context.Context, dst io.Writer, src io.Reader, have in
 func sha256File(ctx context.Context, path string) (string, error) {
 	f, err := os.Open(path) //nolint:gosec // path built from the catalog
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	h := sha256.New()
 	buf := make([]byte, 1<<20)
 	for {
@@ -297,10 +300,10 @@ func sha256File(ctx context.Context, path string) (string, error) {
 			break
 		}
 		if rerr != nil {
-			return "", rerr
+			return "", fmt.Errorf("read %s: %w", path, rerr)
 		}
 		if err := ctx.Err(); err != nil {
-			return "", err
+			return "", fmt.Errorf("verify %s: %w", path, err)
 		}
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil

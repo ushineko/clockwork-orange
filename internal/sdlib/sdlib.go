@@ -47,7 +47,7 @@ var ErrNoLibrary = errors.New("this build has no Stable Diffusion library: " +
 // set, otherwise the embedded copy extracted into the user cache.
 func Resolve() (string, error) {
 	if dir := os.Getenv(EnvDir); dir != "" {
-		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		if st, err := os.Stat(dir); err != nil || !st.IsDir() { //nolint:gosec // the user's own override directory
 			return "", fmt.Errorf("%s=%q is not a directory", EnvDir, dir)
 		}
 		return dir, nil
@@ -99,7 +99,7 @@ func Extract(src fs.FS, cacheRoot, want string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("stage extraction: %w", err)
 	}
-	defer os.RemoveAll(stage)
+	defer func() { _ = os.RemoveAll(stage) }()
 	for _, name := range files {
 		data, err := fs.ReadFile(src, name)
 		if err != nil {
@@ -107,7 +107,7 @@ func Extract(src fs.FS, cacheRoot, want string) (string, error) {
 		}
 		dst := filepath.Join(stage, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
-			return "", err
+			return "", fmt.Errorf("create %s: %w", filepath.Dir(dst), err)
 		}
 		// Shared libraries are mapped, not executed, but the loader of some
 		// platforms insists on the execute bit.
@@ -161,10 +161,10 @@ func fingerprint(src fs.FS, files []string) (string, error) {
 	for _, name := range files {
 		data, err := fs.ReadFile(src, name)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("read embedded %s: %w", name, err)
 		}
-		fmt.Fprintf(h, "%s:%d;", name, len(data))
-		h.Write(data)
+		_, _ = fmt.Fprintf(h, "%s:%d;", name, len(data))
+		_, _ = h.Write(data)
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16], nil
 }

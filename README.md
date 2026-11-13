@@ -6,7 +6,7 @@ timer from local folders and from download plugins, remembers every image it
 has fetched so nothing is downloaded twice, and keeps a blacklist of images
 you never want to see again.
 
-Version 4 is a native Go program: one static command-line binary that is also
+Version 4 is a native Go program: one command-line binary that is also
 the daemon, and one desktop window built with Fyne. No Python, no Qt, no
 interpreter to install. Configuration files and databases from the 2.9.x
 releases are read as they are.
@@ -250,12 +250,19 @@ Python launcher entry from `install-desktop-entry.sh` is removed by
 
 ## Building
 
-    make build        # bin/clockwork-orange, static, CGO_ENABLED=0
+    make build        # bin/clockwork-orange, CGO_ENABLED=0 (links glibc on Linux, see below)
     make build-gui    # bin/clockwork-orange-gui, needs CGO and OpenGL headers
     make test         # go test -race with the CLI/GUI parity guard
     make lint         # golangci-lint, pinned version
     make pkg-arch     # the Arch package, from this checkout
     make pkg-deb      # the Debian package
+
+The command-line binary needs no C toolchain (`CGO_ENABLED=0`), but on Linux it
+is no longer statically linked: the Stable Diffusion plugin loads a native
+library through `purego`, which makes the binary link `libc`, `libdl` and
+`libpthread` dynamically. It has no versioned glibc symbol requirement of its
+own, and it does not run on musl (Alpine). Windows and macOS builds are
+unaffected.
 
 Layout: `cmd/` holds the two entry points; `internal/core` every user-facing
 operation as a function, which both front ends call and nothing else may
