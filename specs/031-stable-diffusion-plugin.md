@@ -282,16 +282,17 @@ commas is passed as a one-item list.
   case are covered by unit tests against a local HTTP server, and a real pull
   was run by hand above.
 - The GUI Models card and the Stable Diffusion section were built and their
-  logic is tested headlessly, but nobody has looked at the rendered window. The
-  pull popup is the shell's indeterminate busy popup with a Cancel button, not
-  a percentage (a gap for the design library: the busy popup takes a caption
-  but no determinate progress).
+  logic is tested headlessly, but nobody has looked at the rendered Models card.
+  The pull popup carries the download's real fraction through
+  `Shell.BusyProgress` (fynedesygn 0.1.114, spec 078); the library's own
+  rendered reading of that popup is in its spec 078.
 - Cancelling a run stops it between images; an image in flight finishes.
 - Windows and macOS libraries and the packaged-artifact `--self-test`.
 
 ### Gaps found
 
-- `fynedesygn`: the busy popup (`Busy`, `PerformCancellable`) has a fixed
-  caption and no determinate progress value, so a multi-gigabyte download shows
-  only a spinner. A determinate variant would serve both the model pull and the
-  plugin run.
+- `fynedesygn`: the busy popup had a fixed caption and no determinate progress
+  value, so a multi-gigabyte download showed only a spinner. Closed:
+  `Shell.BusyProgress(fraction, caption)` shipped in 0.1.114 (fynedesygn #230,
+  spec 078) and the model pull uses it. The plugin run keeps the run dialog's
+  progress bar, which already shows a percentage.

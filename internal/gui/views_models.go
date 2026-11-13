@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/ushineko/clockwork-orange/internal/core"
+	"github.com/ushineko/clockwork-orange/internal/events"
 	"github.com/ushineko/fynedesygn/widgets"
 )
 
@@ -81,7 +82,12 @@ func (u *ui) modelsCard() fyne.CanvasObject {
 // pullModel downloads one model behind the cancellable busy popup.
 func (u *ui) pullModel(name string) {
 	u.sh.PerformCancellable("Pulling "+name+"…", func(ctx context.Context) error {
-		res, err := core.PullModel(ctx, core.PullModelRequest{Request: u.request(), Name: name})
+		// The download knows its length, so the popup's bar shows the real
+		// fraction instead of the one with no end.
+		ev := events.Events{OnProgress: func(pct int, msg string) {
+			u.sh.BusyProgress(float64(pct)/100, msg)
+		}}
+		res, err := core.PullModel(ctx, core.PullModelRequest{Request: u.requestWithEvents(ev), Name: name})
 		if err != nil {
 			return err
 		}
