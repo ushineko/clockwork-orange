@@ -368,10 +368,28 @@ jobs:
       with:
         path: dist
         merge-multiple: true
+        # The packages only: the Stable Diffusion library artifact is an input
+        # to them (embedded), not something to publish.
+        pattern: "{arch-package,debian-package,linux-installer,windows-zip,windows-installer,macos-zip}"
+    - name: Release notes from the changelog
+      # The README's section for this tag, one line per bullet: GitHub renders a
+      # newline in release notes as a line break, so the wrapped changelog is
+      # joined before it is published.
+      run: |
+        TAG="${GITHUB_REF#refs/tags/}"
+        awk -v h="### ${TAG} (" '
+          index($0, h) == 1 { on = 1; next }
+          on && /^### / { exit }
+          on && /^- /   { if (line != "") print line; line = $0; next }
+          on && /^  /   { sub(/^ +/, " "); line = line $0; next }
+          END { if (line != "") print line }
+        ' README.md > release-notes.md
+        test -s release-notes.md || { echo "::error::no changelog section for ${TAG} in README.md"; exit 1; }
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: dist/*
+        body_path: release-notes.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
