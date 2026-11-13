@@ -19,7 +19,8 @@ against its exact pinned library; seasonjs crashes on every library tried.
 Decision (operator): standardize on malina, with no fallback implemented. It
 ships a model catalog, pinned and verified library installs, and resumable
 downloads. Its prebuilt Linux libraries need glibc 2.43, above the 2.38 the GUI needs
-today; the floor decision is open. Pendra is recorded as a possible later fallback only. Reviewers
+today. Decision (operator): keep the current floor and build
+stable-diffusion.cpp in CI. Pendra is recorded as a possible later fallback only. Reviewers
 should read "Findings" first, then "Follow-up spec outline".
 
 ## Context
@@ -294,9 +295,10 @@ operator expected the project's binaries to already require that. Checked on
 (`objdump -T`), and the CLI/daemon is statically linked with no glibc
 requirement. CI builds on `ubuntu-latest` (24.04, glibc 2.39). The floor is
 therefore raised by adopting malina's prebuilt libraries: GUI 2.38 to 2.43, and
-the daemon from none to 2.43 once it loads a shared library. Options for the
-plugin spec: accept the raise, or build stable-diffusion.cpp in CI at malina's
-pinned version against the current glibc and embed that. Pendra (glibc 2.34)
+the daemon from none to 2.43 once it loads a shared library. Decision (operator, 2026-11-12): keep the floor. The plugin spec builds
+stable-diffusion.cpp in CI at malina's pinned version, on the same runner as
+the other Linux builds, and embeds that library instead of malina's prebuilt
+one. Pendra (glibc 2.34)
 stays on record as a later fallback; nothing for it is built.
 
 ### Follow-up spec outline
@@ -317,7 +319,12 @@ stays on record as a later fallback; nothing for it is built.
 5. **GUI**: model list with size and licence, download progress popup (not
    inline, per the no-reflow rule), device picker, first-run shader-compile
    notice.
-6. **Decide the glibc floor**: accept 2.43 or build the library in CI (see Findings).
+6. **CI library build** (decided): build stable-diffusion.cpp at malina's
+   pinned version on the existing Linux runner, with Vulkan and CPU variants,
+   record its glibc requirement with `objdump -T` and fail the job above 2.39,
+   checksum the output, and embed it. The version must move in lockstep with
+   the `malina` module version. This adds cmake and a C++ toolchain to CI only;
+   the Go build keeps `CGO_ENABLED=0`.
 7. **Integration test**: an env-gated `CLOCKWORK_LIVE_SD=1` test that generates
    one image from a small model through the real library.
 
