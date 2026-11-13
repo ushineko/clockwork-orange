@@ -1,0 +1,8 @@
+github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/ISU=
+github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
+github.com/jupiterrider/ffi v0.6.0 h1:UX378KcZvH5c8qgLi9KL/bL82SZTHdRspZ+jj7bvBng=
+github.com/jupiterrider/ffi v0.6.0/go.mod h1:PqZ5Go6X9by8CIXgfprxfMPYmn8oT5m2O7AA56s64bY=
+github.com/l8bloom/gosd v0.11.0 h1:Uj6AAJtsKWRv6ZxOJ2xI03SKxRJHt9aSLYxBQNItqs0=
+github.com/l8bloom/gosd v0.11.0/go.mod h1:N4MgQaUiTaWvdPyEqX+ENCgbBH9H/W//pIeI3gUt0fY=
+github.com/l8bloom/gosd v0.11.1-0.20260606232144-083aca456485 h1:HEIbkH7jv71SXq9k+y6Ey20SQ2h1W4zsKDkpfjqRlwY=
+github.com/l8bloom/gosd v0.11.1-0.20260606232144-083aca456485/go.mod h1:N4MgQaUiTaWvdPyEqX+ENCgbBH9H/W//pIeI3gUt0fY=
