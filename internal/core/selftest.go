@@ -12,10 +12,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/imaging"
+	"github.com/ushineko/clockwork-orange/internal/sdgen"
+	"github.com/ushineko/clockwork-orange/internal/sdlib"
 	"github.com/ushineko/clockwork-orange/internal/store"
 )
 
@@ -111,10 +114,34 @@ func SelfTest(ctx context.Context, req SelfTestRequest) SelfTestResult {
 
 	names := AvailablePluginNames()
 	var regErr error
-	if len(names) != 3 {
-		regErr = fmt.Errorf("expected 3 plugins, found %d", len(names))
+	if len(names) != 4 {
+		regErr = fmt.Errorf("expected 4 plugins, found %d", len(names))
 	}
 	add("plugins", regErr, fmt.Sprintf("%v", names))
+
+	// A build that carries the Stable Diffusion library must be able to use
+	// it: extract, load, and report the version the binding is pinned to.
+	// Builds without the library have nothing to prove and add no line.
+	if sdlib.Embedded() {
+		dir, err := sdlib.Resolve()
+		var ver string
+		if err == nil {
+			ver, err = sdgen.Probe(dir)
+		}
+		// Upstream's own release builds report "unknown": they are built
+		// outside a git checkout. Ours, from build-sd-lib.sh, report the tag.
+		// A reported version must match; an unreported one is said so, and the
+		// embedded VERSION file (checked when it was extracted) stands.
+		detail := ver
+		switch {
+		case err != nil:
+		case ver == "" || ver == "unknown":
+			detail = "loaded; the library does not report a version (VERSION file: " + sdlib.PinnedVersion + ")"
+		case !strings.Contains(ver, sdlib.PinnedVersion):
+			err = fmt.Errorf("the library reports %q, the binding is pinned to %q", ver, sdlib.PinnedVersion)
+		}
+		add("stable diffusion", err, detail)
+	}
 
 	res.OK = true
 	for _, c := range res.Checks {

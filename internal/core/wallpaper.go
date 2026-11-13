@@ -112,7 +112,7 @@ func CollectSources(ctx context.Context, req CollectRequest) ([]string, error) {
 	for _, name := range req.Doc.EnabledPlugins() {
 		p, ok := plugins.Lookup(d.Registry, name)
 		if !ok {
-			// Unknown to this build (e.g. stable_diffusion, D6): keep the
+			// Unknown to this build (a block from a newer version, D6): keep the
 			// config, skip the run.
 			req.Events.Debugf("Plugin %s is enabled but not available in this build; skipping", name)
 			continue

@@ -39,9 +39,50 @@ jobs:
     - name: Build GUI
       run: make build-gui
 
+  # Spec 031 R9. The stable_diffusion plugin needs the stable-diffusion.cpp
+  # libraries, built here at the release malina pins (SD_VERSION in the
+  # Makefile). The runner is pinned to 24.04 rather than ubuntu-latest: the
+  # libraries' glibc floor is whatever they are built on, and the script fails
+  # the job above SD_GLIBC_CEILING (2.39), so a runner that moved on would
+  # otherwise raise the floor of every package built from this artifact.
+  build-sd-lib:
+    name: Build Stable Diffusion library
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    - name: Pinned version
+      id: pin
+      run: echo "version=$(sed -n 's/^SD_VERSION?=//p' Makefile)" >> "$GITHUB_OUTPUT"
+    - name: Cache the library
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: build/sd-lib
+        key: sd-lib-${{ steps.pin.outputs.version }}-${{ hashFiles('scripts/build-sd-lib.sh') }}
+    - name: Install build dependencies
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libvulkan-dev glslc spirv-headers
+    - name: Build the library
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: make sd-lib-build
+    - name: Verify the library
+      run: |
+        # A cache hit skips the build, so check what is on disk either way.
+        test "$(cat build/sd-lib/VERSION)" = "${{ steps.pin.outputs.version }}"
+        (cd build/sd-lib && sha256sum --check SHA256SUMS)
+        test -f build/sd-lib/libstable-diffusion.so
+    - uses: actions/upload-artifact@v4
+      with:
+        name: sd-lib-linux-amd64-vulkan
+        path: build/sd-lib
+        if-no-files-found: error
+
   build-linux-installer:
     name: Build Linux Installer (fynstall)
     runs-on: ubuntu-latest
+    needs: build-sd-lib
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-go@v5
@@ -52,12 +93,18 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev wayland-protocols
+    - uses: actions/download-artifact@v4
+      with:
+        name: sd-lib-linux-amd64-vulkan
+        path: build/sd-lib
+    - name: Stage the Stable Diffusion library
+      run: make sd-lib SD_LIB_SRC=build/sd-lib
     - name: Build the installers
       run: |
         # A release installer is the plain version; the Makefile would add a
         # -dev suffix on a shallow checkout that cannot see the tag.
         if [ "${GITHUB_REF_TYPE}" = tag ]; then export VERSION=$(tr -d 'v[:space:]' < .tag); fi
-        make installer
+        make installer INSTALLER_BUILD="build-sd build-gui-sd"
     - name: Install, run and uninstall (CLI installer, temp HOME)
       run: |
         # The runner has no KDE tools, so --self-test is gated on Arch as for
@@ -102,7 +149,9 @@ jobs:
       run: |
         pacman -U --noconfirm src_repo/packaging/arch/*.pkg.tar.zst
         clockwork-orange version
-        clockwork-orange --self-test
+        clockwork-orange --self-test | tee /tmp/selftest.txt
+        # The package builds and embeds the Stable Diffusion library itself.
+        grep -F '[OK]   stable diffusion' /tmp/selftest.txt
         clockwork-orange-gui --version
     - uses: actions/upload-artifact@v4
       with:
@@ -112,6 +161,7 @@ jobs:
   build-deb:
     name: Build Debian Package
     runs-on: ubuntu-latest
+    needs: build-sd-lib
     steps:
     - uses: actions/checkout@v4
       with:
@@ -124,9 +174,15 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev wayland-protocols dpkg-dev
+    - uses: actions/download-artifact@v4
+      with:
+        name: sd-lib-linux-amd64-vulkan
+        path: build/sd-lib
+    - name: Stage the Stable Diffusion library
+      run: make sd-lib SD_LIB_SRC=build/sd-lib
     - name: Build package
       run: |
-        make build build-gui
+        make build-sd build-gui-sd
         ./packaging/debian/build.sh
     - name: Install and smoke-test
       run: |
@@ -134,6 +190,12 @@ jobs:
         clockwork-orange version
         clockwork-orange plugins list
         clockwork-orange-gui --version
+        # The KDE probes fail on this runner, so the self-test's exit code
+        # says nothing here. The Stable Diffusion probe is the one that proves
+        # the package carries a library that extracts and loads (spec 031 R9).
+        out=$(clockwork-orange --self-test 2>&1 || true)
+        echo "$out"
+        echo "$out" | grep -F '[OK]   stable diffusion'
         # The KDE tools the self-test probes are Recommends; the runner has no
         # Plasma. Run the full self-test only where they installed.
         if command -v kwriteconfig6 >/dev/null; then

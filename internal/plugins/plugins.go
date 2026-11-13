@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/ushineko/clockwork-orange/internal/events"
+	"github.com/ushineko/clockwork-orange/internal/models"
+	"github.com/ushineko/clockwork-orange/internal/sdgen"
 	"github.com/ushineko/clockwork-orange/internal/store"
 )
 
@@ -82,6 +84,14 @@ type Deps struct {
 	Blacklist *store.Blacklist
 	HTTP      *http.Client
 	Now       func() time.Time
+
+	// The stable_diffusion plugin's seams (spec 031). A zero value means the
+	// real thing: sdgen.Open, sdlib.Resolve, the default models directory and
+	// math/rand.
+	SDOpen sdgen.Opener
+	SDLib  func() (string, error)
+	Models models.Store
+	Rand   func(n int) int
 }
 
 // withDefaults returns d with nil HTTP and Now replaced.
@@ -100,13 +110,15 @@ func (d Deps) withDefaults() Deps {
 }
 
 // Registry returns every built-in plugin in the order the Python plugin
-// manager listed them (R5.1): local, wallhaven, duckduckgo_images.
+// manager listed them (R5.1): local, wallhaven, duckduckgo_images, then
+// stable_diffusion (spec 031).
 func Registry(d Deps) []Plugin {
 	d = d.withDefaults()
 	return []Plugin{
 		newLocal(d),
 		newWallhaven(d),
 		newDuckDuckGo(d),
+		newStableDiffusion(d),
 	}
 }
 

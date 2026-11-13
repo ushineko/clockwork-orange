@@ -113,7 +113,7 @@ macOS 13+. It rotates the wallpaper (and on Plasma the lock-screen image) on a
 timer from local folders and from download plugins, remembers every image it
 has fetched so nothing is downloaded twice, and keeps a blacklist.
 
-Version 4 is native Go: one static binary that is also the daemon, plus a Fyne
+Version 4 is native Go: one binary that is also the daemon, plus a Fyne
 desktop window. No Python, no Qt, no interpreter.
 
 In scope: platform backends, rotation policy, download plugins, the databases,

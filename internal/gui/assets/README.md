@@ -6,7 +6,7 @@ timer from local folders and from download plugins, remembers every image it
 has fetched so nothing is downloaded twice, and keeps a blacklist of images
 you never want to see again.
 
-Version 4 is a native Go program: one static command-line binary that is also
+Version 4 is a native Go program: one command-line binary that is also
 the daemon, and one desktop window built with Fyne. No Python, no Qt, no
 interpreter to install. Configuration files and databases from the 2.9.x
 releases are read as they are.

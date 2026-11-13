@@ -195,7 +195,7 @@ func TestEachPluginSectionHasItsOwnIcon(t *testing.T) {
 		seen[icon.Name()] = sec.Title()
 		require.NotNilf(t, assets.PluginSVG(name), "%s has no drawing of its own", name)
 	}
-	require.Len(t, seen, 3, "local, wallhaven and duckduckgo_images")
+	require.Len(t, seen, 4, "local, wallhaven, duckduckgo_images and stable_diffusion")
 }
 
 // A plugin this build has no drawing for keeps the generic picture icon rather
@@ -203,8 +203,8 @@ func TestEachPluginSectionHasItsOwnIcon(t *testing.T) {
 func TestAnUnknownPluginKeepsTheGenericIcon(t *testing.T) {
 	u, _, _ := testUI(t)
 	_ = u
-	require.Nil(t, assets.PluginSVG("stable_diffusion"))
-	require.Equal(t, theme.FileImageIcon().Name(), pluginIcon("stable_diffusion")().Name())
+	require.Nil(t, assets.PluginSVG("future_plugin"))
+	require.Equal(t, theme.FileImageIcon().Name(), pluginIcon("future_plugin")().Name())
 }
 
 /*

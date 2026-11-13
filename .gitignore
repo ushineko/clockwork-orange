@@ -230,3 +230,7 @@ coverage.out
 /packaging/arch/pkg/
 /packaging/arch/src/
 /packaging/arch/*.pkg.tar.zst
+
+# Stable Diffusion libraries staged for the sdembed build (spec 031)
+internal/sdlib/embedded/*
+!internal/sdlib/embedded/.gitkeep

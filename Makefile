@@ -38,7 +38,7 @@ LDFLAGS=-w -s -X $(MODULE)/internal/buildinfo.Version=$(VERSION) -X $(MODULE)/in
 FYNE_TAGS?=migrated_fynedo
 
 LINT_NAME?=golangci-lint
-LINT_VERSION?=v2.12.2
+LINT_VERSION?=v2.15.0
 LINT_PROGRAM=$(LINT_NAME)-$(LINT_VERSION)
 
 # Release asset coordinates for the pinned linter version.
@@ -77,7 +77,7 @@ setup: install-lint ## Setup system for local development
 # whose GOROOT is 1.27. go.mod deliberately carries no `toolchain` line (R1.1),
 # so the pin lives here instead, matching the Go that this linter release was
 # built with. Bump it together with LINT_VERSION.
-LINT_GO_TOOLCHAIN?=go1.26.0
+LINT_GO_TOOLCHAIN?=go1.27.0
 
 .PHONY: lint
 lint: export GOTOOLCHAIN = $(LINT_GO_TOOLCHAIN)
@@ -100,7 +100,7 @@ coverage: ## Run all tests and open a coverage report in the default browser
 	@rm -f coverage.out
 
 .PHONY: build
-build: ## Build the CLI/daemon for the host platform (no CGO: the daemon needs no display)
+build: ## Build the CLI/daemon for the host platform (no CGO: the daemon needs no display; dynamically linked against glibc on Linux)
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -ldflags='$(LDFLAGS)' -trimpath -o bin/clockwork-orange ./cmd/clockwork-orange
 
@@ -108,6 +108,39 @@ build: ## Build the CLI/daemon for the host platform (no CGO: the daemon needs n
 build-gui: ## Build the desktop front end for the host platform (requires CGO)
 	@mkdir -p bin
 	CGO_ENABLED=1 go build -tags $(FYNE_TAGS) -ldflags='$(LDFLAGS)' -trimpath -o bin/clockwork-orange-gui ./cmd/clockwork-orange-gui
+
+# Stable Diffusion (spec 031). The stable_diffusion plugin needs the
+# stable-diffusion.cpp libraries. A default build embeds none and the plugin
+# says so; `build-sd` and `build-gui-sd` embed the libraries staged by `sd-lib`.
+# SD_VERSION must equal sdlib.PinnedVersion (a test checks).
+SD_VERSION?=master-1088-32d516c
+SD_LIB_SRC?=
+SD_EMBED_DIR=internal/sdlib/embedded
+
+.PHONY: sd-lib
+sd-lib: ## Stage the stable-diffusion.cpp libraries to embed: make sd-lib SD_LIB_SRC=<dir>
+	@test -n "$(SD_LIB_SRC)" || { echo "set SD_LIB_SRC to a directory holding libstable-diffusion.so and its libraries (spec 031 R9)" >&2; exit 2; }
+	@test -f "$(SD_LIB_SRC)/libstable-diffusion.so" || { echo "$(SD_LIB_SRC)/libstable-diffusion.so not found" >&2; exit 2; }
+	find $(SD_EMBED_DIR) -mindepth 1 ! -name .gitkeep -delete
+	cp -L $(SD_LIB_SRC)/*.so* $(SD_EMBED_DIR)/
+	printf '%s\n' '$(SD_VERSION)' > $(SD_EMBED_DIR)/VERSION
+
+SD_BACKEND?=vulkan
+SD_LIB_BUILD_DIR?=build/sd-lib
+
+.PHONY: sd-lib-build
+sd-lib-build: ## Build the stable-diffusion.cpp libraries at SD_VERSION into build/sd-lib (cmake, a C++ toolchain, Vulkan headers, glslc)
+	./scripts/build-sd-lib.sh $(SD_VERSION) $(SD_LIB_BUILD_DIR) $(SD_BACKEND)
+
+.PHONY: build-sd
+build-sd: ## Build the CLI/daemon with the staged Stable Diffusion library embedded
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -tags sdembed -ldflags='$(LDFLAGS)' -trimpath -o bin/clockwork-orange ./cmd/clockwork-orange
+
+.PHONY: build-gui-sd
+build-gui-sd: ## Build the desktop front end with the staged Stable Diffusion library embedded
+	@mkdir -p bin
+	CGO_ENABLED=1 go build -tags "$(FYNE_TAGS) sdembed" -ldflags='$(LDFLAGS)' -trimpath -o bin/clockwork-orange-gui ./cmd/clockwork-orange-gui
 
 .PHONY: build-all
 build-all: ## Build static CLI binaries for every platform, plus the host's GUI
@@ -160,7 +193,9 @@ FYNSTALL=go run github.com/ushineko/fynstall/cmd/fynstall@$(FYNSTALL_VERSION)
 INSTALLER_STAGE=build/installer
 
 .PHONY: installer
-installer: build build-gui ## Build the Linux installers (wizard and CLI-only) into dist/ with fynstall
+INSTALLER_BUILD?=build build-gui
+
+installer: $(INSTALLER_BUILD) ## Build the Linux installers (wizard and CLI-only) into dist/ with fynstall
 	./packaging/fynstall/stage.sh "$(VERSION)" "$$(go env GOOS)/$$(go env GOARCH)" bin $(INSTALLER_STAGE)
 	$(FYNSTALL) validate -c $(INSTALLER_STAGE)/fynstall.yaml
 	$(FYNSTALL) build -c $(INSTALLER_STAGE)/fynstall.yaml -o dist --with-cli-only

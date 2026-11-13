@@ -60,6 +60,8 @@ var coreOperations = map[string]string{
 	"history import":    "core.HistoryImport",
 	"plugins list":      "core.PluginsList",
 	"plugin run":        "core.RunPlugin",
+	"models list":       "core.ListModels",
+	"models pull":       "core.PullModel",
 	"config show":       "core.LoadConfig",
 	"config migrate":    "core.LoadConfig",
 	"version":           "core.Version",

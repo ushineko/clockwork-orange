@@ -19,6 +19,7 @@ import (
 
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/events"
+	"github.com/ushineko/clockwork-orange/internal/models"
 	"github.com/ushineko/clockwork-orange/internal/platform"
 	"github.com/ushineko/clockwork-orange/internal/plugins"
 	"github.com/ushineko/clockwork-orange/internal/store"
@@ -42,6 +43,9 @@ type Deps struct {
 	HTTP      *http.Client
 	Registry  []plugins.Plugin
 	Now       func() time.Time
+	// Models is the Stable Diffusion model store; the zero value means the
+	// default directory.
+	Models models.Store
 
 	mu sync.Mutex
 }
@@ -107,7 +111,7 @@ func (d *Deps) ensureRegistry() error {
 	defer d.mu.Unlock()
 	if d.Registry == nil {
 		d.Registry = plugins.Registry(plugins.Deps{
-			History: d.History, Blacklist: d.Blacklist, HTTP: d.HTTP, Now: d.Now,
+			History: d.History, Blacklist: d.Blacklist, HTTP: d.HTTP, Now: d.Now, Models: d.Models,
 		})
 	}
 	return nil
