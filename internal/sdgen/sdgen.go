@@ -177,6 +177,16 @@ func setSinks(opts Options) {
 	stepMu.Unlock()
 }
 
+// Probe loads the native library from dir without loading a model and returns
+// the version it reports. `--self-test` uses it to prove an embedded library
+// extracts, loads and is the version the binding was written against.
+func Probe(dir string) (string, error) {
+	if err := loadLibrary(Options{LibDir: dir, Device: -1}); err != nil {
+		return "", err
+	}
+	return LibraryVersion(), nil
+}
+
 // LibraryVersion reports the loaded library's version string, or "" before
 // the first Open.
 func LibraryVersion() string {

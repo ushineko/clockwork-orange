@@ -269,9 +269,23 @@ commas is passed as a one-item list.
 
 **Not done**
 
-- R9, the CI library build, and the glibc ceiling check. The libraries used here
-  are malina's upstream build, which needs glibc 2.43; the floor decision in
-  spec 030 depends on this job.
+- R9 is written but not yet proven in CI. `scripts/build-sd-lib.sh` builds
+  stable-diffusion.cpp at the pinned tag with upstream's own Linux flags, refuses
+  a checkout that is not that tag, stages the libraries with a `VERSION` file and
+  `SHA256SUMS`, and fails above `SD_GLIBC_CEILING` (2.39). Checked locally: the
+  CPU variant built from the tag (31 libraries, 66 MB), passed shellcheck, and
+  generated an image through the plugin's own test (`TestLiveGenerate`, 8 s).
+  Not checked: the Vulkan build here (this machine lacks `spirv-headers`, which
+  the CI job installs), and the 2.39 ceiling, which needs the 24.04 runner: the
+  local build needs 2.43 because this machine builds on 2.44. The workflow gains
+  a `build-sd-lib` job on a pinned `ubuntu-24.04` runner (so `ubuntu-latest`
+  moving cannot raise the floor), cached on the pinned version and the script,
+  and the Debian and installer jobs now build from its artifact with the
+  library embedded. `--self-test` gained a probe that extracts, loads and
+  version-checks an embedded library. The Arch and AUR packages are not changed:
+  they build from source on the user's machine and would need to build or fetch
+  the library themselves, which is a decision for a follow-up spec. Release
+  Debian and installer binaries grow by about 100 MB each.
 - R10 is done: `go.mod` is on Go 1.27.0, the linter moved to v2.15.0 (built with
   Go 1.27.0; `LINT_GO_TOOLCHAIN` and `config/.golangci-v2.15.0.yml` moved with
   it), `make lint` reports 0 issues, `make test` passes and `govulncheck` is

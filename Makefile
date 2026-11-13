@@ -125,6 +125,13 @@ sd-lib: ## Stage the stable-diffusion.cpp libraries to embed: make sd-lib SD_LIB
 	cp -L $(SD_LIB_SRC)/*.so* $(SD_EMBED_DIR)/
 	printf '%s\n' '$(SD_VERSION)' > $(SD_EMBED_DIR)/VERSION
 
+SD_BACKEND?=vulkan
+SD_LIB_BUILD_DIR?=build/sd-lib
+
+.PHONY: sd-lib-build
+sd-lib-build: ## Build the stable-diffusion.cpp libraries at SD_VERSION into build/sd-lib (cmake, a C++ toolchain, Vulkan headers, glslc)
+	./scripts/build-sd-lib.sh $(SD_VERSION) $(SD_LIB_BUILD_DIR) $(SD_BACKEND)
+
 .PHONY: build-sd
 build-sd: ## Build the CLI/daemon with the staged Stable Diffusion library embedded
 	@mkdir -p bin
@@ -186,7 +193,9 @@ FYNSTALL=go run github.com/ushineko/fynstall/cmd/fynstall@$(FYNSTALL_VERSION)
 INSTALLER_STAGE=build/installer
 
 .PHONY: installer
-installer: build build-gui ## Build the Linux installers (wizard and CLI-only) into dist/ with fynstall
+INSTALLER_BUILD?=build build-gui
+
+installer: $(INSTALLER_BUILD) ## Build the Linux installers (wizard and CLI-only) into dist/ with fynstall
 	./packaging/fynstall/stage.sh "$(VERSION)" "$$(go env GOOS)/$$(go env GOARCH)" bin $(INSTALLER_STAGE)
 	$(FYNSTALL) validate -c $(INSTALLER_STAGE)/fynstall.yaml
 	$(FYNSTALL) build -c $(INSTALLER_STAGE)/fynstall.yaml -o dist --with-cli-only
