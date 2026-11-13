@@ -20,6 +20,7 @@ import (
 	"github.com/ushineko/clockwork-orange/internal/cli"
 	"github.com/ushineko/clockwork-orange/internal/config"
 	"github.com/ushineko/clockwork-orange/internal/core"
+	"github.com/ushineko/clockwork-orange/internal/models"
 	"github.com/ushineko/clockwork-orange/internal/platform"
 	"github.com/ushineko/clockwork-orange/internal/store"
 )
@@ -649,4 +650,49 @@ func TestVersionCommandAndFlag(t *testing.T) {
 	res = h.run("--version")
 	require.Equal(t, cli.ExitOK, res.code)
 	require.Contains(t, res.stdout, "clockwork-orange version ")
+}
+
+// `models list` shows every catalog model with its size, licence and whether
+// it is on disk (spec 031 R6, R7).
+func TestModelsListShowsTheCatalogAndWhatIsPulled(t *testing.T) {
+	h := newHarness(t)
+	dir := t.TempDir()
+	t.Setenv("CLOCKWORK_MODELS_DIR", dir)
+
+	res := h.run("models", "list")
+	require.Equal(t, cli.ExitOK, res.code, res.stderr)
+	lines := strings.Split(strings.TrimSpace(res.stdout), "\n")
+	require.Len(t, lines, 3, "a header and the two catalog models")
+	require.Regexp(t, `^sd-1\.5\s+4\.3 GB\s+no\s+CreativeML Open RAIL-M\s+`, lines[1])
+	require.Regexp(t, `^sdxl-base-1\.0\s+6\.9 GB\s+no\s+`, lines[2])
+
+	// A file of the catalog size makes the model count as pulled.
+	m, ok := models.Lookup("sd-1.5")
+	require.True(t, ok)
+	path := filepath.Join(dir, m.Name, m.File.Name)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	require.NoError(t, f.Truncate(m.File.Size))
+	require.NoError(t, f.Close())
+
+	res = h.run("models", "list")
+	require.Equal(t, cli.ExitOK, res.code, res.stderr)
+	require.Regexp(t, `(?m)^sd-1\.5\s+4\.3 GB\s+yes\s+`, res.stdout)
+	require.Regexp(t, `(?m)^sdxl-base-1\.0\s+6\.9 GB\s+no\s+`, res.stdout)
+}
+
+func TestModelsPullRefusesAnUnknownModelAndNamesTheCatalog(t *testing.T) {
+	h := newHarness(t)
+	t.Setenv("CLOCKWORK_MODELS_DIR", t.TempDir())
+	res := h.run("models", "pull", "nope")
+	require.Equal(t, cli.ExitFailure, res.code)
+	require.Contains(t, res.stderr, `unknown model "nope"`)
+	require.Contains(t, res.stderr, "sd-1.5")
+}
+
+func TestModelsPullNeedsExactlyOneName(t *testing.T) {
+	h := newHarness(t)
+	res := h.run("models", "pull")
+	require.Equal(t, cli.ExitUsage, res.code)
 }

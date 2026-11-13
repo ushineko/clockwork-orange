@@ -114,7 +114,7 @@ retention.
 - [x] `sdlib` resolves `CLOCKWORK_SD_LIB`, extracts an embedded library
       atomically and idempotently, and reports a clear error in a build without
       one (tests with a temp directory and a fake embedded filesystem) (R5)
-- [ ] `models list` prints name, size, licence and pulled state; `models pull`
+- [x] `models list` prints name, size, licence and pulled state; `models pull`
       downloads a real small bundle, resumes an interrupted pull, and a file
       with a wrong hash is rejected and removed (live test against Hugging Face,
       env-gated `CLOCKWORK_LIVE_NET=1`) (R6)
@@ -295,10 +295,13 @@ commas is passed as a one-item list.
   it), `make lint` reports 0 issues, `make test` passes and `govulncheck` is
   clean. The README, CONTRIBUTING and the Makefile no longer call the Linux CLI
   static.
-- No live test of `models pull` against Hugging Face: the catalog files are
-  4.3 GB and larger. Resume, checksum failure, cancellation and the gated
-  case are covered by unit tests against a local HTTP server, and a real pull
-  was run by hand above.
+- `models pull` has a live test (`TestLivePull`, `CLOCKWORK_LIVE_NET=1`) against
+  Hugging Face using a real 4.9 MB file, because the catalog's own files are 4 GB
+  and up: a fresh pull verified against the published SHA-256, a pull resumed from
+  a 2 MiB partial file (the log shows it resumed), and a wrong hash rejected with
+  nothing left behind. `models list` and `models pull`'s argument and
+  unknown-model handling are covered by CLI tests. A real 4.3 GB `sd-1.5` pull
+  was also run by hand above.
 - The Stable Diffusion section was rendered on 2026-11-12 (KDE Plasma 6, Wayland,
   fynedesygn 0.1.114 on Fyne 2.8.3-pre) in Breeze Dark and Breeze Light with the
   library's `tools/screenshot.sh`, under a throwaway `HOME` and
