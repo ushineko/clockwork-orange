@@ -188,6 +188,12 @@ jobs:
         clockwork-orange version
         clockwork-orange plugins list
         clockwork-orange-gui --version
+        # The KDE probes fail on this runner, so the self-test's exit code
+        # says nothing here. The Stable Diffusion probe is the one that proves
+        # the package carries a library that extracts and loads (spec 031 R9).
+        out=$(clockwork-orange --self-test 2>&1 || true)
+        echo "$out"
+        echo "$out" | grep -F '[OK]   stable diffusion'
         # The KDE tools the self-test probes are Recommends; the runner has no
         # Plasma. Run the full self-test only where they installed.
         if command -v kwriteconfig6 >/dev/null; then
