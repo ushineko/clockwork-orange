@@ -1,0 +1,14 @@
+github.com/ebitengine/purego v0.6.0-alpha.3.0.20240117154336-babd452e909b h1:EEX0qSvZB+bdwmdg38DXRk7HUZXEdb9WwlA0jytARRU=
+github.com/ebitengine/purego v0.6.0-alpha.3.0.20240117154336-babd452e909b/go.mod h1:ah1In8AOtksoNK6yk5z1HTJeUkC1Ez4Wk2idgGslMwQ=
+github.com/ebitengine/purego v0.9.1 h1:a/k2f2HQU3Pi399RPW1MOaZyhKJL9w/xFpKAg4q1s0A=
+github.com/ebitengine/purego v0.9.1/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
+github.com/jupiterrider/ffi v0.5.1 h1:l7ANXU+Ex33LilVa283HNaf/sTzCrrht7D05k6T6nlc=
+github.com/jupiterrider/ffi v0.5.1/go.mod h1:x7xdNKo8h0AmLuXfswDUBxUsd2OqUP4ekC8sCnsmbvo=
+github.com/seasonjs/stable-diffusion v0.0.0-20260608113604-508f068eb5fe h1:ryUTa1QtgYiYR+7v02djWnbNDYu/J3OBMeebys7WpaA=
+github.com/seasonjs/stable-diffusion v0.0.0-20260608113604-508f068eb5fe/go.mod h1:I1jIDYxukvjE3E4RReg9ztnXZzqBRU3MDgVLo7SFWWY=
+github.com/seasonjs/stable-diffusion v0.2.0 h1:hQ+2pRloif3kZrIHBI379rtr4Juv+9mbEC6m7E3+7sE=
+github.com/seasonjs/stable-diffusion v0.2.0/go.mod h1:8eeP0rUb1vE19laPLU70A6REABkoBdd0rixwJC3hoHQ=
+golang.org/x/sys v0.16.0 h1:xWw16ngr6ZMtmxDyKyIgsE93KNKz5HKmMa3b8ALHidU=
+golang.org/x/sys v0.16.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
+golang.org/x/sys v0.42.0 h1:omrd2nAlyT5ESRdCLYdm3+fMfNFE/+Rf4bDIQImRJeo=
+golang.org/x/sys v0.42.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
