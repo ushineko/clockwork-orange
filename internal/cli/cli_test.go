@@ -161,7 +161,7 @@ func TestValidationErrorsExitTwoWithThePythonMessages(t *testing.T) {
 			"argument -d/--directory: not allowed with argument -u/--url"},
 		{"two sources", []string{"-f", "a.jpg", "-u", "http://x/"}, "argument -f/--file: not allowed with argument -u/--url"},
 		{"unknown plugin", []string{"--plugin", "nope"},
-			"argument --plugin: invalid choice: 'nope' (choose from 'local', 'wallhaven', 'duckduckgo_images')"},
+			"argument --plugin: invalid choice: 'nope' (choose from 'local', 'wallhaven', 'duckduckgo_images', 'stable_diffusion')"},
 		{"--run-plugin was dropped (DV8)", []string{"--run-plugin", "local"}, "unknown flag: --run-plugin"},
 		{"unknown positional", []string{"frob"}, `unknown command "frob"`},
 		{"non-integer wait", []string{"-d", dir, "-w", "soon"}, `invalid argument "soon" for "-w, --wait" flag`},
@@ -534,10 +534,11 @@ func TestPluginsListShowsEnablement(t *testing.T) {
 	res := h.run("plugins", "list")
 	require.Equal(t, cli.ExitOK, res.code, res.stderr)
 	lines := strings.Split(strings.TrimSpace(res.stdout), "\n")
-	require.Len(t, lines, 4)
+	require.Len(t, lines, 5)
 	require.Regexp(t, `^local\s+yes\s+`, lines[1])
 	require.Regexp(t, `^wallhaven\s+no\s+`, lines[2])
 	require.Regexp(t, `^duckduckgo_images\s+no\s+`, lines[3])
+	require.Regexp(t, `^stable_diffusion\s+no\s+`, lines[4])
 }
 
 func TestPluginRunPrintsThePathAndFailsOnUnknownPlugin(t *testing.T) {

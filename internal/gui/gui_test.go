@@ -230,9 +230,9 @@ func imageDir(t *testing.T, n int) string {
 func TestSectionNamesNeedNoAppAndEveryOneHasABuilder(t *testing.T) {
 	names := SectionNames()
 	require.Equal(t, firstSectionTitle(), names[0])
-	require.Equal(t, []string{"Local", "Wallhaven", "Duckduckgo Images"}, names[1:4],
+	require.Equal(t, []string{"Local", "Wallhaven", "Duckduckgo Images", "Stable Diffusion"}, names[1:5],
 		"one section per registered plugin, `_` → space, Title Case")
-	require.Equal(t, []string{"History", "Blacklist", "Settings", "Appearance", "About"}, names[4:])
+	require.Equal(t, []string{"History", "Blacklist", "Settings", "Appearance", "About"}, names[5:])
 	for _, n := range names {
 		require.Containsf(t, sectionBuilders(), n, "%q is advertised but has no section", n)
 	}

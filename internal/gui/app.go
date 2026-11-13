@@ -74,6 +74,9 @@ type ui struct {
 	blOK      bool
 	history   store.HistoryStats
 	histOK    bool
+	// models is the Stable Diffusion catalog with what is on disk (spec 031).
+	models   []core.ModelInfo
+	modelsOK bool
 	// rotation is what is on screen and what is pinned (spec 026); thumbs
 	// are its thumbnails by path, and nextChange the countdown line the 1 s
 	// tick redraws without a rebuild. rotationSeq numbers the loads, so one
@@ -502,7 +505,7 @@ func (u *ui) onStart(s *shell.Shell) {
 // The activity log is deliberately not part of this: F5 while a plugin runs
 // must not throw away the output it has produced so far.
 func (u *ui) onInvalidate(s *shell.Shell) {
-	u.docOK, u.serviceOK, u.blOK, u.histOK, u.rotationOK = false, false, false, false, false
+	u.docOK, u.serviceOK, u.blOK, u.histOK, u.rotationOK, u.modelsOK = false, false, false, false, false, false
 	if !s.OnScreen() {
 		return
 	}
@@ -607,6 +610,8 @@ func Actions() []string {
 		// list), Download Now / Reset & Run (plugin run), and review mode's
 		// Apply Blacklist (blacklist add)
 		"plugins list", "plugin run", "blacklist add",
+		// The Stable Diffusion section's Models card (spec 031)
+		"models list", "models pull",
 		// History
 		"history stats", "history clear", "history import",
 		// Blacklist

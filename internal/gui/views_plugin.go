@@ -550,7 +550,7 @@ func (u *ui) buildPlugin(name string) fyne.CanvasObject {
 	// press. A control that starts work does not scroll away from it.
 	configTab := container.NewBorder(nil,
 		widgets.Card("Actions", container.NewHBox(download, reset)), nil, nil,
-		u.sh.VScroll(pluginTitle(name), widgets.Card("Configuration", form.body)))
+		u.sh.VScroll(pluginTitle(name), u.configBody(name, form)))
 	// Plain words, no arrow glyphs: the arrows come from a fallback font and
 	// Fyne's shaper drew the run boundary after them as a missing glyph.
 	hint := widgets.Dim("Arrow keys: previous/next  ·  Space: mark/unmark")
@@ -610,4 +610,14 @@ func pluginDir(info core.PluginInfo, block map[string]any) string {
 		}
 	}
 	return ""
+}
+
+// configBody is the Configuration tab's scrolling content: the generated form,
+// preceded for Stable Diffusion by the Models card (spec 031 R7).
+func (u *ui) configBody(name string, form *pluginForm) fyne.CanvasObject {
+	cfg := widgets.Card("Configuration", form.body)
+	if name != stableDiffusionPlugin {
+		return cfg
+	}
+	return container.NewVBox(u.modelsCard(), cfg)
 }

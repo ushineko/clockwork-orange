@@ -111,8 +111,8 @@ func SelfTest(ctx context.Context, req SelfTestRequest) SelfTestResult {
 
 	names := AvailablePluginNames()
 	var regErr error
-	if len(names) != 3 {
-		regErr = fmt.Errorf("expected 3 plugins, found %d", len(names))
+	if len(names) != 4 {
+		regErr = fmt.Errorf("expected 4 plugins, found %d", len(names))
 	}
 	add("plugins", regErr, fmt.Sprintf("%v", names))
 

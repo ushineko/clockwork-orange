@@ -11,7 +11,7 @@ import (
 
 func TestRegistryListsPluginsInThePythonManagerOrder(t *testing.T) {
 	reg := Registry(Deps{})
-	require.Equal(t, []string{"local", "wallhaven", "duckduckgo_images"}, Names(reg))
+	require.Equal(t, []string{"local", "wallhaven", "duckduckgo_images", "stable_diffusion"}, Names(reg))
 }
 
 func TestLookupFindsByNameAndReportsUnknownNames(t *testing.T) {
@@ -21,7 +21,7 @@ func TestLookupFindsByNameAndReportsUnknownNames(t *testing.T) {
 	require.Equal(t, "wallhaven", p.Name())
 	require.Equal(t, "Download wallpapers from Wallhaven.cc (API v1)", p.Description())
 
-	_, ok = Lookup(reg, "stable_diffusion")
+	_, ok = Lookup(reg, "future_plugin")
 	require.False(t, ok)
 }
 

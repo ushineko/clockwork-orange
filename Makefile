@@ -109,6 +109,32 @@ build-gui: ## Build the desktop front end for the host platform (requires CGO)
 	@mkdir -p bin
 	CGO_ENABLED=1 go build -tags $(FYNE_TAGS) -ldflags='$(LDFLAGS)' -trimpath -o bin/clockwork-orange-gui ./cmd/clockwork-orange-gui
 
+# Stable Diffusion (spec 031). The stable_diffusion plugin needs the
+# stable-diffusion.cpp libraries. A default build embeds none and the plugin
+# says so; `build-sd` and `build-gui-sd` embed the libraries staged by `sd-lib`.
+# SD_VERSION must equal sdlib.PinnedVersion (a test checks).
+SD_VERSION?=master-1088-32d516c
+SD_LIB_SRC?=
+SD_EMBED_DIR=internal/sdlib/embedded
+
+.PHONY: sd-lib
+sd-lib: ## Stage the stable-diffusion.cpp libraries to embed: make sd-lib SD_LIB_SRC=<dir>
+	@test -n "$(SD_LIB_SRC)" || { echo "set SD_LIB_SRC to a directory holding libstable-diffusion.so and its libraries (spec 031 R9)" >&2; exit 2; }
+	@test -f "$(SD_LIB_SRC)/libstable-diffusion.so" || { echo "$(SD_LIB_SRC)/libstable-diffusion.so not found" >&2; exit 2; }
+	find $(SD_EMBED_DIR) -mindepth 1 ! -name .gitkeep -delete
+	cp -L $(SD_LIB_SRC)/*.so* $(SD_EMBED_DIR)/
+	printf '%s\n' '$(SD_VERSION)' > $(SD_EMBED_DIR)/VERSION
+
+.PHONY: build-sd
+build-sd: ## Build the CLI/daemon with the staged Stable Diffusion library embedded
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -tags sdembed -ldflags='$(LDFLAGS)' -trimpath -o bin/clockwork-orange ./cmd/clockwork-orange
+
+.PHONY: build-gui-sd
+build-gui-sd: ## Build the desktop front end with the staged Stable Diffusion library embedded
+	@mkdir -p bin
+	CGO_ENABLED=1 go build -tags "$(FYNE_TAGS) sdembed" -ldflags='$(LDFLAGS)' -trimpath -o bin/clockwork-orange-gui ./cmd/clockwork-orange-gui
+
 .PHONY: build-all
 build-all: ## Build static CLI binaries for every platform, plus the host's GUI
 	@set -e; for p in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do \

@@ -108,14 +108,14 @@ func TestResolveModeMergesFlagsWithConfig(t *testing.T) {
 }
 
 // A dynamic cycle reloads the config, runs the enabled local plugin and sets
-// one image per monitor; a plugin the build does not know (stable_diffusion)
+// one image per monitor; a plugin the build does not know (future_plugin)
 // is skipped without failing the cycle (D6).
 func TestDynamicCycleRunsEnabledPluginsAndSkipsUnknownOnes(t *testing.T) {
 	d, fp, _ := testDeps(t, 2)
 	dir := imageDir(t, 4)
 	doc := config.Defaults()
 	doc.Plugins["local"] = map[string]any{"enabled": true, "path": dir}
-	doc.Plugins["stable_diffusion"] = map[string]any{"enabled": true, "prompt": "castle"}
+	doc.Plugins["future_plugin"] = map[string]any{"enabled": true, "prompt": "castle"}
 	writeConfig(t, doc)
 
 	var logs []string
@@ -125,7 +125,7 @@ func TestDynamicCycleRunsEnabledPluginsAndSkipsUnknownOnes(t *testing.T) {
 	require.Equal(t, []string{dir}, res.Sources)
 	require.Len(t, fp.multi, 1)
 	require.Len(t, fp.multi[0], 2)
-	require.Contains(t, logs, "Plugin stable_diffusion is enabled but not available in this build; skipping")
+	require.Contains(t, logs, "Plugin future_plugin is enabled but not available in this build; skipping")
 }
 
 // With nothing enabled the dynamic cycle reports ErrNoEnabledPlugins instead
@@ -291,7 +291,7 @@ func TestPluginsListReportsEnablement(t *testing.T) {
 	writeConfig(t, doc)
 	list, err := PluginsList(context.Background(), Request{Deps: d})
 	require.NoError(t, err)
-	require.Len(t, list, 3)
+	require.Len(t, list, 4)
 	require.Equal(t, "local", list[0].Name)
 	require.True(t, list[0].Enabled)
 	require.False(t, list[1].Enabled)

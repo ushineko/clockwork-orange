@@ -8,7 +8,7 @@ two front ends may disagree only about presentation (tests/parity).
 
 The root command is the v2.9.5 argparse surface, flag for flag, so existing
 systemd units, desktop entries and shell habits keep working. The subcommands
-(`service`, `blacklist`, `history`, `plugins`, `plugin`, `config`, `version`)
+(`service`, `blacklist`, `history`, `plugins`, `plugin`, `models`, `config`, `version`)
 are new in v4 and give the CLI every operation the GUI has (R6.5).
 
 Output is plain text with no ANSI colour: one fact per line, or a fixed-width
@@ -123,6 +123,7 @@ func NewApp(o Options) *App {
 		newHistoryCmd(a, g),
 		newPluginsCmd(a, g),
 		newPluginCmd(a, g),
+		newModelsCmd(a, g),
 		newConfigCmd(a, g),
 		newVersionCmd(),
 	)

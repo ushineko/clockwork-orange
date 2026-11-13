@@ -278,6 +278,13 @@ notes.
 
 ### Unreleased
 
+- A `stable_diffusion` plugin generates wallpapers on this machine with
+  stable-diffusion.cpp, on the CPU or a Vulkan GPU, with a Stable Diffusion
+  section in the window and `models list` / `models pull` to fetch a model.
+  It needs the native library, which only builds made with `make sd-lib` and
+  `make build-sd` carry for now; release builds ship it once CI builds it
+  (spec 031, #60).
+
 ### v4.7.2 (2026-11-11)
 
 - The Wallpaper card in Activity no longer flips to "Not rotating" after a

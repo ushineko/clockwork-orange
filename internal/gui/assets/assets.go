@@ -36,6 +36,9 @@ var pluginWallhavenSVG []byte
 //go:embed plugin-duckduckgo.svg
 var pluginDuckDuckGoSVG []byte
 
+//go:embed plugin-stable-diffusion.svg
+var pluginStableDiffusionSVG []byte
+
 // IconPNG is the application icon: the window icon, the tray icon, and the
 // image the About section draws at 72 px.
 func IconPNG() []byte { return iconPNG }
@@ -51,7 +54,7 @@ One silhouette per source rather than one picture icon for all of them: three
 identical entries are three things to guess between, and in the icons-only
 navigation the mark is nearly all there is. A folder for the directory it
 reads, a wall of tiles for the gallery it downloads from, a magnifier for the
-search it runs.
+search it runs, a pair of sparkles for the images it makes.
 */
 func PluginSVG(name string) []byte {
 	switch name {
@@ -61,6 +64,8 @@ func PluginSVG(name string) []byte {
 		return pluginWallhavenSVG
 	case "duckduckgo_images":
 		return pluginDuckDuckGoSVG
+	case "stable_diffusion":
+		return pluginStableDiffusionSVG
 	}
 	return nil
 }
