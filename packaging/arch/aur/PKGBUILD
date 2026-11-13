@@ -40,7 +40,12 @@ build() {
 	# stable-diffusion.cpp tag and embedded in both binaries. It takes a quarter
 	# of an hour and fetches the tag with git. Built for this machine, so the
 	# glibc ceiling that protects the release builds' floor does not apply.
-	SD_GLIBC_CEILING=99 make sd-lib-build
+	#
+	# The script is run directly, not through `make sd-lib-build`: the Makefile
+	# sets LDFLAGS to Go linker flags and make would pass them to cmake, whose
+	# C compiler check then fails to link.
+	SD_GLIBC_CEILING=99 ./scripts/build-sd-lib.sh \
+		"$(sed -n 's/^SD_VERSION?=//p' Makefile)" build/sd-lib vulkan
 	make sd-lib SD_LIB_SRC=build/sd-lib
 	make build-sd build-gui-sd VERSION="$(tr -d '[:space:]v' < .tag)"
 }

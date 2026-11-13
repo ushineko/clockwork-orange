@@ -297,8 +297,10 @@ commas is passed as a one-item list.
   and loads the library and the library reports the real version (upstream's own
   release builds report `unknown`). Locally the CPU variant also built from the
   tag, passed shellcheck, and generated an image through `TestLiveGenerate`.
-  The Arch and AUR PKGBUILDs build the library themselves (`make sd-lib-build`
-  with `SD_GLIBC_CEILING=99`, since the result is for the building machine, then
+  The Arch and AUR PKGBUILDs build the library themselves (`scripts/build-sd-lib.sh`
+  with `SD_GLIBC_CEILING=99`, since the result is for the building machine, run
+  directly because makepkg's `LDFLAGS` plus the Makefile's Go `LDFLAGS` made
+  cmake's compiler check fail when it went through make; then
   `make sd-lib build-sd build-gui-sd`), adding cmake, vulkan-headers, shaderc and
   spirv-headers as makedepends and vulkan-icd-loader as a dependency. The Arch
   CI job asserts the same `[OK]   stable diffusion` line. Chosen over fetching
