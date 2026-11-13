@@ -334,7 +334,7 @@ Every change worth telling a user about adds a line here under
 heading to the version and its date, and those lines become the release
 notes.
 
-### Unreleased
+### v4.8.0 (2026-11-13)
 
 - A `stable_diffusion` plugin generates wallpapers on this machine with
   stable-diffusion.cpp, on the CPU or a Vulkan GPU, with a Stable Diffusion
@@ -342,6 +342,9 @@ notes.
   The native library is embedded in the Debian package, the Linux installer
   and the Arch/AUR package (which builds it on install, about a quarter of an
   hour); Windows and macOS builds do not carry it yet (spec 031, #60).
+- The Linux command-line binary is no longer statically linked: loading the
+  Stable Diffusion library needs glibc at run time, so it does not run on musl
+  (Alpine). The Debian package and installer need glibc 2.38 or newer.
 
 ### v4.7.2 (2026-11-11)
 
