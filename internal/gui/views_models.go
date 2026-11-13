@@ -68,7 +68,9 @@ func (u *ui) modelsCard() fyne.CanvasObject {
 			pulls = append(pulls, b)
 			action = b
 		}
-		body.Add(container.NewBorder(nil, nil, nil, action, container.NewVBox(title, detail)))
+		// Centred so the button keeps its own height instead of stretching to
+		// the two lines of text beside it.
+		body.Add(container.NewBorder(nil, nil, nil, container.NewCenter(action), container.NewVBox(title, detail)))
 	}
 	u.sh.Gate(pulls...)
 	hint := widget.NewLabel("Models are downloaded to " + modelsDirHint(u.models) +

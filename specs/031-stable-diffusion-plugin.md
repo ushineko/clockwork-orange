@@ -281,9 +281,16 @@ commas is passed as a one-item list.
   4.3 GB and larger. Resume, checksum failure, cancellation and the gated
   case are covered by unit tests against a local HTTP server, and a real pull
   was run by hand above.
-- The GUI Models card and the Stable Diffusion section were built and their
-  logic is tested headlessly, but nobody has looked at the rendered Models card.
-  The pull popup carries the download's real fraction through
+- The Stable Diffusion section was rendered on 2026-11-12 (KDE Plasma 6, Wayland,
+  fynedesygn 0.1.114 on Fyne 2.8.3-pre) in Breeze Dark and Breeze Light with the
+  library's `tools/screenshot.sh`, under a throwaway `HOME` and
+  `CLOCKWORK_LOCK_DIR`: the sparkle icon in the navigation, the Models card with
+  both models, size, licence and a Pull button each, and the generated form
+  below it. The first capture showed the Pull buttons stretched to the height of
+  the two text lines beside them and the model field's caption carrying a CLI
+  hint in backticks; both were fixed and re-captured. A pull in flight and the
+  Review tab were not captured, and no other section was re-rendered on the new
+  Fyne. The pull popup carries the download's real fraction through
   `Shell.BusyProgress` (fynedesygn 0.1.114, spec 078); the library's own
   rendered reading of that popup is in its spec 078.
 - Cancelling a run stops it between images; an image in flight finishes.

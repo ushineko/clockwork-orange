@@ -68,7 +68,7 @@ func (*stableDiffusion) Schema() []Field {
 		},
 		{
 			Key: "model_id", Type: TypeString, Default: "sd-1.5",
-			Description: "Model (pull it with `models pull`)",
+			Description: "Model (a catalog name, or a path to a checkpoint)",
 			Suggestions: modelNames(),
 		},
 		{Key: "steps", Type: TypeInteger, Default: 30, Description: "Inference Steps"},
