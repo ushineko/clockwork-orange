@@ -130,7 +130,7 @@ retention.
       names the applied device (R8)
 - [ ] A CI job produces the library at the pinned version, enforces the glibc
       ceiling, and the packaged CLI and GUI pass `--self-test` (R9)
-- [ ] `go.mod` and the linter pin agree on the new Go version, `make test` and
+- [x] `go.mod` and the linter pin agree on the new Go version, `make test` and
       `make lint` pass, and `govulncheck` is clean or its findings are listed
       here (R10)
 
@@ -272,9 +272,11 @@ commas is passed as a one-item list.
 - R9, the CI library build, and the glibc ceiling check. The libraries used here
   are malina's upstream build, which needs glibc 2.43; the floor decision in
   spec 030 depends on this job.
-- R10: `go.mod` is on Go 1.27.0 and the pinned golangci-lint v2.12.2 (built with
-  Go 1.26) refuses it, so `make lint` does not run. A newer linter release and a
-  copy of its config are needed (v2.15.0 is the latest). `go vet ./...` is clean.
+- R10 is done: `go.mod` is on Go 1.27.0, the linter moved to v2.15.0 (built with
+  Go 1.27.0; `LINT_GO_TOOLCHAIN` and `config/.golangci-v2.15.0.yml` moved with
+  it), `make lint` reports 0 issues, `make test` passes and `govulncheck` is
+  clean. The README, CONTRIBUTING and the Makefile no longer call the Linux CLI
+  static.
 - No live test of `models pull` against Hugging Face: the catalog files are
   4.3 GB and larger. Resume, checksum failure, cancellation and the gated
   case are covered by unit tests against a local HTTP server, and a real pull
