@@ -128,8 +128,11 @@ retention.
       `CLOCKWORK_LIVE_SD=1` test for the CLI path) (R5, R7, R8)
 - [x] `backend: vulkan` with `device: 0` generates on the RTX 4090 and the log
       names the applied device (R8)
-- [ ] A CI job produces the library at the pinned version, enforces the glibc
-      ceiling, and the packaged CLI and GUI pass `--self-test` (R9)
+- [x] A CI job produces the library at the pinned version, enforces the glibc
+      ceiling, and the packaged Debian CLI's `--self-test` probe extracts and
+      loads it (R9). The GUI has no `--self-test`, so the packaged GUI is not
+      probed; the installer job builds from the same artifact but does not run
+      the probe.
 - [x] `go.mod` and the linter pin agree on the new Go version, `make test` and
       `make lint` pass, and `govulncheck` is clean or its findings are listed
       here (R10)
@@ -269,23 +272,24 @@ commas is passed as a one-item list.
 
 **Not done**
 
-- R9 is written but not yet proven in CI. `scripts/build-sd-lib.sh` builds
-  stable-diffusion.cpp at the pinned tag with upstream's own Linux flags, refuses
-  a checkout that is not that tag, stages the libraries with a `VERSION` file and
-  `SHA256SUMS`, and fails above `SD_GLIBC_CEILING` (2.39). Checked locally: the
-  CPU variant built from the tag (31 libraries, 66 MB), passed shellcheck, and
-  generated an image through the plugin's own test (`TestLiveGenerate`, 8 s).
-  Not checked: the Vulkan build here (this machine lacks `spirv-headers`, which
-  the CI job installs), and the 2.39 ceiling, which needs the 24.04 runner: the
-  local build needs 2.43 because this machine builds on 2.44. The workflow gains
-  a `build-sd-lib` job on a pinned `ubuntu-24.04` runner (so `ubuntu-latest`
-  moving cannot raise the floor), cached on the pinned version and the script,
-  and the Debian and installer jobs now build from its artifact with the
-  library embedded. `--self-test` gained a probe that extracts, loads and
-  version-checks an embedded library. The Arch and AUR packages are not changed:
-  they build from source on the user's machine and would need to build or fetch
-  the library themselves, which is a decision for a follow-up spec. Release
-  Debian and installer binaries grow by about 100 MB each.
+- R9 is done and proven in CI (run 43382104176). `scripts/build-sd-lib.sh`
+  builds stable-diffusion.cpp at the pinned tag with upstream's own Linux flags,
+  refuses a checkout that is not that tag, stages the libraries with a `VERSION`
+  file and `SHA256SUMS`, and fails above `SD_GLIBC_CEILING` (2.39). On the
+  pinned `ubuntu-24.04` runner the Vulkan build produced 32 libraries (96 MB)
+  needing **glibc 2.38**, the same floor the GUI has today, and libstdc++
+  `GLIBCXX_3.4.32` (gcc 13: Debian 12 ships 3.4.30, so these libraries do not
+  load there). The job took 13.5 min and is cached on the pinned version and the
+  script. The Debian and installer jobs build from its artifact, and the Debian
+  job asserts that the installed binary's `--self-test` prints
+  `[OK]   stable diffusion: master-1088-32d516c`, so the packaged binary extracts
+  and loads the library and the library reports the real version (upstream's own
+  release builds report `unknown`). Locally the CPU variant also built from the
+  tag, passed shellcheck, and generated an image through `TestLiveGenerate`.
+  Not changed: the Arch and AUR packages build from source on the user's machine
+  and would need to build or fetch the library themselves, a decision for a
+  follow-up spec. Release Debian and installer binaries grow by about 100 MB
+  each, and the installer job does not run the probe.
 - R10 is done: `go.mod` is on Go 1.27.0, the linter moved to v2.15.0 (built with
   Go 1.27.0; `LINT_GO_TOOLCHAIN` and `config/.golangci-v2.15.0.yml` moved with
   it), `make lint` reports 0 issues, `make test` passes and `govulncheck` is
