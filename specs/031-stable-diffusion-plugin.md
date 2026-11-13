@@ -2,7 +2,7 @@
 
 **Issue**: #60
 
-## Status: INCOMPLETE
+## Status: COMPLETE
 
 - **Priority**: Medium
 - **Estimated Complexity**: High
@@ -12,7 +12,13 @@
 
 ## Executive Summary
 
-<!-- Populate last. -->
+A `stable_diffusion` plugin, a model catalog with resumable checksummed pulls
+(`models list`, `models pull`, a Models card in the window), and a CI-built
+stable-diffusion.cpp library embedded in the Debian package and Linux installer
+and loaded through malina and purego. Review first: `internal/sdgen` and
+`internal/sdlib` (the only code that touches the native library),
+`scripts/build-sd-lib.sh` and the `build-sd-lib` job. Not covered: Arch/AUR,
+Windows and macOS libraries, and a generation with `sdxl-base-1.0`.
 
 ## Context
 
@@ -118,14 +124,18 @@ retention.
       downloads a real small bundle, resumes an interrupted pull, and a file
       with a wrong hash is rejected and removed (live test against Hugging Face,
       env-gated `CLOCKWORK_LIVE_NET=1`) (R6)
-- [ ] The parity test passes with `core.ListModels` and `core.PullModel` and no
+- [x] The parity test passes with `core.ListModels` and `core.PullModel` and no
       new allow-list entries; the GUI Models area lists, pulls with cancel, and
-      shows progress as a popup (R7)
-- [ ] A binary built with the embed tag, `CGO_ENABLED=0` for the CLI, runs
+      shows progress as a popup (R7). The GUI part was exercised by hand on
+      this machine on the embed build at 9747502 (2026-11-13); no in-flight
+      capture was taken.
+- [x] A binary built with the embed tag, `CGO_ENABLED=0` for the CLI, runs
       `clockwork-orange plugin run stable_diffusion --force` on this machine
       and writes a PNG from the real library and a real model; the GUI build
       does the same from the Plugins section (env-gated
-      `CLOCKWORK_LIVE_SD=1` test for the CLI path) (R5, R7, R8)
+      `CLOCKWORK_LIVE_SD=1` test for the CLI path) (R5, R7, R8). The CLI path
+      was run and `TestLiveGenerate` passes; the GUI path was exercised by hand
+      on this machine on 2026-11-13, reported working.
 - [x] `backend: vulkan` with `device: 0` generates on the RTX 4090 and the log
       names the applied device (R8)
 - [x] A CI job produces the library at the pinned version, enforces the glibc

@@ -239,13 +239,62 @@ It reloads the configuration on every cycle and reacts to a saved edit within
 about two seconds, so changing the interval or enabling a plugin in the window
 takes effect without a restart.
 
+## Stable Diffusion
+
+The `stable_diffusion` plugin generates wallpapers on this machine with
+[stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp), on the
+CPU or a Vulkan GPU. Nothing is sent to a service.
+
+**How it is embedded.** The program stays one file to install. The native
+library (stable-diffusion.cpp, ggml and the Vulkan backend, about 96 MB) is
+built in CI from the pinned tag `master-1088-32d516c` and compiled into the
+binary with `go:embed`. On first use it is extracted to
+`~/.cache/clockwork-orange/sd/<hash>/` and loaded at run time through
+[malina](https://github.com/ardanlabs/malina) and `purego`, so the build needs
+no C++ toolchain. A `VERSION` file in the library is checked against the pinned
+tag before loading, because a mismatched library crashes the process.
+`--self-test` reports `stable diffusion: <version>` when the library loads.
+Setting `CLOCKWORK_SD_LIB` to a directory uses that library instead.
+
+Builds that embed it are the `.deb` and the Linux installer. They need glibc
+2.38 and `GLIBCXX_3.4.32` (Ubuntu 24.04 or Debian 13 or newer; Debian 12 cannot
+load it).
+Arch/AUR, Windows and macOS builds do not carry it yet; there the plugin
+reports that the library is missing. To build one yourself, run
+`make sd-lib-build` (needs cmake, a C++ toolchain, Vulkan headers and `glslc`),
+or point `make sd-lib SD_LIB_SRC=<dir>` at a library you already have, then
+`make build-sd` or `make build-gui-sd`.
+
+**Models.** Weights are not bundled. `clockwork-orange models list` shows the
+catalog and `models pull <name>` downloads one, as does the Pull button in the
+window's Models card. A pull resumes if interrupted and is checked against a
+pinned SHA-256 before it is used. The default folder is
+`~/.local/share/clockwork-orange/models` (`CLOCKWORK_MODELS_DIR` overrides it).
+
+| Name | File | Size | Licence |
+|---|---|---|---|
+| `sd-1.5` | `v1-5-pruned-emaonly.safetensors` | 4.3 GB | CreativeML Open RAIL-M |
+| `sdxl-base-1.0` | `sd_xl_base_1.0.safetensors` | 6.9 GB | CreativeML Open RAIL++-M |
+
+`model_id` takes a catalog name, a 2.9.x Hugging Face id for one of these
+(`runwayml/stable-diffusion-v1-5`, `stabilityai/stable-diffusion-xl-base-1.0`),
+or a path to a checkpoint you already have. Only `sd-1.5` has been generated
+from end to end (an RTX 4090, 2.9 s per image once loaded); `sdxl-base-1.0` is
+in the catalog but has not been run. Other architectures that
+stable-diffusion.cpp reads may load from a path, but are not tested here.
+
+Prompts follow the 2.9.x keys. A comma-separated string is split into several
+prompts, so pass a one-item list to keep a prompt with commas whole. On a
+machine with several GPUs, `device` picks one; the default is whichever Vulkan
+lists first, which can be an integrated GPU.
+
 ## Upgrading from 2.9.x
 
 Nothing to migrate: the configuration file and both databases are read as
 they are. A `google_images` block is renamed to `duckduckgo_images` on first
-load. The Stable Diffusion plugin is not part of version 4; its
-`stable_diffusion` block is kept in the file, untouched, and skipped. The
-Python launcher entry from `install-desktop-entry.sh` is removed by
+load. The `stable_diffusion` block is read by the new plugin (see above); its
+2.9.x keys keep their meaning, with `seed`, `threads`, `backend` and `device`
+added. The Python launcher entry from `install-desktop-entry.sh` is removed by
 `install.sh`, and `service install` replaces the Python unit.
 
 ## Building
@@ -288,8 +337,8 @@ notes.
 - A `stable_diffusion` plugin generates wallpapers on this machine with
   stable-diffusion.cpp, on the CPU or a Vulkan GPU, with a Stable Diffusion
   section in the window and `models list` / `models pull` to fetch a model.
-  It needs the native library, which only builds made with `make sd-lib` and
-  `make build-sd` carry for now; release builds ship it once CI builds it
+  The native library is built in CI and embedded in the Debian package and the
+  Linux installer; Arch, Windows and macOS builds do not carry it yet
   (spec 031, #60).
 
 ### v4.7.2 (2026-11-11)
