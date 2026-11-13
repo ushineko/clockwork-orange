@@ -256,11 +256,13 @@ tag before loading, because a mismatched library crashes the process.
 `--self-test` reports `stable diffusion: <version>` when the library loads.
 Setting `CLOCKWORK_SD_LIB` to a directory uses that library instead.
 
-Builds that embed it are the `.deb` and the Linux installer. They need glibc
+Builds that embed it are the `.deb`, the Linux installer and the Arch/AUR
+package. The `.deb` and the installer carry the CI-built library and need glibc
 2.38 and `GLIBCXX_3.4.32` (Ubuntu 24.04 or Debian 13 or newer; Debian 12 cannot
-load it).
-Arch/AUR, Windows and macOS builds do not carry it yet; there the plugin
-reports that the library is missing. To build one yourself, run
+load it). The Arch/AUR package builds the library itself with cmake and the
+Vulkan headers while it installs, which adds about a quarter of an hour, and
+has no glibc floor of its own. Windows and macOS builds do not carry it yet;
+there the plugin reports that the library is missing. To build one yourself, run
 `make sd-lib-build` (needs cmake, a C++ toolchain, Vulkan headers and `glslc`),
 or point `make sd-lib SD_LIB_SRC=<dir>` at a library you already have, then
 `make build-sd` or `make build-gui-sd`.
@@ -337,9 +339,9 @@ notes.
 - A `stable_diffusion` plugin generates wallpapers on this machine with
   stable-diffusion.cpp, on the CPU or a Vulkan GPU, with a Stable Diffusion
   section in the window and `models list` / `models pull` to fetch a model.
-  The native library is built in CI and embedded in the Debian package and the
-  Linux installer; Arch, Windows and macOS builds do not carry it yet
-  (spec 031, #60).
+  The native library is embedded in the Debian package, the Linux installer
+  and the Arch/AUR package (which builds it on install, about a quarter of an
+  hour); Windows and macOS builds do not carry it yet (spec 031, #60).
 
 ### v4.7.2 (2026-11-11)
 

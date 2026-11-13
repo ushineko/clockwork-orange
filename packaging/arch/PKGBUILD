@@ -13,13 +13,18 @@ pkgdesc="Wallpaper manager and downloader with plugin support (Wallhaven, DuckDu
 arch=('x86_64' 'aarch64')
 url="https://github.com/ushineko/clockwork-orange"
 license=('MIT')
-# The daemon is static. The window is Fyne over GLFW, built with both the X11
+# The window is Fyne over GLFW, built with both the X11
 # and the Wayland back end, so it needs OpenGL, X11 and Wayland at run time.
 # kconfig provides kwriteconfig6, which the lock screen shells out to (spec 010
 # R4). The desktop goes over D-Bus to plasmashell (spec 028), so qt6-tools'
 # qdbus6 is no longer needed.
-depends=('libgl' 'libx11' 'libxcursor' 'libxrandr' 'libxinerama' 'libxi' 'libxxf86vm' 'libxkbcommon' 'wayland' 'kconfig')
-makedepends=('go' 'git' 'gcc' 'pkgconf' 'mesa' 'wayland-protocols')
+#
+# The Stable Diffusion library (spec 031) is built here from the pinned
+# stable-diffusion.cpp tag and embedded in both binaries, so the package is as
+# self-contained as the Debian one. That build takes a quarter of an hour and
+# fetches the tag with git. vulkan-icd-loader is what the Vulkan backend links.
+depends=('libgl' 'libx11' 'libxcursor' 'libxrandr' 'libxinerama' 'libxi' 'libxxf86vm' 'libxkbcommon' 'wayland' 'kconfig' 'vulkan-icd-loader')
+makedepends=('go' 'git' 'gcc' 'pkgconf' 'mesa' 'wayland-protocols' 'cmake' 'vulkan-headers' 'shaderc' 'spirv-headers')
 provides=("${pkgname%-git}")
 conflicts=("${pkgname%-git}")
 options=('!strip' '!debug') # Go binaries: stripped by the linker flags in the Makefile; no separate debug package
@@ -46,7 +51,12 @@ build() {
 	# VERSION explicitly: a package is the plain version, and the Makefile
 	# would otherwise stamp a -dev suffix on a checkout that is not sitting
 	# on the release tag -- which a VCS package never is.
-	make build build-gui VERSION="$(tr -d '[:space:]v' < .tag)"
+	#
+	# The library is built for this machine, so the glibc ceiling that protects
+	# the release builds' floor (scripts/build-sd-lib.sh) does not apply.
+	SD_GLIBC_CEILING=99 make sd-lib-build
+	make sd-lib SD_LIB_SRC=build/sd-lib
+	make build-sd build-gui-sd VERSION="$(tr -d '[:space:]v' < .tag)"
 }
 
 check() {

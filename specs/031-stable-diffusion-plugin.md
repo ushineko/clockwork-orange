@@ -17,8 +17,9 @@ A `stable_diffusion` plugin, a model catalog with resumable checksummed pulls
 stable-diffusion.cpp library embedded in the Debian package and Linux installer
 and loaded through malina and purego. Review first: `internal/sdgen` and
 `internal/sdlib` (the only code that touches the native library),
-`scripts/build-sd-lib.sh` and the `build-sd-lib` job. Not covered: Arch/AUR,
-Windows and macOS libraries, and a generation with `sdxl-base-1.0`.
+`scripts/build-sd-lib.sh` and the `build-sd-lib` job. The Arch/AUR PKGBUILDs
+build the library on install. Not covered: Windows and macOS libraries, and a
+generation with `sdxl-base-1.0`.
 
 ## Context
 
@@ -296,10 +297,15 @@ commas is passed as a one-item list.
   and loads the library and the library reports the real version (upstream's own
   release builds report `unknown`). Locally the CPU variant also built from the
   tag, passed shellcheck, and generated an image through `TestLiveGenerate`.
-  Not changed: the Arch and AUR packages build from source on the user's machine
-  and would need to build or fetch the library themselves, a decision for a
-  follow-up spec. Release Debian and installer binaries grow by about 100 MB
-  each, and the installer job does not run the probe.
+  The Arch and AUR PKGBUILDs build the library themselves (`make sd-lib-build`
+  with `SD_GLIBC_CEILING=99`, since the result is for the building machine, then
+  `make sd-lib build-sd build-gui-sd`), adding cmake, vulkan-headers, shaderc and
+  spirv-headers as makedepends and vulkan-icd-loader as a dependency. The Arch
+  CI job asserts the same `[OK]   stable diffusion` line. Chosen over fetching
+  the CI-built library: no second download to trust, and the library matches the
+  machine's glibc; the cost is about a quarter of an hour at install. Release
+  Debian and installer binaries grow by about 100 MB each, and the installer job
+  does not run the probe.
 - R10 is done: `go.mod` is on Go 1.27.0, the linter moved to v2.15.0 (built with
   Go 1.27.0; `LINT_GO_TOOLCHAIN` and `config/.golangci-v2.15.0.yml` moved with
   it), `make lint` reports 0 issues, `make test` passes and `govulncheck` is

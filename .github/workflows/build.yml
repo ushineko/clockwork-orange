@@ -149,7 +149,9 @@ jobs:
       run: |
         pacman -U --noconfirm src_repo/packaging/arch/*.pkg.tar.zst
         clockwork-orange version
-        clockwork-orange --self-test
+        clockwork-orange --self-test | tee /tmp/selftest.txt
+        # The package builds and embeds the Stable Diffusion library itself.
+        grep -F '[OK]   stable diffusion' /tmp/selftest.txt
         clockwork-orange-gui --version
     - uses: actions/upload-artifact@v4
       with:

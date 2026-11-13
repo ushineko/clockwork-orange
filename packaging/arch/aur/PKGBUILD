@@ -12,8 +12,8 @@ pkgdesc="Wallpaper manager and downloader with plugin support (Wallhaven, DuckDu
 arch=('x86_64' 'aarch64')
 url="https://github.com/ushineko/clockwork-orange"
 license=('MIT')
-depends=('libgl' 'libx11' 'libxcursor' 'libxrandr' 'libxinerama' 'libxi' 'libxxf86vm' 'libxkbcommon' 'wayland' 'kconfig')
-makedepends=('go' 'git' 'gcc' 'pkgconf' 'mesa' 'wayland-protocols')
+depends=('libgl' 'libx11' 'libxcursor' 'libxrandr' 'libxinerama' 'libxi' 'libxxf86vm' 'libxkbcommon' 'wayland' 'kconfig' 'vulkan-icd-loader')
+makedepends=('go' 'git' 'gcc' 'pkgconf' 'mesa' 'wayland-protocols' 'cmake' 'vulkan-headers' 'shaderc' 'spirv-headers')
 provides=("${pkgname%-git}")
 conflicts=("${pkgname%-git}")
 options=('!strip' '!debug')
@@ -35,7 +35,14 @@ build() {
 	# VERSION explicitly: a package is the plain version, and the Makefile
 	# would otherwise stamp a -dev suffix on a checkout that is not sitting
 	# on the release tag -- which a VCS package never is.
-	make build build-gui VERSION="$(tr -d '[:space:]v' < .tag)"
+	#
+	# The Stable Diffusion library (spec 031) is built here from the pinned
+	# stable-diffusion.cpp tag and embedded in both binaries. It takes a quarter
+	# of an hour and fetches the tag with git. Built for this machine, so the
+	# glibc ceiling that protects the release builds' floor does not apply.
+	SD_GLIBC_CEILING=99 make sd-lib-build
+	make sd-lib SD_LIB_SRC=build/sd-lib
+	make build-sd build-gui-sd VERSION="$(tr -d '[:space:]v' < .tag)"
 }
 
 check() {
