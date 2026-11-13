@@ -18,9 +18,8 @@ and on the RTX 4090 over Vulkan, both embed and load their library with
 against its exact pinned library; seasonjs crashes on every library tried.
 Decision (operator): standardize on malina, with no fallback implemented. It
 ships a model catalog, pinned and verified library installs, and resumable
-downloads. Its prebuilt Linux libraries need glibc 2.43; the operator states
-the project's own binaries and GUI already require that glibc, so this is
-accepted. Pendra is recorded as a possible later fallback only. Reviewers
+downloads. Its prebuilt Linux libraries need glibc 2.43, above the 2.38 the GUI needs
+today; the floor decision is open. Pendra is recorded as a possible later fallback only. Reviewers
 should read "Findings" first, then "Follow-up spec outline".
 
 ## Context
@@ -288,17 +287,17 @@ go-getter's `ProgressTracker`, not a channel.
 | gosd | **reject** | Vulkan release SIGILLs on the pinned version; every other version segfaults; CPU only worked in one combination. |
 | seasonjs | **reject** | Crashes on every library tried; no pinned library; Linux library not shipped. |
 
-**glibc floor (resolved by the operator).** malina's upstream libraries need
-glibc 2.43 (Ubuntu 26.04), which excludes Debian 12/13 and Ubuntu 22.04–24.04.
-The operator states that this project's built binaries and GUI already require
-at least that glibc, so the floor adds no new restriction. That statement was
-not re-checked in this spike; the plugin spec should confirm it against the
-packaged artifacts. Pendra (glibc 2.34) stays on record as a later fallback
-if the floor ever becomes a problem; nothing for it is built.
-
-Not covered: Windows and macOS (Metal, Windows Vulkan/CUDA), SDXL or newer
-models, image-to-image, upscaling, memory use under the daemon, and CUDA with a
-CUDA 13 runtime installed.
+**glibc floor (checked, not settled).** malina's upstream libraries need glibc
+2.43 (Ubuntu 26.04), which excludes Debian 12/13 and Ubuntu 22.04–24.04. The
+operator expected the project's binaries to already require that. Checked on
+2026-11-12 against the local builds in `bin/`: the GUI needs glibc 2.38
+(`objdump -T`), and the CLI/daemon is statically linked with no glibc
+requirement. CI builds on `ubuntu-latest` (24.04, glibc 2.39). The floor is
+therefore raised by adopting malina's prebuilt libraries: GUI 2.38 to 2.43, and
+the daemon from none to 2.43 once it loads a shared library. Options for the
+plugin spec: accept the raise, or build stable-diffusion.cpp in CI at malina's
+pinned version against the current glibc and embed that. Pendra (glibc 2.34)
+stays on record as a later fallback; nothing for it is built.
 
 ### Follow-up spec outline
 
@@ -318,7 +317,7 @@ CUDA 13 runtime installed.
 5. **GUI**: model list with size and licence, download progress popup (not
    inline, per the no-reflow rule), device picker, first-run shader-compile
    notice.
-6. **Confirm the glibc floor** against the packaged artifacts (decision: accepted).
+6. **Decide the glibc floor**: accept 2.43 or build the library in CI (see Findings).
 7. **Integration test**: an env-gated `CLOCKWORK_LIVE_SD=1` test that generates
    one image from a small model through the real library.
 
