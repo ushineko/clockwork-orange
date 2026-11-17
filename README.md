@@ -334,6 +334,13 @@ Every change worth telling a user about adds a line here under
 heading to the version and its date, and those lines become the release
 notes.
 
+### Unreleased
+
+- The Wallpaper card no longer drifts to "Not rotating: no window timer is
+  running" after the window has been open for a while. The window now knows it
+  holds its own single-instance lock instead of probing the lock file in
+  `/tmp` again, which macOS can clear under a running app.
+
 ### v4.8.0 (2026-11-13)
 
 - A `stable_diffusion` plugin generates wallpapers on this machine with
