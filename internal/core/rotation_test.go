@@ -365,3 +365,25 @@ func TestConcurrentLockProbesReadFree(t *testing.T) {
 	wg.Wait()
 	require.Zero(t, falsePositives.Load(), "a free lock was reported held")
 }
+
+// A window that holds the GUI lock keeps reporting itself running after its
+// lock file is removed (macOS clears old files in /tmp); probing the file
+// again would find it free.
+func TestGUIRunningSurvivesLockFileRemoval(t *testing.T) {
+	t.Setenv("CLOCKWORK_LOCK_DIR", t.TempDir())
+	release, ok := TryGUILock()
+	if !ok {
+		t.Fatal("could not take the GUI lock")
+	}
+	defer release()
+	if err := os.Remove(filepath.Join(os.Getenv("CLOCKWORK_LOCK_DIR"), guiLockID+".lock")); err != nil {
+		t.Skipf("no lock file to remove on this platform: %v", err)
+	}
+	if !GUIRunning() {
+		t.Error("GUIRunning is false while this process holds the lock")
+	}
+	release()
+	if GUIRunning() {
+		t.Error("GUIRunning is true after the lock was released")
+	}
+}

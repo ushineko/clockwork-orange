@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ushineko/clockwork-orange/internal/config"
@@ -38,8 +39,18 @@ func TryGUILock() (release func(), ok bool) {
 	if !ok {
 		return func() {}, false
 	}
-	return lock.Release, true
+	guiHeld.Store(true)
+	return func() {
+		guiHeld.Store(false)
+		lock.Release()
+	}, true
 }
+
+// guiHeld is true while this process holds the GUI lock. GUIRunning answers
+// from it first: probing the lock file again would report "not running" if
+// the file were removed under the live window (macOS clears old files in
+// /tmp), and the card would then say no timer is running while it still is.
+var guiHeld atomic.Bool
 
 // SetRequest sets from an explicit local source.
 type SetRequest struct {
