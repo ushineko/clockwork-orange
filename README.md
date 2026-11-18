@@ -334,7 +334,7 @@ Every change worth telling a user about adds a line here under
 heading to the version and its date, and those lines become the release
 notes.
 
-### Unreleased
+### v4.8.1 (2026-11-18)
 
 - The Wallpaper card no longer drifts to "Not rotating: no window timer is
   running" after the window has been open for a while. The window now knows it
